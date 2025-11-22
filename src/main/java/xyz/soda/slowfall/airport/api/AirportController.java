@@ -8,4 +8,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/airports")
 @CrossOrigin(origins = "http://localhost:5173") // frontend dev server
 public class AirportController {
+
+    
 }

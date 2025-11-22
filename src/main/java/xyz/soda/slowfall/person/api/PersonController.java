@@ -1,5 +1,8 @@
 package xyz.soda.slowfall.person.api;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,5 +35,18 @@ public class PersonController {
     @GetMapping
     public List<PersonDto> listPeople() {
         return service.listAllPeople().stream().map(PersonDto::from).toList();
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<PersonDto>> searchPersons(
+            @RequestParam(required = false) String firstName,
+            @RequestParam(required = false) String lastName,
+            @RequestParam(required = false) Boolean pilot,
+            @RequestParam(required = false) Boolean skyDiver,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        Page<Person> results = service.searchPersons(firstName, lastName, pilot, skyDiver, pageable);
+        Page<PersonDto> dtoPage = results.map(PersonDto::from);
+        return ResponseEntity.ok(dtoPage);
     }
 }
