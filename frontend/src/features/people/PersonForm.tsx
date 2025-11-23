@@ -10,7 +10,7 @@ type Props = {
 
 export default function PersonForm({ onCreated }: Props) {
   const [name, setName] = useState('')
-  const [weight, setWeight] = useState<number | ''>('')
+  const [weight, setWeight] = useState<number | string>('')
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
 

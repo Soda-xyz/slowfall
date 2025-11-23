@@ -23,4 +23,3 @@ class JumpTest {
         assertEquals(1, j.getPilots().size());
     }
 }
-

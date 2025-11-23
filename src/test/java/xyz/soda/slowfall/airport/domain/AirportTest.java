@@ -26,4 +26,3 @@ class AirportTest {
         assertEquals("EGLL", a.getIcaoCode());
     }
 }
-

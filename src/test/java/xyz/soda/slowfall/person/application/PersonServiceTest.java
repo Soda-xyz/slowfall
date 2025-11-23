@@ -49,4 +49,3 @@ class PersonServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.createPerson(req));
     }
 }
-

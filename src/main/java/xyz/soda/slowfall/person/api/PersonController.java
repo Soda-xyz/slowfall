@@ -60,7 +60,7 @@ public class PersonController {
      * @param pageable pagination information
      * @return a paged ResponseEntity of PersonDto matching the criteria
      */
-    @GetMapping
+    @GetMapping("/search")
     public ResponseEntity<Page<PersonDto>> searchPersons(
             @RequestParam(required = false) String firstName,
             @RequestParam(required = false) String lastName,

@@ -9,6 +9,7 @@ import xyz.soda.slowfall.craft.api.CreateCraftRequest;
 import xyz.soda.slowfall.craft.domain.Craft;
 import xyz.soda.slowfall.craft.infra.CraftRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,5 +46,25 @@ class CraftServiceTest {
 
         assertThrows(IllegalArgumentException.class, () -> service.createCraft(req));
     }
-}
 
+    @Test
+    void createCraftFailsWhenRegistrationExists() {
+        CreateCraftRequest req = new CreateCraftRequest("C2", "REG-2", 1500, 5);
+        Craft existing = new Craft("C-EX", "REG-2", 1500, 5);
+        when(repository.findByName("C2")).thenReturn(Optional.empty());
+        when(repository.findByRegistrationNumber("REG-2")).thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class, () -> service.createCraft(req));
+    }
+
+    @Test
+    void listAllCraftsReturnsRepositoryList() {
+        Craft c = new Craft("C1", "REG-1", 1000, 4);
+        when(repository.findAll()).thenReturn(List.of(c));
+
+        java.util.List<Craft> results = service.listAllCrafts();
+
+        assertEquals(1, results.size());
+        assertEquals("C1", results.getFirst().getName());
+    }
+}

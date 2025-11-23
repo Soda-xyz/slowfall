@@ -1,7 +1,7 @@
-import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { vi, test, expect } from 'vitest'
+import { MantineProvider } from '@mantine/core'
 
 import PersonForm from './PersonForm'
 
@@ -17,7 +17,11 @@ vi.mock('./api', () => ({
 
 test('renders PersonForm and submits with valid data', async () => {
   const onCreated = vi.fn()
-  render(<PersonForm onCreated={onCreated} />)
+  render(
+    <MantineProvider withGlobalStyles withNormalizeCSS>
+      <PersonForm onCreated={onCreated} />
+    </MantineProvider>
+  )
 
   const nameInput = screen.getByLabelText(/Name/i)
   const weightInput = screen.getByLabelText(/Weight/i)
@@ -35,4 +39,3 @@ test('renders PersonForm and submits with valid data', async () => {
 
   expect(onCreated).toHaveBeenCalled()
 })
-

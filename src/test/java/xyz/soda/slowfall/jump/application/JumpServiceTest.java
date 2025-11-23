@@ -70,7 +70,8 @@ class JumpServiceTest {
         Person pilot = new Person("P", "I", true, false, 80, "p@i.com");
         when(personRepository.findById(pilotId)).thenReturn(Optional.of(pilot));
 
-        CreateJumpRequest req = new CreateJumpRequest(LocalDateTime.now(ZoneId.of("UTC")).plusDays(1), airportId, "REG-1", 12000, pilotId);
+        CreateJumpRequest req = new CreateJumpRequest(
+                LocalDateTime.now(ZoneId.of("UTC")).plusDays(1), airportId, "REG-1", 12000, pilotId);
         when(jumpRepository.save(any(Jump.class))).thenAnswer(i -> i.getArgument(0));
 
         Jump created = service.createJump(req);

@@ -43,9 +43,11 @@ class PersonControllerWebSliceTest {
         Person p = new Person("A", "B", false, false, 70, "a@b.com");
         when(service.createPerson(any(CreatePersonRequest.class))).thenReturn(p);
 
-        mockMvc.perform(post("/api/people").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/people")
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.email").value("a@b.com"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("a@b.com"));
     }
 
     @Test
@@ -53,6 +55,8 @@ class PersonControllerWebSliceTest {
         Person p = new Person("A", "B", false, false, 70, "a@b.com");
         when(service.listAllPeople()).thenReturn(List.of(p));
 
-        mockMvc.perform(get("/api/people")).andExpect(status().isOk()).andExpect(jsonPath("$[0].email").value("a@b.com"));
+        mockMvc.perform(get("/api/people"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].email").value("a@b.com"));
     }
 }

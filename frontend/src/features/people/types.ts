@@ -3,6 +3,7 @@ export type Person = {
   name: string
   weight: number
   email: string
+  pilot?: boolean
 }
 
 export type CreatePersonRequest = {

@@ -17,7 +17,7 @@ java {
 }
 checkstyle {
     toolVersion = "10.12.7"
-    configFile = file("config/checkstyle.xml") // Path to your config file
+    configFile = file("config/checkstyle.xml")
     ignoreFailures = false
 }
 
@@ -33,12 +33,7 @@ dependencies {
     runtimeOnly 'com.h2database:h2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    // Testcontainers for optional integration tests that require a real database/container.
-    // Note: Docker must be available on the machine/CI runner to run these tests.
-    // If you prefer not to add these, we can omit them and rely on H2 for CI and dev.
-    testImplementation 'org.testcontainers:junit-jupiter:1.18.3'
-    testImplementation 'org.testcontainers:postgresql:1.18.3'
-    testImplementation 'org.testcontainers:testcontainers:1.18.3'
+
 }
 
 tasks.named('test') {

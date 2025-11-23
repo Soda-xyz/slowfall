@@ -1,5 +1,6 @@
 package xyz.soda.slowfall.airport.api;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class AirportController {
      * @return a ResponseEntity with the created AirportDto and HTTP 201, or 400 on bad request
      */
     @PostMapping
-    public ResponseEntity<AirportDto> createAirport(@RequestBody CreateAirportRequest request) {
+    public ResponseEntity<AirportDto> createAirport(@Valid @RequestBody CreateAirportRequest request) {
         try {
             Airport created = service.createAirport(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(AirportDto.from(created));

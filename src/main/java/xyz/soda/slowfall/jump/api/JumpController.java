@@ -1,5 +1,6 @@
 package xyz.soda.slowfall.jump.api;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +32,7 @@ public class JumpController {
      * @return ResponseEntity with created JumpDto and HTTP 201, or 400 on bad request
      */
     @PostMapping
-    public ResponseEntity<JumpDto> createJump(@RequestBody CreateJumpRequest request) {
+    public ResponseEntity<JumpDto> createJump(@Valid @RequestBody CreateJumpRequest request) {
         try {
             Jump created = service.createJump(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(JumpDto.from(created));

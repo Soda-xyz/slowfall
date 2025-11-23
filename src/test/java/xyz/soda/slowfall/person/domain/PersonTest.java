@@ -24,4 +24,3 @@ class PersonTest {
         assertThrows(IllegalArgumentException.class, () -> p.setEmail("not-an-email"));
     }
 }
-

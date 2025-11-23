@@ -5,26 +5,29 @@ import JumpForm from './JumpForm'
 import JumpTable from './JumpTable'
 import { fetchJumps, addPassengerToJump, addPilotToJump } from './api'
 import { fetchPeople } from '../people/api'
+import { fetchPilots } from '../people/api'
 import type { Jump, PersonDto } from './types'
 
 export default function JumpPage() {
   const [jumps, setJumps] = useState<Jump[]>([])
-  const [loading, setLoading] = useState(false)
   const [people, setPeople] = useState<PersonDto[]>([])
+  const [pilots, setPilots] = useState<PersonDto[]>([])
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
   const [targetJumpId, setTargetJumpId] = useState<string | null>(null)
+  const [actionMode, setActionMode] = useState<'passenger' | 'pilot' | null>(null)
 
   const loadAll = async () => {
     const ctrl = new AbortController()
-    setLoading(true)
     try {
-      const [js, ps] = await Promise.all([fetchJumps(ctrl.signal), fetchPeople()])
+      const [js, ps, pls] = await Promise.all([fetchJumps(ctrl.signal), fetchPeople(), fetchPilots()])
       setJumps(js)
-      setPeople(ps)
+      // ensure ids are strings to match PersonDto
+      setPeople(ps.map((p) => ({ ...p, id: String(p.id) })))
+      setPilots(pls.map((p) => ({ ...p, id: String(p.id) })))
     } catch (err) {
       notifications.show({ color: 'red', title: 'Load failed', message: String(err?.message || err) })
     } finally {
-      setLoading(false)
+      // no-op
     }
   }
 
@@ -37,13 +40,14 @@ export default function JumpPage() {
 
   const handleAddPassenger = async (jumpId: string) => {
     setTargetJumpId(jumpId)
+    setActionMode('passenger')
   }
 
   const submitAddPassenger = async () => {
     if (!targetJumpId || !selectedPersonId) return
     try {
       await addPassengerToJump(targetJumpId, selectedPersonId)
-      notifications.show({ color: 'green', title: 'Passenger added' })
+      notifications.show({ color: 'green', title: 'Passenger added', message: 'Passenger added successfully' })
       setSelectedPersonId(null)
       setTargetJumpId(null)
       await loadAll()
@@ -54,13 +58,14 @@ export default function JumpPage() {
 
   const handleAddPilot = async (jumpId: string) => {
     setTargetJumpId(jumpId)
+    setActionMode('pilot')
   }
 
   const submitAddPilot = async () => {
     if (!targetJumpId || !selectedPersonId) return
     try {
       await addPilotToJump(targetJumpId, selectedPersonId)
-      notifications.show({ color: 'green', title: 'Pilot added' })
+      notifications.show({ color: 'green', title: 'Pilot added', message: 'Pilot added successfully' })
       setSelectedPersonId(null)
       setTargetJumpId(null)
       await loadAll()
@@ -97,7 +102,7 @@ export default function JumpPage() {
                 searchable
                 value={selectedPersonId ?? undefined}
                 onChange={(v) => setSelectedPersonId(v ?? null)}
-                data={people.map((p) => ({ value: p.id, label: p.name }))}
+                data={(actionMode === 'pilot' ? pilots : people).map((p) => ({ value: p.id, label: p.name }))}
               />
               <Group mt="xs">
                 <Button onClick={submitAddPassenger} disabled={!selectedPersonId}>

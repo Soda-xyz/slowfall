@@ -20,7 +20,7 @@ public class Person {
     private String lastName;
 
     @Column(nullable = false)
-    private boolean Pilot;
+    private boolean pilot;
 
     @Column(nullable = false)
     private boolean skyDiver;
@@ -42,15 +42,15 @@ public class Person {
      *
      * @param firstName the person's first name
      * @param lastName  the person's last name
-     * @param Pilot     whether the person is a pilot
+     * @param pilot     whether the person is a pilot
      * @param skyDiver  whether the person is a sky diver
      * @param weight    the person's weight in kilograms
      * @param email     the person's email address
      */
-    public Person(String firstName, String lastName, boolean Pilot, boolean skyDiver, Integer weight, String email) {
+    public Person(String firstName, String lastName, boolean pilot, boolean skyDiver, Integer weight, String email) {
         setFirstName(firstName);
         setLastName(lastName);
-        setPilot(Pilot);
+        setPilot(pilot);
         setSkyDiver(skyDiver);
         setWeight(weight);
         setEmail(email);
@@ -101,7 +101,7 @@ public class Person {
         if (lastName == null || lastName.isBlank()) {
             throw new IllegalArgumentException("Last name must not be blank");
         }
-        this.firstName = firstName.trim();
+        this.lastName = lastName.trim();
     }
 
     /**
@@ -109,15 +109,15 @@ public class Person {
      * @return {@code true} if person is a pilot, otherwise {@code false}
      */
     public boolean getPilot() {
-        return Pilot;
+        return pilot;
     }
 
     /**
      * Set pilot flag for the person.
-     * @param Pilot true if the person is a pilot
+     * @param pilot true if the person is a pilot
      */
-    public void setPilot(boolean Pilot) {
-        this.Pilot = Pilot;
+    public void setPilot(boolean pilot) {
+        this.pilot = pilot;
     }
 
     /**

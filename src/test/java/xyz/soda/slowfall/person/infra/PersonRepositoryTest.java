@@ -20,7 +20,11 @@ class PersonRepositoryTest {
         Person p = new Person("First", "Last", false, false, 60, "f@l.com");
         repository.save(p);
 
-        assertThat(repository.findByEmail("f@l.com")).isPresent().get().extracting(Person::getEmail).isEqualTo("f@l.com");
+        assertThat(repository.findByEmail("f@l.com"))
+                .isPresent()
+                .get()
+                .extracting(Person::getEmail)
+                .isEqualTo("f@l.com");
     }
 
     @Test

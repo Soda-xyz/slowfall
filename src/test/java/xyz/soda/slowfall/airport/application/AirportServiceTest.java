@@ -27,7 +27,8 @@ class AirportServiceTest {
 
     @Test
     void createAirportSavesEntity() {
-        CreateAirportRequest req = new CreateAirportRequest("EGLL", "Heathrow", "Europe/London");
+        // CreateAirportRequest record is declared as (String name, String icaoCode, String timezone)
+        CreateAirportRequest req = new CreateAirportRequest("Heathrow", "EGLL", "Europe/London");
         when(repository.save(any(Airport.class))).thenAnswer(i -> i.getArgument(0));
 
         Airport created = service.createAirport(req);
@@ -44,6 +45,6 @@ class AirportServiceTest {
         java.util.List<Airport> results = service.listAllAirports();
 
         assertEquals(1, results.size());
-        assertEquals("Heathrow", results.iterator().next().getName());
+        assertEquals("Heathrow", results.getFirst().getName());
     }
 }
