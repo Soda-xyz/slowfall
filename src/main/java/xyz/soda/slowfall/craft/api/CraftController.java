@@ -11,16 +11,31 @@ import xyz.soda.slowfall.craft.application.CraftService;
 public class CraftController {
     private final CraftService service;
 
+    /**
+     * Create a new instance of {@code CraftController}.
+     *
+     * @param service the service handling craft operations
+     */
     public CraftController(CraftService service) {
         this.service = service;
     }
 
+    /**
+     * Create a new craft from the request.
+     * @param request payload with craft details
+     * @return a ResponseEntity containing the created CraftDto with HTTP 201, or 400 on bad request
+     */
     @PostMapping
     public ResponseEntity<CraftDto> createCraft(@RequestBody CreateCraftRequest request) {
         try {
             var created = service.createCraft(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(new CraftDto(created.getId(), created.getName(),
-                    created.getRegistrationNumber(), created.getCapacityWeight(), created.getCapacityPersons()));
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new CraftDto(
+                            created.getId(),
+                            created.getName(),
+                            created.getRegistrationNumber(),
+                            created.getCapacityWeight(),
+                            created.getCapacityPersons()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }

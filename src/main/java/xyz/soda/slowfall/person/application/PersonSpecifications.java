@@ -9,6 +9,12 @@ public final class PersonSpecifications {
     private PersonSpecifications() {
     }
 
+    /**
+     * Build a specification to match persons whose first name contains the provided text (case-insensitive).
+     *
+     * @param firstName substring to match against firstName
+     * @return a Specification for Person or null if {@code firstName} is blank
+     */
     public static Specification<Person> firstNameContains(String firstName) {
         return (root, query, cb) -> {
             if (firstName == null || firstName.isBlank()) return null;
@@ -17,6 +23,11 @@ public final class PersonSpecifications {
         };
     }
 
+    /**
+     * Build a specification to match persons whose last name contains the provided text (case-insensitive).
+     * @param lastName substring to match against lastName
+     * @return a Specification for Person or null if {@code lastName} is blank
+     */
     public static Specification<Person> lastNameContains(String lastName) {
         return (root, query, cb) -> {
             if (lastName == null || lastName.isBlank()) return null;
@@ -25,6 +36,11 @@ public final class PersonSpecifications {
         };
     }
 
+    /**
+     * Build a specification to filter by pilot flag.
+     * @param pilot the pilot flag to match (null to ignore)
+     * @return a Specification for Person or null if {@code pilot} is null
+     */
     public static Specification<Person> isPilot(Boolean pilot) {
         return (root, query, cb) -> {
             if (pilot == null) return null;
@@ -32,6 +48,11 @@ public final class PersonSpecifications {
         };
     }
 
+    /**
+     * Build a specification to filter by sky diver flag.
+     * @param skyDiver the skyDiver flag to match (null to ignore)
+     * @return a Specification for Person or null if {@code skyDiver} is null
+     */
     public static Specification<Person> isSkyDiver(Boolean skyDiver) {
         return (root, query, cb) -> {
             if (skyDiver == null) return null;

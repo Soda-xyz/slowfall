@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AppShell, Card, Container, Grid, Group, Title } from '@mantine/core'
+import { Card, Container, Grid, Group, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import PersonForm from './PersonForm'
 import PeopleTable from './PeopleTable'
@@ -32,25 +32,23 @@ export default function PeoplePage() {
   )
 
   return (
-    <AppShell header={{ height: 56 }} padding="md">
-      <AppShell.Header>{header}</AppShell.Header>
-      <AppShell.Main>
-        <Container size="lg">
-          <Grid gutter="md">
-            <Grid.Col span={{ base: 12, md: 5 }}>
-              <Card withBorder shadow="sm" radius="md" p="md">
-                <Title order={4} mb="sm">
-                  Add person
-                </Title>
-                <PersonForm onCreated={onCreated} />
-              </Card>
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 7 }}>
-              <PeopleTable people={people} loading={loading} />
-            </Grid.Col>
-          </Grid>
-        </Container>
-      </AppShell.Main>
-    </AppShell>
+    <>
+      {header}
+      <Container size="lg">
+        <Grid gutter="md">
+          <Grid.Col span={{ base: 12, md: 5 }}>
+            <Card withBorder shadow="sm" radius="md" p="md">
+              <Title order={4} mb="sm">
+                Add person
+              </Title>
+              <PersonForm onCreated={onCreated} />
+            </Card>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 7 }}>
+            <PeopleTable people={people} loading={loading} />
+          </Grid.Col>
+        </Grid>
+      </Container>
+    </>
   )
 }
