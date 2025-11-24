@@ -74,7 +74,7 @@ class JumpControllerTest {
     @Test
     void createJumpBadRequestOnInvalidPayload() throws Exception {
         // null airportId -> invalid
-        CreateJumpRequest req = new CreateJumpRequest(LocalDateTime.now().plusDays(1), null, "REG-1", 12000, null);
+        CreateJumpRequest req = new CreateJumpRequest(Instant.now()., null, "REG-1", 12000, null);
 
         mvc.perform(post("/api/jumps")
                         .contentType(MediaType.APPLICATION_JSON)
