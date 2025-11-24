@@ -1,5 +1,6 @@
 package xyz.soda.slowfall.person.api;
 
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -33,11 +34,12 @@ public class PersonController {
      * @return a ResponseEntity with created PersonDto and HTTP 201, or 400 on bad request
      */
     @PostMapping
-    public ResponseEntity<PersonDto> createPerson(@RequestBody CreatePersonRequest request) {
+    public ResponseEntity<PersonDto> createPerson(@Valid @RequestBody CreatePersonRequest request) {
         try {
             Person created = service.createPerson(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(PersonDto.from(created));
         } catch (IllegalArgumentException e) {
+            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }

@@ -5,7 +5,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import xyz.soda.slowfall.person.domain.Person;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -21,7 +21,7 @@ public class Jump {
     private UUID id;
 
     @Column(nullable = false)
-    private LocalDateTime jumpTime;
+    private Instant jumpTime;
 
     @Column(nullable = false)
     private UUID airportId;
@@ -31,7 +31,7 @@ public class Jump {
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @ManyToMany
     @JoinTable(
@@ -60,7 +60,7 @@ public class Jump {
      * @param airportId    the airport id where the jump occurs
      * @param altitudeFeet altitude in feet for the jump
      */
-    public Jump(LocalDateTime jumpTime, UUID airportId, Integer altitudeFeet) {
+    public Jump(Instant jumpTime, UUID airportId, Integer altitudeFeet) {
         this.jumpTime = jumpTime;
         this.airportId = airportId;
         this.altitudeFeet = altitudeFeet;
@@ -78,7 +78,7 @@ public class Jump {
      * Get the scheduled jump time.
      * @return the LocalDateTime of the jump
      */
-    public LocalDateTime getJumpTime() {
+    public Instant getJumpTime() {
         return jumpTime;
     }
 
@@ -102,7 +102,7 @@ public class Jump {
      * Get the set of skydiver for this jump.
      * @return an unmodifiable set of skydiver (Person entities)
      */
-    public Set<Person> getSkydiver() {
+    public Set<Person> getSkydivers() {
         return skydiver;
     }
 
@@ -118,7 +118,7 @@ public class Jump {
      * Get the creation timestamp.
      * @return the createdAt timestamp
      */
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 

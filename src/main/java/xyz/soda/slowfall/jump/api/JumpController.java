@@ -33,12 +33,12 @@ public class JumpController {
      */
     @PostMapping
     public ResponseEntity<JumpDto> createJump(@Valid @RequestBody CreateJumpRequest request) {
-        try {
+        //try {
             Jump created = service.createJump(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(JumpDto.from(created));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        }
+        //} catch (IllegalArgumentException e) {
+        //   return ResponseEntity.badRequest().build();
+        //}
     }
 
     /**
@@ -58,7 +58,7 @@ public class JumpController {
      * @param body request body map containing key "personId" with the skydiver UUID
      * @return ResponseEntity with 200 on success or 400 on bad request
      */
-    @PostMapping("/{id}/skydiver")
+    @PostMapping("/{id}/skydivers")
     public ResponseEntity<Void> addSkydiver(@PathVariable("id") UUID id, @RequestBody Map<String, UUID> body) {
         UUID personId = body.get("personId");
         if (personId == null) return ResponseEntity.badRequest().build();

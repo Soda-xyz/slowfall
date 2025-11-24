@@ -10,8 +10,9 @@ import xyz.soda.slowfall.jump.infra.JumpRepository;
 import xyz.soda.slowfall.person.domain.Person;
 import xyz.soda.slowfall.person.infra.PersonRepository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,7 +51,7 @@ public class JumpService {
                 .orElseThrow(() -> new IllegalArgumentException("Airport not found"));
 
         ZoneId airportZone = ZoneId.of(airport.getTimezone());
-        LocalDateTime nowAtAirport = LocalDateTime.now(airportZone);
+        Instant nowAtAirport = ZonedDateTime.now(airportZone).toInstant();
 
         if (request.jumpTime().isBefore(nowAtAirport)) {
             throw new IllegalArgumentException("Cannot schedule in the past");

@@ -9,8 +9,9 @@ type Props = {
 }
 
 export default function PersonForm({ onCreated }: Props) {
-  const [name, setName] = useState('')
-  const [weight, setWeight] = useState<number | string>('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [weight, setWeight] = useState<number | string>('') //Look at this
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -21,17 +22,23 @@ export default function PersonForm({ onCreated }: Props) {
       return
     }
 
-    const payload: CreatePersonRequest = { name: name.trim(), weight: Number(weight), email: email.trim() }
-    if (!payload.name || !payload.email) {
-      notifications.show({ color: 'red', title: 'Missing fields', message: 'Name and email are required' })
+    const payload: CreatePersonRequest = { firstName: firstName.trim(),lastName: lastName.trim(), weight: Number
+        (weight),
+        pilot:
+        false, skydiver: true,
+        email:
+        email.trim() }
+    if (!payload.firstName || !payload.lastName || !payload.email) {
+      notifications.show({ color: 'red', title: 'Missing fields', message: 'First name, last name and email required' })
       return
     }
 
     try {
       setSubmitting(true)
       const created = await createPerson(payload)
-      notifications.show({ color: 'green', title: 'Person added', message: `${created.name} has been added` })
-      setName('')
+      notifications.show({ color: 'green', title: 'Person added', message: `${created.fistName} has been added` })
+      setFirstName('')
+      setLastName('')
       setWeight('')
       setEmail('')
       onCreated?.(created)
@@ -47,11 +54,17 @@ export default function PersonForm({ onCreated }: Props) {
     <form onSubmit={handleSubmit}>
       <Stack gap="sm">
         <TextInput
-          label="Name"
-          placeholder="Jane Doe"
+          label="First Name"
+          placeholder="Jane"
           withAsterisk
-          value={name}
-          onChange={(e) => setName(e.currentTarget.value)}
+          value={firstName}
+          onChange={(e) => setFirstName(e.currentTarget.value)}
+        /><TextInput
+          label="Last Name"
+          placeholder="Doe"
+          withAsterisk
+          value={lastName}
+          onChange={(e) => setLastName(e.currentTarget.value)}
         />
         <NumberInput
           label="Weight"

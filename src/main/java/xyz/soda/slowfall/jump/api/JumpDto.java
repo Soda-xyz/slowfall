@@ -3,7 +3,7 @@ package xyz.soda.slowfall.jump.api;
 import xyz.soda.slowfall.jump.domain.Jump;
 import xyz.soda.slowfall.person.api.PersonDto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -15,15 +15,15 @@ import java.util.stream.Collectors;
  * @param jumpTime     the scheduled date/time of the jump
  * @param airportId    the airport id where the jump occurs
  * @param altitudeFeet altitude in feet for the jump
- * @param skydiver   list of skydiver PersonDto
+ * @param skydivers   list of skydiver PersonDto
  * @param pilots       list of pilot PersonDto
  */
 public record JumpDto(
         UUID id,
-        LocalDateTime jumpTime,
+        Instant jumpTime,
         UUID airportId,
         Integer altitudeFeet,
-        List<PersonDto> skydiver,
+        List<PersonDto> skydivers,
         List<PersonDto> pilots) {
     /**
      * Convert a Jump domain object to a JumpDto.
@@ -31,10 +31,10 @@ public record JumpDto(
      * @return a populated JumpDto
      */
     public static JumpDto from(Jump jump) {
-        List<PersonDto> skydiver =
-                jump.getSkydiver().stream().map(PersonDto::from).collect(Collectors.toList());
+        List<PersonDto> skydivers =
+                jump.getSkydivers().stream().map(PersonDto::from).collect(Collectors.toList());
         List<PersonDto> pilots = jump.getPilots().stream().map(PersonDto::from).collect(Collectors.toList());
         return new JumpDto(
-                jump.getId(), jump.getJumpTime(), jump.getAirportId(), jump.getAltitudeFeet(), skydiver, pilots);
+                jump.getId(), jump.getJumpTime(), jump.getAirportId(), jump.getAltitudeFeet(), skydivers, pilots);
     }
 }

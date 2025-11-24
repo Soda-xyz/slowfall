@@ -17,7 +17,6 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
       <tr key={j.id}>
         <td>{new Date(j.jumpTime).toLocaleString()}</td>
         <td>{j.altitudeFeet}</td>
-        <td>{j.airportId}</td>
         <td>
           <Group>
             <Button size="xs" onClick={() => onAddSkydiver?.(j.id)}>
@@ -32,7 +31,7 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
           <div>
             <strong>Skydivers:</strong>
             <ul>
-              {j.skydivers.map((p) => (
+              {(j.skydivers ?? []).map((p) => (
                 <li key={p.id}>{p.name}</li>
               ))}
             </ul>
@@ -40,7 +39,7 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
           <div>
             <strong>Pilots:</strong>
             <ul>
-              {j.pilots.map((p) => (
+              {(j.pilots ?? []).map((p) => (
                 <li key={p.id}>{p.name}</li>
               ))}
             </ul>
@@ -55,8 +54,6 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
         <tr>
           <th>Jump time</th>
           <th>Altitude</th>
-          <th>Actions</th>
-          <th>Participants</th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>

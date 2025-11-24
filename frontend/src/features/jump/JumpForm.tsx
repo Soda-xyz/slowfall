@@ -3,6 +3,8 @@ import { Button, Group, Stack, TextInput, NumberInput, Select } from '@mantine/c
 import { DateTimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+dayjs.extend(utc)
 import type { CreateJumpRequest } from './types'
 import { createJump } from './api'
 import { fetchPerson, fetchPilots } from '../person/api'
@@ -76,7 +78,7 @@ export default function JumpForm({ onCreated, airportId }: Props) {
     }
 
     const payload: CreateJumpRequest = {
-      jumpTime: dayjs(jumpTimeDate).format('YYYY-MM-DDTHH:mm:ss'),
+      jumpTime: dayjs(jumpTimeDate).utc().toISOString(),
       airportId: airportToUse,
       craftRegistrationNumber,
       altitudeFeet: Number(altitudeFeet),

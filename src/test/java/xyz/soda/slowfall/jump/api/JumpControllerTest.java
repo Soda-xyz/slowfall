@@ -16,6 +16,8 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import xyz.soda.slowfall.jump.application.JumpService;
 import xyz.soda.slowfall.jump.domain.Jump;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -51,7 +53,7 @@ class JumpControllerTest {
 
     @Test
     void createJumpReturns201AndBody() throws Exception {
-        LocalDateTime when = LocalDateTime.now().plusDays(1);
+        Instant when = Instant.now().plus(Duration.ofDays(1));
         UUID airportId = UUID.randomUUID();
         CreateJumpRequest req = new CreateJumpRequest(when, airportId, "REG-1", 12000, null);
 
