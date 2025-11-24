@@ -42,7 +42,7 @@ public class PersonService {
                 request.firstName(),
                 request.lastName(),
                 request.pilot(),
-                request.skyDiver(),
+                request.skydiver(),
                 request.weight(),
                 request.email());
         return repository.save(person);
@@ -53,7 +53,7 @@ public class PersonService {
      * @return list of all Person entities
      */
     @Transactional(readOnly = true)
-    public List<Person> listAllPeople() {
+    public List<Person> listAllPerson() {
         return repository.findAll();
     }
 
@@ -62,18 +62,18 @@ public class PersonService {
      * @param firstName optional first name filter
      * @param lastName optional last name filter
      * @param pilot optional pilot flag filter
-     * @param skyDiver optional sky diver flag filter
+     * @param skydiver optional sky diver flag filter
      * @param pageable pagination information
      * @return a page of Person entities matching the filters
      */
     @Transactional(readOnly = true)
     public Page<Person> searchPersons(
-            String firstName, String lastName, Boolean pilot, Boolean skyDiver, Pageable pageable) {
+            String firstName, String lastName, Boolean pilot, Boolean skydiver, Pageable pageable) {
         Specification<Person> spec = Stream.of(
                         PersonSpecifications.firstNameContains(firstName),
                         PersonSpecifications.lastNameContains(lastName),
                         PersonSpecifications.isPilot(pilot),
-                        PersonSpecifications.isSkyDiver(skyDiver))
+                        PersonSpecifications.isSkydiver(skydiver))
                 .reduce(Specification::and)
                 .orElse(null);
 

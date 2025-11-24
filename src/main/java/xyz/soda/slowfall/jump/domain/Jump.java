@@ -35,10 +35,10 @@ public class Jump {
 
     @ManyToMany
     @JoinTable(
-            name = "jump_passengers",
+            name = "jump_skydiver",
             joinColumns = @JoinColumn(name = "jump_id"),
             inverseJoinColumns = @JoinColumn(name = "person_id"))
-    private final Set<Person> passengers = new HashSet<>();
+    private final Set<Person> skydiver = new HashSet<>();
 
     @ManyToMany
     @JoinTable(
@@ -99,11 +99,11 @@ public class Jump {
     }
 
     /**
-     * Get the set of passengers for this jump.
-     * @return an unmodifiable set of passengers (Person entities)
+     * Get the set of skydiver for this jump.
+     * @return an unmodifiable set of skydiver (Person entities)
      */
-    public Set<Person> getPassengers() {
-        return passengers;
+    public Set<Person> getSkydiver() {
+        return skydiver;
     }
 
     /**
@@ -123,11 +123,11 @@ public class Jump {
     }
 
     /**
-     * Add a passenger to this jump.
-     * @param person the Person to add as passenger
+     * Add a skydiver to this jump.
+     * @param person the Person to add as skydiver
      */
-    public void addPassenger(Person person) {
-        this.passengers.add(person);
+    public void addSkydiver(Person person) {
+        this.skydiver.add(person);
     }
 
     /**

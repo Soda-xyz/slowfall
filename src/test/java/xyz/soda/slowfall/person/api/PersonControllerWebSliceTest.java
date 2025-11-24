@@ -43,7 +43,7 @@ class PersonControllerWebSliceTest {
         Person p = new Person("A", "B", false, false, 70, "a@b.com");
         when(service.createPerson(any(CreatePersonRequest.class))).thenReturn(p);
 
-        mockMvc.perform(post("/api/people")
+        mockMvc.perform(post("/api/person")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated())
@@ -51,11 +51,11 @@ class PersonControllerWebSliceTest {
     }
 
     @Test
-    void listPeopleReturnsOk() throws Exception {
+    void listPersonReturnsOk() throws Exception {
         Person p = new Person("A", "B", false, false, 70, "a@b.com");
-        when(service.listAllPeople()).thenReturn(List.of(p));
+        when(service.listAllPerson()).thenReturn(List.of(p));
 
-        mockMvc.perform(get("/api/people"))
+        mockMvc.perform(get("/api/person"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].email").value("a@b.com"));
     }

@@ -50,13 +50,13 @@ public final class PersonSpecifications {
 
     /**
      * Build a specification to filter by sky diver flag.
-     * @param skyDiver the skyDiver flag to match (null to ignore)
-     * @return a Specification for Person or null if {@code skyDiver} is null
+     * @param skydiver the skydiver flag to match (null to ignore)
+     * @return a Specification for Person or null if {@code skydiver} is null
      */
-    public static Specification<Person> isSkyDiver(Boolean skyDiver) {
+    public static Specification<Person> isSkydiver(Boolean skydiver) {
         return (root, query, cb) -> {
-            if (skyDiver == null) return null;
-            return cb.equal(root.get("skyDiver"), skyDiver);
+            if (skydiver == null) return null;
+            return cb.equal(root.get("skydiver"), skydiver);
         };
     }
 }

@@ -34,8 +34,10 @@ class JumpControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
     @Mock
     JumpService service;
+
     private MockMvc mvc;
 
     @BeforeEach
@@ -94,12 +96,12 @@ class JumpControllerTest {
     }
 
     @Test
-    void addPassengerAndPilotEndpoints() throws Exception {
+    void addSkydiverAndPilotEndpoints() throws Exception {
         UUID jumpId = UUID.randomUUID();
         UUID personId = UUID.randomUUID();
 
-        // successful add passenger (mock service does nothing => OK)
-        mvc.perform(post("/api/jumps/" + jumpId + "/passengers")
+        // successful add skydiver (mock service does nothing => OK)
+        mvc.perform(post("/api/jumps/" + jumpId + "/skydivers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("personId", personId))))
                 .andExpect(status().isOk());

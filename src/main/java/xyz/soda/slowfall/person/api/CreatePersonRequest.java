@@ -9,7 +9,7 @@ public record CreatePersonRequest(
         @NotBlank @Size(max = 20) String firstName,
         @NotBlank @Size(max = 20) String lastName,
         @NotBlank boolean pilot,
-        @NotBlank boolean skyDiver,
+        @NotBlank boolean skydiver,
         @NotBlank @Positive Integer weight,
         @Email String email) {
 }

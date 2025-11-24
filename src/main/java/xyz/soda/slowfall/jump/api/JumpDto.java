@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
  * @param jumpTime     the scheduled date/time of the jump
  * @param airportId    the airport id where the jump occurs
  * @param altitudeFeet altitude in feet for the jump
- * @param passengers   list of passenger PersonDto
+ * @param skydiver   list of skydiver PersonDto
  * @param pilots       list of pilot PersonDto
  */
 public record JumpDto(
@@ -23,7 +23,7 @@ public record JumpDto(
         LocalDateTime jumpTime,
         UUID airportId,
         Integer altitudeFeet,
-        List<PersonDto> passengers,
+        List<PersonDto> skydiver,
         List<PersonDto> pilots) {
     /**
      * Convert a Jump domain object to a JumpDto.
@@ -31,10 +31,10 @@ public record JumpDto(
      * @return a populated JumpDto
      */
     public static JumpDto from(Jump jump) {
-        List<PersonDto> passengers =
-                jump.getPassengers().stream().map(PersonDto::from).collect(Collectors.toList());
+        List<PersonDto> skydiver =
+                jump.getSkydiver().stream().map(PersonDto::from).collect(Collectors.toList());
         List<PersonDto> pilots = jump.getPilots().stream().map(PersonDto::from).collect(Collectors.toList());
         return new JumpDto(
-                jump.getId(), jump.getJumpTime(), jump.getAirportId(), jump.getAltitudeFeet(), passengers, pilots);
+                jump.getId(), jump.getJumpTime(), jump.getAirportId(), jump.getAltitudeFeet(), skydiver, pilots);
     }
 }

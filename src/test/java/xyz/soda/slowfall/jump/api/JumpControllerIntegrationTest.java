@@ -47,7 +47,7 @@ class JumpControllerIntegrationTest {
     }
 
     @Test
-    void addPassengerIntegration() {
+    void addSkydiverIntegration() {
         String airportUrl = "http://localhost:" + port + "/api/airports";
         CreateAirportRequest areq = new CreateAirportRequest("Heathrow", "EGLL", "UTC");
         restTemplate.postForEntity(airportUrl, areq, Object.class);
@@ -68,9 +68,9 @@ class JumpControllerIntegrationTest {
         UUID jumpId = created.id();
 
         // attempt to add non-existent person -> expect 400
-        String addPassengerUrl = jumpUrl + "/" + jumpId + "/passengers";
+        String addSkydiverUrl = jumpUrl + "/" + jumpId + "/skydivers";
         var body = java.util.Map.of("personId", UUID.randomUUID());
-        ResponseEntity<String> addResp = restTemplate.postForEntity(addPassengerUrl, body, String.class);
+        ResponseEntity<String> addResp = restTemplate.postForEntity(addSkydiverUrl, body, String.class);
         assertEquals(HttpStatus.BAD_REQUEST, addResp.getStatusCode());
     }
 }

@@ -1,3 +1,3 @@
-export * from './people'
+export * from './person'
 export * from './airport'
 export * from './jump'

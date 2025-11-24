@@ -11,7 +11,7 @@ import java.util.UUID;
  * @param name               the craft name
  * @param registrationNumber the craft registration number
  * @param capacityWeight     weight capacity for the craft
- * @param capacityPersons    passenger capacity for the craft
+ * @param capacityPersons    person capacity for the craft
  */
 public record CraftDto(
         UUID id, String name, String registrationNumber, Integer capacityWeight, Integer capacityPersons) {

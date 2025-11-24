@@ -29,8 +29,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AirportControllerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Mock
     AirportService service;
+
     private MockMvc mvc;
 
     @BeforeEach

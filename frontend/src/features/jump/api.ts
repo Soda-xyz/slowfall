@@ -25,13 +25,13 @@ export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
   return res.json()
 }
 
-export async function addPassengerToJump(jumpId: string, personId: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/jumps/${jumpId}/passengers`, {
+export async function addSkydiverToJump(jumpId: string, personId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/jumps/${jumpId}/skydivers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ personId }),
   })
-  if (!res.ok) throw new Error(`Failed to add passenger: ${res.status} ${res.statusText}`)
+  if (!res.ok) throw new Error(`Failed to add skydiver: ${res.status} ${res.statusText}`)
 }
 
 export async function addPilotToJump(jumpId: string, personId: string): Promise<void> {

@@ -4,7 +4,7 @@ export type PersonDto = {
   id: UUID
   name: string
   pilot?: boolean
-  skyDiver?: boolean
+  skydiver?: boolean
   weight?: number
   email?: string
 }
@@ -14,7 +14,7 @@ export type Jump = {
   jumpTime: string // ISO datetime
   airportId: UUID
   altitudeFeet: number
-  passengers: PersonDto[]
+  skydivers: PersonDto[]
   pilots: PersonDto[]
 }
 

@@ -16,7 +16,12 @@ export default function AirportPage() {
     setLoading(true)
     fetchAirports(controller.signal)
       .then(setAirports)
-      .catch((err) => notifications.show({ color: 'red', title: 'Load failed', message: String(err?.message || err) }))
+      .catch((err) => {
+        console.error('fetchAirports error:', err)
+        // Ignore aborts caused by effect cleanup/unmount
+        if ((err as any)?.name === 'AbortError') return
+        notifications.show({ color: 'red', title: 'Load failed', message: String((err as Error)?.message || err) })
+      })
       .finally(() => setLoading(false))
     return () => controller.abort()
   }, [])

@@ -69,19 +69,19 @@ public class JumpService {
     }
 
     /**
-     * Add a passenger to an existing jump.
+     * Add a skydiver to an existing jump.
      * @param jumpId the id of the jump to modify
-     * @param personId the id of the person to add as passenger
+     * @param personId the id of the person to add as skydiver
      * @throws IllegalArgumentException if the jump or person is not found
      */
     @Transactional
-    public void addPassengerToJump(UUID jumpId, UUID personId) {
+    public void addSkydiverToJump(UUID jumpId, UUID personId) {
         Jump jump = jumpRepository.findById(jumpId).orElseThrow(() -> new IllegalArgumentException("Jump not found"));
 
         Person person =
                 personRepository.findById(personId).orElseThrow(() -> new IllegalArgumentException("Person not found"));
 
-        jump.addPassenger(person);
+        jump.addSkydiver(person);
     }
 
     /**

@@ -26,8 +26,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CraftControllerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Mock
     CraftService service;
+
     private MockMvc mvc;
 
     @BeforeEach

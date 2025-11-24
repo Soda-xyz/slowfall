@@ -37,7 +37,7 @@ public class Craft {
      * @param name               the craft name
      * @param registrationNumber the unique registration identifier
      * @param capacityWeight     weight capacity in appropriate units
-     * @param capacityPersons    passenger capacity
+     * @param capacityPersons    person capacity
      */
     public Craft(String name, String registrationNumber, Integer capacityWeight, Integer capacityPersons) {
         setName(name);

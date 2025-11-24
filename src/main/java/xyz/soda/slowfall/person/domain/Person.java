@@ -23,7 +23,7 @@ public class Person {
     private boolean pilot;
 
     @Column(nullable = false)
-    private boolean skyDiver;
+    private boolean skydiver;
 
     @Column(nullable = false)
     private Integer weight;
@@ -43,15 +43,15 @@ public class Person {
      * @param firstName the person's first name
      * @param lastName  the person's last name
      * @param pilot     whether the person is a pilot
-     * @param skyDiver  whether the person is a sky diver
+     * @param setSkydiver  whether the person is a skydiver
      * @param weight    the person's weight in kilograms
      * @param email     the person's email address
      */
-    public Person(String firstName, String lastName, boolean pilot, boolean skyDiver, Integer weight, String email) {
+    public Person(String firstName, String lastName, boolean pilot, boolean setSkydiver, Integer weight, String email) {
         setFirstName(firstName);
         setLastName(lastName);
         setPilot(pilot);
-        setSkyDiver(skyDiver);
+        setSkydiver(setSkydiver);
         setWeight(weight);
         setEmail(email);
     }
@@ -73,7 +73,7 @@ public class Person {
     }
 
     /**
-     * Set the first name. First name must not be blank.
+     * Set the firstname. The First name must not be blank.
      * @param firstName the first name to set
      * @throws IllegalArgumentException if {@code firstName} is null or blank
      */
@@ -93,7 +93,7 @@ public class Person {
     }
 
     /**
-     * Set the last name. Last name must not be blank.
+     * Set the last name. The Last name must not be blank.
      * @param lastName the last name to set
      * @throws IllegalArgumentException if {@code lastName} is null or blank
      */
@@ -113,7 +113,7 @@ public class Person {
     }
 
     /**
-     * Set pilot flag for the person.
+     * Set the pilot flag for the person.
      * @param pilot true if the person is a pilot
      */
     public void setPilot(boolean pilot) {
@@ -121,19 +121,19 @@ public class Person {
     }
 
     /**
-     * Get whether the person is a sky diver.
-     * @return {@code true} if person is a sky diver, otherwise {@code false}
+     * Get whether the person is a skydiver.
+     * @return {@code true} if person is a skydiver, otherwise {@code false}
      */
-    public boolean getSkyDiver() {
-        return skyDiver;
+    public boolean getSkydiver() {
+        return skydiver;
     }
 
     /**
-     * Set sky diver flag for the person.
-     * @param skyDiver true if the person is a sky diver
+     * Set the skydiver flag for the person.
+     * @param skydiver true if the person is a skydiver
      */
-    public void setSkyDiver(boolean skyDiver) {
-        this.skyDiver = skyDiver;
+    public void setSkydiver(boolean skydiver) {
+        this.skydiver = skydiver;
     }
 
     /**

@@ -3,11 +3,11 @@ import type { Jump } from './types'
 
 type Props = {
   jumps: Jump[]
-  onAddPassenger?: (jumpId: string) => void
+  onAddSkydiver?: (jumpId: string) => void
   onAddPilot?: (jumpId: string) => void
 }
 
-export default function JumpTable({ jumps, onAddPassenger, onAddPilot }: Props) {
+export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
   if (!jumps || jumps.length === 0) return <Text>No upcoming jumps</Text>
 
   const rows = jumps
@@ -20,8 +20,8 @@ export default function JumpTable({ jumps, onAddPassenger, onAddPilot }: Props) 
         <td>{j.airportId}</td>
         <td>
           <Group>
-            <Button size="xs" onClick={() => onAddPassenger?.(j.id)}>
-              Add passenger
+            <Button size="xs" onClick={() => onAddSkydiver?.(j.id)}>
+              Add skydiver
             </Button>
             <Button size="xs" variant="outline" onClick={() => onAddPilot?.(j.id)}>
               Add pilot
@@ -30,9 +30,9 @@ export default function JumpTable({ jumps, onAddPassenger, onAddPilot }: Props) 
         </td>
         <td>
           <div>
-            <strong>Passengers:</strong>
+            <strong>Skydivers:</strong>
             <ul>
-              {j.passengers.map((p) => (
+              {j.skydivers.map((p) => (
                 <li key={p.id}>{p.name}</li>
               ))}
             </ul>
@@ -55,7 +55,6 @@ export default function JumpTable({ jumps, onAddPassenger, onAddPilot }: Props) 
         <tr>
           <th>Jump time</th>
           <th>Altitude</th>
-          <th>Airport ID</th>
           <th>Actions</th>
           <th>Participants</th>
         </tr>

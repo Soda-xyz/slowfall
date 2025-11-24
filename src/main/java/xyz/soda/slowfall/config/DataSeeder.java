@@ -49,9 +49,9 @@ public class DataSeeder {
 
             if (personRepository.count() == 0) {
                 // Interpret the user's request as 4 people:
-                // 1: pilot and passenger (pilot=true, skyDiver=true)
-                // 2: pilot only (pilot=true, skyDiver=false)
-                // 3-4: passengers only (pilot=false, skyDiver=true)
+                // 1: pilot and skydiver (pilot=true, skydiver=true)
+                // 2: pilot only (pilot=true, skydiver=false)
+                // 3-4: skydivers only (pilot=false, skydiver=true)
                 var p1 = new Person("Alice", "Anderson", true, true, 70, "alice@example.com");
                 var p2 = new Person("Bob", "Brown", true, false, 85, "bob@example.com");
                 var p3 = new Person("Carol", "Clark", false, true, 60, "carol@example.com");

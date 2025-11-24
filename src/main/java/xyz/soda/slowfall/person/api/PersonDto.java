@@ -10,11 +10,11 @@ import java.util.UUID;
  * @param id       the person unique identifier
  * @param name     the person's full name (first + last)
  * @param pilot    whether the person is a pilot
- * @param skyDiver whether the person is a sky diver
+ * @param skydiver whether the person is a sky diver
  * @param weight   the person's weight in kilograms (nullable)
  * @param email    the person's email address
  */
-public record PersonDto(UUID id, String name, boolean pilot, boolean skyDiver, Integer weight, String email) {
+public record PersonDto(UUID id, String name, boolean pilot, boolean skydiver, Integer weight, String email) {
     /**
      * Convert Person domain object to PersonDto.
      * @param person the Person entity
@@ -26,7 +26,7 @@ public record PersonDto(UUID id, String name, boolean pilot, boolean skyDiver, I
                 person.getId(),
                 fullName,
                 person.getPilot(),
-                person.getSkyDiver(),
+                person.getSkydiver(),
                 person.getWeight(),
                 person.getEmail());
     }

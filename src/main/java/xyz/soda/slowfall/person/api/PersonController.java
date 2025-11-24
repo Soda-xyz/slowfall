@@ -12,7 +12,7 @@ import xyz.soda.slowfall.person.domain.Person;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/people")
+@RequestMapping("/api/person")
 @CrossOrigin(origins = "http://localhost:5173") // frontend dev server
 public class PersonController {
 
@@ -43,12 +43,12 @@ public class PersonController {
     }
 
     /**
-     * List all people.
+     * List all person.
      * @return a list of PersonDto for all stored persons
      */
     @GetMapping
-    public List<PersonDto> listPeople() {
-        return service.listAllPeople().stream().map(PersonDto::from).toList();
+    public List<PersonDto> listPerson() {
+        return service.listAllPerson().stream().map(PersonDto::from).toList();
     }
 
     /**
@@ -56,7 +56,7 @@ public class PersonController {
      * @param firstName optional first name filter
      * @param lastName optional last name filter
      * @param pilot optional pilot flag filter
-     * @param skyDiver optional sky diver flag filter
+     * @param skydiver optional sky diver flag filter
      * @param pageable pagination information
      * @return a paged ResponseEntity of PersonDto matching the criteria
      */
@@ -65,9 +65,9 @@ public class PersonController {
             @RequestParam(required = false) String firstName,
             @RequestParam(required = false) String lastName,
             @RequestParam(required = false) Boolean pilot,
-            @RequestParam(required = false) Boolean skyDiver,
+            @RequestParam(required = false) Boolean skydiver,
             @PageableDefault(size = 20) Pageable pageable) {
-        Page<Person> results = service.searchPersons(firstName, lastName, pilot, skyDiver, pageable);
+        Page<Person> results = service.searchPersons(firstName, lastName, pilot, skydiver, pageable);
         Page<PersonDto> dtoPage = results.map(PersonDto::from);
         return ResponseEntity.ok(dtoPage);
     }

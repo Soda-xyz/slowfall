@@ -52,18 +52,18 @@ public class JumpController {
     }
 
     /**
-     * Add a passenger to the specified jump.
+     * Add a skydiver to the specified jump.
      *
      * @param id   the jump id
-     * @param body request body map containing key "personId" with the passenger UUID
+     * @param body request body map containing key "personId" with the skydiver UUID
      * @return ResponseEntity with 200 on success or 400 on bad request
      */
-    @PostMapping("/{id}/passengers")
-    public ResponseEntity<Void> addPassenger(@PathVariable("id") UUID id, @RequestBody Map<String, UUID> body) {
+    @PostMapping("/{id}/skydiver")
+    public ResponseEntity<Void> addSkydiver(@PathVariable("id") UUID id, @RequestBody Map<String, UUID> body) {
         UUID personId = body.get("personId");
         if (personId == null) return ResponseEntity.badRequest().build();
         try {
-            service.addPassengerToJump(id, personId);
+            service.addSkydiverToJump(id, personId);
             return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();

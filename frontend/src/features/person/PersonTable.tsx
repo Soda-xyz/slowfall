@@ -2,19 +2,19 @@ import { Badge, Card, Group, Loader, Table, Text } from '@mantine/core'
 import type { Person } from './types'
 
 type Props = {
-  people: Person[]
+  person: Person[]
   loading?: boolean
 }
 
-export default function PeopleTable({ people, loading }: Props) {
+export default function PersonTable({ person, loading }: Props) {
   return (
     <Card withBorder shadow="sm" radius="md" p="md">
       <Group justify="space-between" mb="sm">
         <Text fw={600} size="lg">
-          People in database
+          Person in database
         </Text>
         <Badge variant="light" color="blue">
-          {people.length}
+          {person.length}
         </Badge>
       </Group>
 
@@ -22,8 +22,8 @@ export default function PeopleTable({ people, loading }: Props) {
         <Group justify="center" p="lg">
           <Loader />
         </Group>
-      ) : people.length === 0 ? (
-        <Text c="dimmed">No people yet. Add the first person using the form.</Text>
+      ) : person.length === 0 ? (
+        <Text c="dimmed">No person yet. Add the first person using the form.</Text>
       ) : (
         <Table striped highlightOnHover withTableBorder stickyHeader>
           <Table.Thead>
@@ -34,7 +34,7 @@ export default function PeopleTable({ people, loading }: Props) {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {people.map((p) => (
+            {person.map((p) => (
               <Table.Tr key={p.id}>
                 <Table.Td>{p.name}</Table.Td>
                 <Table.Td>{p.weight}</Table.Td>
