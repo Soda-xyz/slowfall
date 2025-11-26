@@ -18,7 +18,6 @@ import xyz.soda.slowfall.jump.domain.Jump;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
@@ -74,7 +73,7 @@ class JumpControllerTest {
     @Test
     void createJumpBadRequestOnInvalidPayload() throws Exception {
         // null airportId -> invalid
-        CreateJumpRequest req = new CreateJumpRequest(Instant.now()., null, "REG-1", 12000, null);
+        CreateJumpRequest req = new CreateJumpRequest(Instant.now(), null, "REG-1", 12000, null);
 
         mvc.perform(post("/api/jumps")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -84,7 +83,7 @@ class JumpControllerTest {
 
     @Test
     void createJumpReturns400WhenServiceThrows() throws Exception {
-        LocalDateTime when = LocalDateTime.now().plusDays(1);
+        Instant when = Instant.now().plus(Duration.ofDays(1));
         UUID airportId = UUID.randomUUID();
         CreateJumpRequest req = new CreateJumpRequest(when, airportId, "REG-1", 12000, null);
 
@@ -102,7 +101,7 @@ class JumpControllerTest {
         UUID jumpId = UUID.randomUUID();
         UUID personId = UUID.randomUUID();
 
-        // successful add skydiver (mock service does nothing => OK)
+        // Successfully add skydiver (mock service does nothing => OK)
         mvc.perform(post("/api/jumps/" + jumpId + "/skydivers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("personId", personId))))

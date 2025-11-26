@@ -1,73 +1,99 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Card, Container, Grid, Group, Title } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import AirportForm from './AirportForm'
-import AirportTable from './AirportTable'
-import { fetchAirports, deleteAirport } from './api'
-import type { Airport } from './types'
+import { useEffect, useMemo, useState } from "react";
+import { Card, Container, Grid, Group, Title } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import AirportForm from "./AirportForm";
+import AirportTable from "./AirportTable";
+import { fetchAirports, deleteAirport } from "./api";
+import type { Airport } from "./types";
 
 export default function AirportPage() {
-  const [airports, setAirports] = useState<Airport[]>([])
-  const [loading, setLoading] = useState(false)
-  const [deleting, setDeleting] = useState<string | null>(null)
+	const [airports, setAirports] = useState<Airport[]>([]);
+	const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController()
-    setLoading(true)
-    fetchAirports(controller.signal)
-      .then(setAirports)
-      .catch((err) => {
-        console.error('fetchAirports error:', err)
-        // Ignore aborts caused by effect cleanup/unmount
-        if ((err as any)?.name === 'AbortError') return
-        notifications.show({ color: 'red', title: 'Load failed', message: String((err as Error)?.message || err) })
-      })
-      .finally(() => setLoading(false))
-    return () => controller.abort()
-  }, [])
+	const onCreated = (airport: Airport) =>
+		setAirports((previousAirports) => [...previousAirports, airport]);
 
-  const onCreated = (a: Airport) => setAirports((prev) => [...prev, a])
+	const handleDeleted = async (id: string) => {
+		try {
+			await deleteAirport({ id });
+			setAirports((previousAirports) =>
+				previousAirports.filter((airportItem) => airportItem.id !== id),
+			);
+			notifications.show({
+				color: "green",
+				title: "Deleted",
+				message: "Airport deleted successfully",
+			});
+		} catch (err) {
+			const error = err as unknown;
+			notifications.show({
+				color: "red",
+				title: "Delete failed",
+				message: String(error instanceof Error ? error.message : error),
+			});
+		}
+	};
 
-  const handleDeleted = async (id: string) => {
-    setDeleting(id)
-    try {
-      await deleteAirport(id)
-      setAirports((prev) => prev.filter((a) => a.id !== id))
-      notifications.show({ color: 'green', title: 'Deleted', message: 'Airport deleted successfully' })
-    } catch (err) {
-      notifications.show({ color: 'red', title: 'Delete failed', message: String(err?.message || err) })
-    } finally {
-      setDeleting(null)
-    }
-  }
+	const header = useMemo(
+		() => (
+			<Group p="md">
+				<Title order={3}>Airport dashboard</Title>
+			</Group>
+		),
+		[],
+	);
 
-  const header = useMemo(
-    () => (
-      <Group p="md">
-        <Title order={3}>Airport dashboard</Title>
-      </Group>
-    ),
-    []
-  )
+	useEffect(() => {
+		const controller = new AbortController();
+		let mounted = true;
 
-  return (
-    <>
-      {header}
-      <Container size="lg">
-        <Grid gutter="md">
-          <Grid.Col span={{ base: 12, md: 5 }}>
-            <Card withBorder shadow="sm" radius="md" p="md">
-              <Title order={4} mb="sm">
-                Add airport
-              </Title>
-              <AirportForm onCreated={onCreated} />
-            </Card>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 7 }}>
-            <AirportTable airports={airports} loading={loading} />
-          </Grid.Col>
-        </Grid>
-      </Container>
-    </>
-  )
+		async function load() {
+			setLoading(true);
+			try {
+				const data = await fetchAirports(controller.signal);
+				if (!mounted) return;
+				setAirports(data);
+			} catch (err) {
+				const error = err as unknown;
+				console.error("fetchAirports error:", error);
+				// Ignore aborts caused by effect cleanup/unmount
+				const maybe = error as { name?: string };
+				if (maybe.name === "AbortError") return;
+				notifications.show({
+					color: "red",
+					title: "Load failed",
+					message: String(error instanceof Error ? error.message : error),
+				});
+			} finally {
+				if (mounted) setLoading(false);
+			}
+		}
+
+		load();
+		return () => {
+			mounted = false;
+			controller.abort();
+		};
+	}, []);
+
+	return (
+		<>
+			{header}
+			<Container size="lg">
+				<Grid gutter="md">
+					<Grid.Col span={{ base: 12, md: 5 }}>
+						<Card withBorder shadow="sm" radius="md" p="md">
+							<Title order={4} mb="sm">
+								Add airport
+							</Title>
+							<AirportForm onCreated={onCreated} />
+						</Card>
+					</Grid.Col>
+					<Grid.Col span={{ base: 12, md: 7 }}>
+						<AirportTable airports={airports} loading={loading} onDelete={handleDeleted} />
+					</Grid.Col>
+				</Grid>
+			</Container>
+		</>
+	);
 }

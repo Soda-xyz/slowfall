@@ -1,51 +1,77 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { fetchPilots, fetchPerson } from './api'
-import type { Person } from './types'
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { fetchPilots } from "./api";
+import type { Person } from "./types";
 
-const API_BASE = 'http://localhost:8080'
+describe("person api", () => {
+	const originalFetch = globalThis.fetch;
+	let mockFetch: ReturnType<typeof vi.fn>;
 
-describe('person api', () => {
-  const originalFetch = global.fetch
+	beforeEach(() => {
+		// reset fetch mock
+		mockFetch = vi.fn();
+		globalThis.fetch = mockFetch as unknown as typeof fetch;
+	});
 
-  beforeEach(() => {
-    // reset fetch mock
-    global.fetch = vi.fn()
-  })
+	afterEach(() => {
+		vi.resetAllMocks();
+		globalThis.fetch = originalFetch;
+	});
 
-  afterEach(() => {
-    vi.resetAllMocks()
-    global.fetch = originalFetch
-  })
+	it("fetchPilots should return content array from paged response", async () => {
+		const pilots: Person[] = [
+			{
+				id: 1,
+				name: "Pilot One",
+				weight: 80,
+				email: "p1@example.com",
+				pilot: true,
+				skydiver: false,
+			},
+		];
+		// mock search endpoint returning a page
+		mockFetch.mockImplementationOnce(() =>
+			Promise.resolve({
+				ok: true,
+				json: () => Promise.resolve({ content: pilots }),
+			} as unknown as Response),
+		);
 
-  it('fetchPilots should return content array from paged response', async () => {
-    const pilots: Person[] = [{ id: 1, name: 'Pilot One', weight: 80, email: 'p1@example.com', pilot: true }]
-    // mock search endpoint returning a page
-    ;(global.fetch as unknown as vi.Mock).mockImplementationOnce((url: string) =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({ content: pilots }) }) as Response
-    )
+		const res = await fetchPilots();
+		expect(res).toHaveLength(1);
+		expect(res[0].name).toBe("Pilot One");
+	});
 
-    const res = await fetchPilots()
-    expect(res).toHaveLength(1)
-    expect(res[0].name).toBe('Pilot One')
-  })
+	it("fetchPilots falls back to /api/person if search returns 404 and filters pilots", async () => {
+		const all: Person[] = [
+			{
+				id: 1,
+				name: "Pilot One",
+				weight: 80,
+				email: "p1@example.com",
+				pilot: true,
+				skydiver: false,
+			},
+			{
+				id: 2,
+				name: "Not Pilot",
+				weight: 70,
+				email: "np@example.com",
+				pilot: false,
+				skydiver: false,
+			},
+		];
 
-  it('fetchPilots falls back to /api/person if search returns 404 and filters pilots', async () => {
-    const all: Person[] = [
-      { id: 1, name: 'Pilot One', weight: 80, email: 'p1@example.com', pilot: true },
-      { id: 2, name: 'Not Pilot', weight: 70, email: 'np@example.com', pilot: false },
-    ]
+		// first call to search returns 404
+		mockFetch.mockImplementationOnce(() =>
+			Promise.resolve({ ok: false, status: 404, statusText: "Not Found" } as unknown as Response),
+		);
+		// second call to /api/person returns full list
+		mockFetch.mockImplementationOnce(() =>
+			Promise.resolve({ ok: true, json: () => Promise.resolve(all) } as unknown as Response),
+		);
 
-    // first call to search returns 404
-    ;(global.fetch as unknown as vi.Mock).mockImplementationOnce((url: string) =>
-      Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' }) as Response
-    )
-    // second call to /api/person returns full list
-    ;(global.fetch as unknown as vi.Mock).mockImplementationOnce((url: string) =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve(all) }) as Response
-    )
-
-    const res = await fetchPilots()
-    expect(res).toHaveLength(1)
-    expect(res[0].name).toBe('Pilot One')
-  })
-})
+		const res = await fetchPilots();
+		expect(res).toHaveLength(1);
+		expect(res[0].name).toBe("Pilot One");
+	});
+});

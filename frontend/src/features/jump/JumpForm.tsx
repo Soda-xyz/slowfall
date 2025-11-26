@@ -1,122 +1,230 @@
-import { useEffect, useState } from 'react'
-import { Button, Group, Stack, TextInput, NumberInput, Select } from '@mantine/core'
-import { DateTimePicker } from '@mantine/dates'
-import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
-import utc from 'dayjs/plugin/utc'
-dayjs.extend(utc)
-import type { CreateJumpRequest } from './types'
-import { createJump } from './api'
-import { fetchPerson, fetchPilots } from '../person/api'
-import { fetchAirports } from '../airport/api'
-import { fetchCrafts } from '../craft/api'
-import type { Airport } from '../airport/types'
-import { useAirport } from '../airport/AirportContext'
+import React, { useEffect, useState } from "react";
+import { IconClock } from "@tabler/icons-react";
+import { Button, Group, Stack, NumberInput, Select, ActionIcon } from "@mantine/core";
+import { DateInput, TimePicker } from "@mantine/dates";
+import { notifications } from "@mantine/notifications";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
+import type { CreateJumpRequest, Jump } from "./types";
+import { createJump } from "./api";
+import { fetchPilots } from "../person/api";
+import { fetchAirports } from "../airport/api";
+import { fetchCrafts } from "../craft/api";
+import { useAirport } from "../airport/AirportContext";
 
 type Props = {
-  onCreated?: (jump: any) => void
-  airportId?: string
-}
+	onCreated?: (jump: Jump) => void;
+	airportId?: string;
+};
 
 export default function JumpForm({ onCreated, airportId }: Props) {
-  const { airports, selectedAirportId: globalAirportId } = useAirport()
-  const [jumpTimeDate, setJumpTimeDate] = useState<Date | null>(null)
-  const [craftRegistrationNumber, setCraftRegistrationNumber] = useState('')
-  const [altitudeFeet, setAltitudeFeet] = useState<number | string>('')
-  const [pilotId, setPilotId] = useState<string | null>(null)
-  const [personOptions, setPersonOptions] = useState<{ value: string; label: string }[]>([])
-  const [airportsOptions, setAirportsOptions] = useState<{ value: string; label: string }[]>([])
-  const [craftsOptions, setCraftsOptions] = useState<{ value: string; label: string }[]>([])
-  const [selectedAirportId, setSelectedAirportId] = useState<string | null>(airportId ?? globalAirportId ?? null)
-  const [submitting, setSubmitting] = useState(false)
+	const { airports, selectedAirportId: globalAirportId } = useAirport();
+	const [jumpDate, setJumpDate] = useState<string | null>(null);
+	const [jumpTime, setJumpTime] = useState<string | undefined>(undefined);
+	const [dropdownOpened, setDropdownOpened] = useState(false);
+	const [craftRegistrationNumber, setCraftRegistrationNumber] = useState("");
+	const [altitudeFeet, setAltitudeFeet] = useState<number | string>("");
+	const [pilotId, setPilotId] = useState<string | null>(null);
+	const [personOptions, setPersonOptions] = useState<{ value: string; label: string }[]>([]);
+	const [craftsOptions, setCraftsOptions] = useState<{ value: string; label: string }[]>([]);
+	const [selectedAirportId, setSelectedAirportId] = useState<string | null>(
+		airportId ?? globalAirportId ?? null,
+	);
+	const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    let mounted = true
-    fetchPilots()
-      .then((p) => {
-        if (!mounted) return
-        setPersonOptions(p.map((pp) => ({ value: String(pp.id), label: pp.name })))
-      })
-      .catch(() => {})
+	useEffect(() => {
+		let mounted = true;
+		fetchPilots()
+			.then((pilotsList) => {
+				if (!mounted) return;
+				setPersonOptions(
+					pilotsList.map((pilot) => ({ value: String(pilot.id), label: pilot.name })),
+				);
+			})
+			.catch(() => {});
 
-    fetchCrafts()
-      .then((c) => {
-        if (!mounted) return
-        setCraftsOptions(c.map((cr) => ({ value: String(cr.registrationNumber), label: cr.name })))
-        if (!craftRegistrationNumber && c.length > 0) setCraftRegistrationNumber(String(c[0].registrationNumber))
-      })
-      .catch(() => {})
-    if (airports && airports.length > 0) {
-      setAirportsOptions(airports.map((ap) => ({ value: String(ap.id), label: ap.name })))
-      if (!selectedAirportId) setSelectedAirportId(airportId ?? globalAirportId ?? (airports.length > 0 ? String(airports[0].id) : null))
-    } else {
-      fetchAirports()
-        .then((a) => {
-          if (!mounted) return
-          setAirportsOptions(a.map((ap) => ({ value: String(ap.id), label: ap.name })))
-          if (!selectedAirportId && a.length > 0) setSelectedAirportId(String(a[0].id))
-        })
-        .catch(() => {})
-    }
+		fetchCrafts()
+			.then((craftsList) => {
+				if (!mounted) return;
+				setCraftsOptions(
+					craftsList.map((craftItem) => ({
+						value: String(craftItem.registrationNumber),
+						label: craftItem.name,
+					})),
+				);
+				if (!craftRegistrationNumber && craftsList.length > 0)
+					setCraftRegistrationNumber(String(craftsList[0].registrationNumber));
+			})
+			.catch(() => {});
+		if (!airports || airports.length === 0) {
+			fetchAirports()
+				.then((airportsResponse) => {
+					if (!mounted) return;
+					if (!selectedAirportId && airportsResponse.length > 0)
+						setSelectedAirportId(String(airportsResponse[0].id));
+				})
+				.catch(() => {});
+		} else {
+			if (!selectedAirportId)
+				setSelectedAirportId(
+					airportId ?? globalAirportId ?? (airports.length > 0 ? String(airports[0].id) : null),
+				);
+		}
 
-    return () => {
-      mounted = false
-    }
-  }, [airports])
+		return () => {
+			mounted = false;
+		};
+	}, [airportId, airports, craftRegistrationNumber, globalAirportId, selectedAirportId]);
 
-  useEffect(() => {
-    if (airportId) return
-    setSelectedAirportId(globalAirportId ?? null)
-  }, [globalAirportId, airportId])
+	useEffect(() => {
+		if (airportId) return;
+		setSelectedAirportId(globalAirportId ?? null);
+	}, [globalAirportId, airportId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const airportToUse = airportId ?? selectedAirportId ?? globalAirportId
-    if (!jumpTimeDate || !airportToUse || !craftRegistrationNumber || altitudeFeet === '' || Number.isNaN(Number(altitudeFeet))) {
-      notifications.show({ color: 'red', title: 'Missing fields', message: 'All fields are required' })
-      return
-    }
+	const handleDateChange = (value: Date | string | null) => {
+		if (!value) {
+			setJumpDate(null);
+			return;
+		}
+		const dateObj = typeof value === "string" ? dayjs(value).toDate() : value;
+		setJumpDate(dayjs(dateObj).format("YYYY-MM-DD"));
+	};
 
-    const payload: CreateJumpRequest = {
-      jumpTime: dayjs(jumpTimeDate).utc().toISOString(),
-      airportId: airportToUse,
-      craftRegistrationNumber,
-      altitudeFeet: Number(altitudeFeet),
-      pilotId: pilotId || undefined,
-    }
+	const handleTimeChange = (timeValue: string) => {
+		setJumpTime(timeValue);
+	};
 
-    try {
-      setSubmitting(true)
-      const created = await createJump(payload)
-      notifications.show({ color: 'green', title: 'Jump created', message: 'Jump scheduled' })
-      setJumpTimeDate(null)
-      setCraftRegistrationNumber('')
-      setAltitudeFeet('')
-      setPilotId(null)
-      onCreated?.(created)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create jump'
-      notifications.show({ color: 'red', title: 'Error', message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
+	const handleSubmit = async (event: React.FormEvent) => {
+		event.preventDefault();
+		const airportToUse = airportId ?? selectedAirportId ?? globalAirportId;
+		if (
+			!jumpDate ||
+			!jumpTime ||
+			!airportToUse ||
+			!craftRegistrationNumber ||
+			altitudeFeet === "" ||
+			Number.isNaN(Number(altitudeFeet))
+		) {
+			notifications.show({
+				color: "red",
+				title: "Missing fields",
+				message: "All fields are required",
+			});
+			return;
+		}
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <Stack gap="sm">
-        <Select label="Craft" placeholder="Select craft" withAsterisk data={craftsOptions} value={craftRegistrationNumber ?? undefined} onChange={(v) => setCraftRegistrationNumber(v ?? '')} searchable />
-        <DateTimePicker label="Jump time" value={jumpTimeDate} onChange={setJumpTimeDate} withSeconds={false} />
-        <NumberInput label="Altitude (feet)" withAsterisk min={0} value={altitudeFeet as number | string} onChange={setAltitudeFeet} />
+		const combined = dayjs(`${jumpDate}T${jumpTime}`);
+		const payload: CreateJumpRequest = {
+			jumpTime: combined.utc().toISOString(),
+			airportId: airportToUse,
+			craftRegistrationNumber,
+			altitudeFeet: Number(altitudeFeet),
+			pilotId: pilotId || undefined,
+		};
 
-        <Select label="Pilot (optional)" placeholder="Select pilot" data={personOptions} value={pilotId ?? undefined} onChange={setPilotId} searchable />
+		try {
+			setSubmitting(true);
+			const created = await createJump(payload);
+			notifications.show({ color: "green", title: "Jump created", message: "Jump scheduled" });
+			setJumpDate(null);
+			setJumpTime(undefined);
+			setCraftRegistrationNumber("");
+			setAltitudeFeet("");
+			setPilotId(null);
+			onCreated?.(created);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Failed to create jump";
+			notifications.show({ color: "red", title: "Error", message });
+		} finally {
+			setSubmitting(false);
+		}
+	};
 
-        <Group justify="flex-end" mt="xs">
-          <Button type="submit" loading={submitting} variant="filled" disabled={!(selectedAirportId ?? airportId ?? globalAirportId) || submitting}>
-            Create jump
-          </Button>
-        </Group>
-      </Stack>
-    </form>
-  )
+	return (
+		<form onSubmit={handleSubmit}>
+			<Stack gap="xm">
+				<Select
+					label="Craft"
+					placeholder="Select craft"
+					withAsterisk
+					data={craftsOptions}
+					clearable
+					value={craftRegistrationNumber ?? undefined}
+					onChange={(value) => setCraftRegistrationNumber(value ?? "")}
+					searchable
+				/>
+				<Group>
+					<DateInput
+						label="Date"
+						radius={"md"}
+						required
+						defaultValue={dayjs().toDate()}
+						onChange={handleDateChange}
+					/>
+					<TimePicker
+						label="Time"
+						required
+						clearable
+						withDropdown
+						minutesStep={15}
+						radius="md"
+						rightSection={
+							<ActionIcon radius={"md"} onClick={() => setDropdownOpened(true)} variant="default">
+								<IconClock size={14} stroke={1.5} />
+							</ActionIcon>
+						}
+						value={jumpTime}
+						onChange={(timeValue: string) => {
+							handleTimeChange(timeValue);
+							if (!timeValue) setDropdownOpened(false);
+						}}
+						popoverProps={{
+							withinPortal: true,
+							opened: dropdownOpened,
+							onChange: (_opened) => !_opened && setDropdownOpened(false),
+						}}
+					/>
+				</Group>
+				<NumberInput
+					label="Altitude"
+					withAsterisk
+					radius="md"
+					min={0}
+					value={altitudeFeet as number | string}
+					onChange={setAltitudeFeet}
+					suffix={"ft"}
+					allowNegative={false}
+					allowDecimal={false}
+					step={500}
+					thousandSeparator={" "}
+				/>
+
+				<Select
+					label="Pilot (optional)"
+					placeholder="Select pilot"
+					data={personOptions}
+					value={pilotId ?? undefined}
+					onChange={setPilotId}
+					searchable
+					radius="md"
+					clearable
+					allowDeselect
+				/>
+
+				<Group justify="flex-end" mt="xs">
+					<Button
+						type="submit"
+						loading={submitting}
+						radius="md"
+						variant="filled"
+						disabled={!(selectedAirportId ?? airportId ?? globalAirportId) || submitting}
+					>
+						Create jump
+					</Button>
+				</Group>
+			</Stack>
+		</form>
+	);
 }

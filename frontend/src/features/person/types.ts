@@ -1,13 +1,19 @@
 export type Person = {
-  id: number
-  name: string
-  weight: number
-  email: string
-  pilot?: boolean
-}
+	id: number;
+	name: string;
+	firstName?: string;
+	lastName?: string;
+	pilot: boolean;
+	skydiver: boolean;
+	weight: number;
+	email: string;
+};
 
 export type CreatePersonRequest = {
-  name: string
-  weight: number
-  email: string
-}
+	firstName: string;
+	lastName: string;
+	pilot: boolean;
+	skydiver: boolean;
+	weight: number;
+	email: string;
+};

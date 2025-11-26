@@ -1,3 +1,2 @@
-export { default as JumpPage } from './JumpPage'
-export * from './types'
-
+export { default as JumpPage } from "./JumpPage";
+export * from "./types";
