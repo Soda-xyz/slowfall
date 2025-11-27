@@ -5,7 +5,7 @@
     "lib": [
       "ES2023"
     ],
-    "module": "ESNext",
+    "module": "ES2020",
     "baseUrl": ".",
     "paths": {
       "vite-plugin-eslint": [
@@ -17,7 +17,7 @@
     ],
     "skipLibCheck": true,
     /* Bundler mode */
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -32,6 +32,7 @@
   },
   "include": [
     "vite.config.ts",
-    "src/types/**/*.d.ts"
+    "src/types/**/*.d.ts",
+    "playwright.config.ts"
   ]
 }

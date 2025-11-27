@@ -184,10 +184,8 @@ export default function JumpForm({ onCreated, airportId }: Props) {
 					placeholder="Select craft"
 					withAsterisk
 					data={craftsOptions}
-					clearable
 					value={craftRegistrationNumber ?? undefined}
 					onChange={(value) => setCraftRegistrationNumber(value ?? "")}
-					searchable
 				/>
 				<Group>
 					<DateInput

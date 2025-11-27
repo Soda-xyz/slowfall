@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { visitHome } from '../test-helpers';
 
-test('home page shows app title', async ({ page }) => {
-  await page.goto('http://localhost:5173/');
-  await expect(page.locator('text=Slowfall')).toBeVisible();
+test('home page loads and shows brand and dashboard', async ({ page }) => {
+  await visitHome(page);
+  await expect(page.getByRole('heading', { name: 'Slowfall' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 });
-

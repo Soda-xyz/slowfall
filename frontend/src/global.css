@@ -1,11 +1,16 @@
-/* Global styles (non-module) — follows Mantine docs: https://mantine.dev/styles/css-modules/
+/* Global styles (non-module) —
    This file is intentionally a plain .css file (not .module.css). Use it for global
    element rules like body and :root. It reads CSS variables populated by the theme
    (via ThemeVars or cssVariablesResolver) so the Mantine theme remains the source of truth.
 */
 
 :root {
-	/* keep empty — theme-driven CSS variables will be written at runtime */
+	/* default tokens so linters / dev tools can resolve them; theme provider may overwrite at runtime */
+	--bg: #ffffff;
+	--text: #111827;
+	--font-family: Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
+	--accent: #3380ff;
+	--accent-hover: #005be6;
 }
 
 /* App-level defaults. These refer to CSS variables that should be set by the Mantine theme
@@ -15,7 +20,7 @@ body {
 	min-height: 100vh;
 	background-color: var(--bg, #fff);
 	color: var(--text, #000);
-	font-family: var(--font-family, Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial);
+	font-family: var(--font-family, Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial), sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }

@@ -51,7 +51,11 @@ export default function DatabaseControlPage() {
 				<Grid.Col span={6}>
 					<Stack gap={"xs"}>
 						<Card shadow="xs" padding="md">
-							<PersonForm />
+							<PersonForm
+								onCreated={(createdPerson) =>
+									setPeople((prev) => (prev ? [createdPerson, ...prev] : [createdPerson]))
+								}
+							/>
 						</Card>
 						<Card shadow="xs" padding="md">
 							<Title order={4}>People</Title>

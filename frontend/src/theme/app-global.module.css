@@ -1,20 +1,26 @@
-:root {
-	/* fallback tokens; if you prefer, keep these in index.css and reference them here */
+/* css */
+:global(:root) {
+    /* Define global custom properties (tokens) so var(--...) resolves */
+    --bg: #ffffff;
+    --text: #111827;
+    --card-bg: #f8fafc;
+    --button-bg: #1f2937;
+    --button-text: #ffffff;
 }
 
 .appRoot {
-	min-height: 100vh;
-	background-color: var(--bg);
-	color: var(--text);
-	/* keep layout defaults minimal; prefer Mantine components for UI */
+    min-height: 100vh;
+    background-color: var(--bg);
+    color: var(--text);
+    /* keep layout defaults minimal; prefer Mantine components for UI */
 }
 
 /* Optional utility classes (component-level) */
 .appRoot .app-card {
-	background-color: var(--card-bg);
+    background-color: var(--card-bg);
 }
 
 .appRoot .app-button {
-	background-color: var(--button-bg);
-	color: var(--button-text);
+    background-color: var(--button-bg);
+    color: var(--button-text);
 }
