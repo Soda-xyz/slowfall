@@ -1,0 +1,21 @@
+:root {
+	/* fallback tokens; if you prefer, keep these in index.css and reference them here */
+}
+
+.appRoot {
+	min-height: 100vh;
+	background-color: var(--bg);
+	color: var(--text);
+	/* keep layout defaults minimal; prefer Mantine components for UI */
+}
+
+/* Optional utility classes (component-level) */
+.appRoot .app-card {
+	background-color: var(--card-bg);
+}
+
+.appRoot .app-button {
+	background-color: var(--button-bg);
+	color: var(--button-text);
+}
+

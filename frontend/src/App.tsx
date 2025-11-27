@@ -1,39 +1,37 @@
-import { useState } from "react";
-import { AppShell, Group, SegmentedControl, Space } from "@mantine/core";
-import { PersonPage, AirportPage, JumpPage } from "./features";
+import { AppShell, Group, Tabs } from "@mantine/core";
 import { AirportProvider, AirportSelector } from "./features/airport/AirportContext";
-import "./App.css";
+import { DashboardPage } from "./features/dashboard";
+import { DatabaseControlPage } from "./features/databaseControl";
+import "@mantine/core/styles.css";
 
 export default function App() {
-	const [view, setView] = useState<"person" | "airport" | "jump">("person");
-
-	const header = (
-		<Group justify="space-between" p="md" align="center">
-			<Group>
-				<SegmentedControl
-					value={view}
-					onChange={(v) => setView(v as "person" | "airport" | "jump")}
-					data={[
-						{ label: "Person", value: "person" },
-						{ label: "Airport", value: "airport" },
-						{ label: "Jump", value: "jump" },
-					]}
-				/>
-				<Space w="md" />
-				<AirportSelector />
-			</Group>
-		</Group>
-	);
-
 	return (
 		<AirportProvider>
 			<AppShell header={{ height: 64 }} padding="md">
-				<AppShell.Header>{header}</AppShell.Header>
-				<AppShell.Main>
-					{view === "person" && <PersonPage />}
-					{view === "airport" && <AirportPage />}
-					{view === "jump" && <JumpPage />}
-				</AppShell.Main>
+				<Tabs defaultValue="dashboard">
+					<AppShell.Header>
+						<Group justify="space-between" p="md" align="center">
+							<Group>
+								<Tabs.List>
+									<Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
+									<Tabs.Tab value="database">Database</Tabs.Tab>
+								</Tabs.List>
+							</Group>
+							<Group>
+								<AirportSelector />
+							</Group>
+						</Group>
+					</AppShell.Header>
+
+					<AppShell.Main>
+						<Tabs.Panel value="dashboard" pt="sm">
+							<DashboardPage />
+						</Tabs.Panel>
+						<Tabs.Panel value="database" pt="sm">
+							<DatabaseControlPage />
+						</Tabs.Panel>
+					</AppShell.Main>
+				</Tabs>
 			</AppShell>
 		</AirportProvider>
 	);

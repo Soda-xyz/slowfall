@@ -1,3 +1,3 @@
-export * from "./person";
-export * from "./airport";
-export * from "./jump";
+export * from "./dashboard";
+export * from "./databaseControl";
+export { default as MainTabs } from "./MainTabs";

@@ -1,0 +1,87 @@
+import type { CSSVariablesResolver, MantineTheme } from "@mantine/core";
+
+// Map a Mantine theme object into a set of CSS custom properties.
+// - returns an object compatible with Mantine's CSSVariablesResolver type
+// - exposes a small, stable set of variables (prefix: --sf-)
+// - includes light/dark overrides
+export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineTheme) => {
+	const prefix = "--sf-";
+
+	// Treat theme.colors as a record of readonly color tuples to avoid mutable-array casts
+	const colorsRecord = theme.colors as unknown as Record<string, readonly string[] | undefined>;
+
+	const getPaletteColor = (name: string | undefined, shade = 6): string | undefined => {
+		if (!name) return undefined;
+		const palette = colorsRecord[name];
+		if (palette && typeof palette[shade] === "string") return palette[shade];
+		return undefined;
+	};
+
+	// Access primaryShade safely without using `any` (use Partial assertion)
+	const maybePrimaryShade = (theme as Partial<{ primaryShade?: number }>).primaryShade;
+	const primaryShade = typeof maybePrimaryShade === "number" ? maybePrimaryShade : 6;
+
+	const fallbackPrimary = getPaletteColor("blue", 6) ?? "#228be6";
+	const primary = getPaletteColor(theme.primaryColor, primaryShade) ?? fallbackPrimary;
+
+	const success = getPaletteColor("green", 6) ?? "#37b24d";
+	const danger = getPaletteColor("red", 6) ?? "#f03e3e";
+	const warning = getPaletteColor("yellow", 6) ?? "#f59f00";
+	const info = getPaletteColor("blue", 6) ?? "#228be6";
+
+	const gray0 = colorsRecord.gray?.[0] ?? theme.white ?? "#ffffff";
+	const gray5 = colorsRecord.gray?.[5] ?? "#868e96";
+
+	// Basic variable set that does not depend on color scheme
+	const variables: Record<string, string> = {
+		[`${prefix}font-family`]:
+			theme.fontFamily ?? "Inter, system-ui, Avenir, 'Helvetica Neue', Helvetica, Arial",
+		[`${prefix}radius-sm`]: theme.radius?.sm ?? "4px",
+		[`${prefix}radius-md`]: theme.radius?.md ?? "8px",
+		[`${prefix}radius-lg`]: theme.radius?.lg ?? "12px",
+		[`${prefix}spacing-sm`]:
+			(theme.spacing as Record<string, string | number>)?.sm?.toString() ?? "8px",
+		[`${prefix}spacing-md`]:
+			(theme.spacing as Record<string, string | number>)?.md?.toString() ?? "12px",
+		[`${prefix}spacing-lg`]:
+			(theme.spacing as Record<string, string | number>)?.lg?.toString() ?? "20px",
+		[`${prefix}shadow-sm`]: theme.shadows?.sm ?? "none",
+		[`${prefix}shadow-md`]: theme.shadows?.md ?? "none",
+		[`${prefix}shadow-lg`]: theme.shadows?.lg ?? "none",
+
+		// Semantic colors (general/fallback)
+		[`${prefix}primary`]: primary,
+		[`${prefix}success`]: success,
+		[`${prefix}danger`]: danger,
+		[`${prefix}warning`]: warning,
+		[`${prefix}info`]: info,
+		[`${prefix}muted`]: gray5,
+	};
+
+	// Light color scheme overrides — avoid using theme.colorScheme here because the
+	// resolver returns separate light/dark objects and Mantine handles applying them.
+	const light: Record<string, string> = {
+		[`${prefix}background`]: theme.white ?? gray0,
+		[`${prefix}surface`]: gray0,
+		[`${prefix}text`]: theme.black ?? "#000000",
+		[`${prefix}accent`]: primary,
+		[`${prefix}accent-foreground`]: theme.black ?? "#000000",
+	};
+
+	// Dark color scheme overrides
+	const dark: Record<string, string> = {
+		[`${prefix}background`]: colorsRecord.dark?.[7] ?? theme.black ?? "#000000",
+		[`${prefix}surface`]: colorsRecord.dark?.[6] ?? theme.black ?? "#000000",
+		[`${prefix}text`]: colorsRecord.dark?.[0] ?? theme.white ?? "#ffffff",
+		[`${prefix}accent`]: primary,
+		[`${prefix}accent-foreground`]: theme.white ?? "#ffffff",
+	};
+
+	return {
+		variables,
+		light,
+		dark,
+	};
+};
+
+export default mantineCssVariableResolver;

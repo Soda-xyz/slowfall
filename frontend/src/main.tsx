@@ -6,19 +6,19 @@ import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "@mantine/dates/styles.css";
 import "./index.css";
+import "./global.css";
 import App from "./App";
+import { theme as mantineTheme } from "./theme/theme";
+import styles from "./theme/app-global.module.css";
+import mantineCssVariableResolver from "./theme/cssVariableResolver";
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
-		<MantineProvider
-			defaultColorScheme="dark"
-			theme={{
-				defaultRadius: "md",
-				fontFamily: "Inter, system-ui, Avenir, Helvetica, Arial, sans-serif",
-			}}
-		>
+		<MantineProvider theme={mantineTheme} cssVariablesResolver={mantineCssVariableResolver}>
 			<Notifications position="top-right" />
-			<App />
+			<div className={styles.appRoot}>
+				<App />
+			</div>
 		</MantineProvider>
 	</StrictMode>,
 );

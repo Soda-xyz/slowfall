@@ -12,8 +12,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@emotion/react": "^11.13.5",
-    "@emotion/styled": "^11.13.5",
     "@mantine/core": "^8.3.9",
     "@mantine/dates": "^8.3.9",
     "@mantine/hooks": "^8.3.9",
