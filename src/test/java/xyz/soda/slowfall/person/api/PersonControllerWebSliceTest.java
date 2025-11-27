@@ -25,7 +25,7 @@ class PersonControllerWebSliceTest {
 
     MockMvc mockMvc;
 
-    ObjectMapper objectMapper = new ObjectMapper();
+    final ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
     PersonService service;

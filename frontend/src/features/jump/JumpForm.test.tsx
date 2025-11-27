@@ -3,11 +3,9 @@ import { vi, describe, it, expect } from "vitest";
 import JumpForm from "./JumpForm";
 import { MantineProvider } from "@mantine/core";
 
-// mock airport and person api modules
 vi.mock("../person/api", () => ({
 	fetchPilots: vi.fn(() =>
 		Promise.resolve([
-			// match src/features/person/types.ts: Person has `Name` (capital N) and `skydiver`
 			{
 				id: 1,
 				name: "Pilot One",
@@ -46,7 +44,6 @@ describe("JumpForm", () => {
 			</MantineProvider>,
 		);
 
-		// wait for async effects
 		await waitFor(() =>
 			expect(
 				(screen.getByRole("button", { name: /Create jump/i }) as HTMLButtonElement).disabled,

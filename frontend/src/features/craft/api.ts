@@ -7,7 +7,7 @@ import { API_BASE_URL } from "../../lib/apiBase";
  * Small wrappers over the backend craft endpoints used by the UI.
  */
 export async function fetchCrafts(signal?: AbortSignal): Promise<Craft[]> {
-	const res = await fetch(`${API_BASE_URL}/api/crafts`, { signal });
+	const res = await fetch(`${API_BASE_URL}/api/crafts`, { signal, credentials: "include" });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch crafts: ${res.status} ${res.statusText}`);
 	}
@@ -23,6 +23,7 @@ export async function createCraft(payload: CreateCraftRequest): Promise<Craft> {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
+		credentials: "include",
 	});
 	if (!res.ok) {
 		const text = await res.text().catch(() => "");

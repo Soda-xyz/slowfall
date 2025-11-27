@@ -98,7 +98,7 @@ public class LoggingAspect {
             }
         }
 
-        boolean shouldLog = false;
+        boolean shouldLog;
         String modeUpper = mode == null ? "" : mode.toUpperCase().trim();
 
         shouldLog = switch (modeUpper) {
@@ -196,7 +196,7 @@ public class LoggingAspect {
             }
             default -> {}
         }
-        // Spring MultipartFile (if on classpath)
+        // Spring MultipartFile (if on a classpath)
         try {
             if (arg.getClass().getName().equals("org.springframework.web.multipart.MultipartFile"))
                 return "<MultipartFile>";
@@ -231,7 +231,7 @@ public class LoggingAspect {
      */
     private String formatResult(Object result) {
         if (result == null) return "null";
-        // Keep result summary short
+        // Keep the result summary short
         if (result.getClass().isArray()) {
             return "Array(" + java.lang.reflect.Array.getLength(result) + ")";
         }

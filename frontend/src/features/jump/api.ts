@@ -7,9 +7,8 @@ import { API_BASE_URL } from "../../lib/apiBase";
  * @param signal optional AbortSignal
  */
 export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
-	const res = await fetch(`${API_BASE_URL}/api/jumps`, { signal });
+	const res = await fetch(`${API_BASE_URL}/api/jumps`, { signal, credentials: "include" });
 	if (!res.ok) {
-		// If the endpoint isn't implemented server-side, return empty list to allow UI to function
 		if (res.status === 404) return [];
 		throw new Error(`Failed to fetch jumps: ${res.status} ${res.statusText}`);
 	}
@@ -25,6 +24,7 @@ export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
+		credentials: "include",
 	});
 	if (!res.ok) {
 		const text = await res.text().catch(() => "");
@@ -41,6 +41,7 @@ export async function addSkydiverToJump(jumpId: string, personId: string): Promi
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ personId }),
+		credentials: "include",
 	});
 	if (!res.ok) throw new Error(`Failed to add skydiver: ${res.status} ${res.statusText}`);
 }
@@ -53,6 +54,7 @@ export async function addPilotToJump(jumpId: string, personId: string): Promise<
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ personId }),
+		credentials: "include",
 	});
 	if (!res.ok) throw new Error(`Failed to add pilot: ${res.status} ${res.statusText}`);
 }

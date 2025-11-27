@@ -1,3 +1,5 @@
+import org.springframework.boot.gradle.tasks.run.BootRun
+
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.7'
@@ -54,4 +56,15 @@ spotless {
         endWithNewline()
 
     }
+}
+tasks.register('bootRunDev', BootRun) {
+    group = 'application'
+    description = 'Run the application with the dev Spring profile active'
+    systemProperty 'spring.profiles.active', 'dev'
+    // propagate JVM args if needed
+    jvmArgs = System.getProperty('jvmArgs') ? System.getProperty('jvmArgs').split(' ') : []
+    // ensure the runtime classpath (classes + dependencies) is used
+    classpath = sourceSets.main.runtimeClasspath
+    // specify the application's main class so BootRun can start the app
+    mainClass.set('xyz.soda.slowfall.SlowfallApplication')
 }

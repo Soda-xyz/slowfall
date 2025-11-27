@@ -62,7 +62,6 @@ export default function AirportPage() {
 			} catch (err) {
 				const error = err as unknown;
 				console.error("fetchAirports error:", error);
-				// Ignore aborts caused by effect cleanup/unmount
 				const maybe = error as { name?: string };
 				if (maybe.name === "AbortError") return;
 				notifications.show({

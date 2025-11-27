@@ -7,7 +7,6 @@ describe("person api", () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
-		// reset fetch mock
 		mockFetch = vi.fn();
 		globalThis.fetch = mockFetch as unknown as typeof fetch;
 	});
@@ -28,7 +27,7 @@ describe("person api", () => {
 				skydiver: false,
 			},
 		];
-		// mock search endpoint returning a page
+
 		mockFetch.mockImplementationOnce(() =>
 			Promise.resolve({
 				ok: true,
@@ -61,11 +60,10 @@ describe("person api", () => {
 			},
 		];
 
-		// first call to search returns 404
 		mockFetch.mockImplementationOnce(() =>
 			Promise.resolve({ ok: false, status: 404, statusText: "Not Found" } as unknown as Response),
 		);
-		// second call to /api/person returns full list
+
 		mockFetch.mockImplementationOnce(() =>
 			Promise.resolve({ ok: true, json: () => Promise.resolve(all) } as unknown as Response),
 		);

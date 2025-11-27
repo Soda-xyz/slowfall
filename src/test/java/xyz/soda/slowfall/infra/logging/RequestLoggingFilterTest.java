@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -18,7 +16,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 public class RequestLoggingFilterTest {
 
     /**
-     * When request headers are present the filter should populate MDC during the chain
+     * When request headers are present, the filter should populate MDC during the chain
      * and clear the values after the chain completes.
      *
      * @throws IOException if IO errors occur while running the filter
@@ -30,13 +28,10 @@ public class RequestLoggingFilterTest {
 
         MockHttpServletRequest req = new MockHttpServletRequest();
         MockHttpServletResponse res = new MockHttpServletResponse();
-        FilterChain chain = new FilterChain() {
-            @Override
-            public void doFilter(ServletRequest request, ServletResponse response) {
-                // Inside chain, MDC should contain values
-                assertThat(MDC.get(RequestLoggingFilter.TRACE_ID_KEY)).isEqualTo("trace-123");
-                assertThat(MDC.get(RequestLoggingFilter.USER_ID_KEY)).isEqualTo("user-456");
-            }
+        FilterChain chain = (request, response) -> {
+            // Inside chain, MDC should contain values
+            assertThat(MDC.get(RequestLoggingFilter.TRACE_ID_KEY)).isEqualTo("trace-123");
+            assertThat(MDC.get(RequestLoggingFilter.USER_ID_KEY)).isEqualTo("user-456");
         };
 
         req.addHeader(RequestLoggingFilter.TRACE_ID_HEADER, "trace-123");
@@ -44,13 +39,13 @@ public class RequestLoggingFilterTest {
 
         filter.doFilter(req, res, chain);
 
-        // After filter chain completes, MDC should not contain the keys
+        // After a filter chain completes, MDC should not contain the keys
         assertThat(MDC.get(RequestLoggingFilter.TRACE_ID_KEY)).isNull();
         assertThat(MDC.get(RequestLoggingFilter.USER_ID_KEY)).isNull();
     }
 
     /**
-     * When headers are missing the filter should generate a trace id and still clear MDC after.
+     * When headers are missing, the filter should generate a trace id and still clear MDC after.
      *
      * @throws IOException if IO errors occur while running the filter
      * @throws ServletException if servlet errors occur while running the filter
@@ -71,7 +66,7 @@ public class RequestLoggingFilterTest {
 
         filter.doFilter(req, res, chain);
 
-        // After filter chain completes, MDC should not contain the keys
+        // After a filter chain completes, MDC should not contain the keys
         assertThat(MDC.get(RequestLoggingFilter.TRACE_ID_KEY)).isNull();
         assertThat(MDC.get(RequestLoggingFilter.USER_ID_KEY)).isNull();
     }

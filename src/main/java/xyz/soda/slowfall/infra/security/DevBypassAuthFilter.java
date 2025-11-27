@@ -16,41 +16,38 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * <p>
  * NOTE: This class is no longer auto-registered as a servlet filter. It should be
  * added explicitly into the Spring Security filter chain by calling
- * `http.addFilterBefore(devBypassAuthFilter, SecurityContextPersistenceFilter.class)`
- * in `SecurityConfig` so ordering is correct and the SecurityContext isn't overwritten.
+ * `http.addFilterBefore(devBypassAuthFilter, SecurityContextPersistenceFilter. Class)`
+ * in `SecurityConfig` so the ordering is correct and the SecurityContext isn't overwritten.
  */
-public class DevBypassAuthFilter implements Filter {
+public record DevBypassAuthFilter(Environment env) implements Filter {
 
     public static final String AUTHENTICATED_USER_ATTR = "authenticatedUser";
     public static final String DEV_USER_HEADER = "X-Dev-User";
-
-    private final Environment env;
 
     /**
      * Create a new DevBypassAuthFilter backed by the provided {@link Environment}.
      *
      * @param env Spring environment used to read the 'app.security.dev-bypass' flag and active profiles
      */
-    public DevBypassAuthFilter(Environment env) {
-        this.env = env;
+    public DevBypassAuthFilter {
     }
 
     /**
      * Filter implementation that either populates a simple development Authentication when
-     * the dev-bypass mode is enabled, or performs a minimal Authorization header check
-     * for production-like behaviour.
+     * the dev-bypass mode is enabled or performs a minimal Authorization header check
+     * for production-like behavior.
      *
-     * <p>When dev-bypass is active this method:
+     * <p>When dev-bypass is active, this method:
      * <ul>
      *   <li>sets a request attribute named {@link #AUTHENTICATED_USER_ATTR} with the username,</li>
      *   <li>sets a basic {@link UsernamePasswordAuthenticationToken} on the {@link SecurityContextHolder},</li>
      *   <li>and clears the SecurityContext after the request completes.</li>
      * </ul>
      *
-     * @param request the current servlet request
+     * @param request  the current servlet request
      * @param response the current servlet response
-     * @param chain the filter chain to continue processing the request
-     * @throws IOException if an I/O error occurs during processing
+     * @param chain    the filter chain to continue processing the request
+     * @throws IOException      if an I/O error occurs during processing
      * @throws ServletException if a servlet error occurs during processing
      */
     @Override

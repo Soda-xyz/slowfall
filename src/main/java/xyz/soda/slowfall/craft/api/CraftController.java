@@ -8,7 +8,6 @@ import xyz.soda.slowfall.craft.application.CraftService;
 
 @RestController
 @RequestMapping("/api/crafts")
-@CrossOrigin(origins = "http://localhost:5173") // frontend dev server
 public class CraftController {
     private final CraftService service;
 
@@ -20,6 +19,9 @@ public class CraftController {
     public CraftController(CraftService service) {
         this.service = service;
     }
+    // Note: CORS is handled globally by the application's CorsConfigurationSource
+    // and per-profile settings (see application-dev.properties). Remove per-controller
+    // @CrossOrigin to centralize CORS policy for dev vs. prod environments.
 
     /**
      * Create a new craft from the request.

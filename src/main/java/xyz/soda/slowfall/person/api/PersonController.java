@@ -10,13 +10,20 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.soda.slowfall.person.application.PersonService;
 import xyz.soda.slowfall.person.domain.Person;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/person")
-@CrossOrigin(origins = "http://localhost:5173") // frontend dev server
 public class PersonController {
 
+    // Note: CORS is handled globally by the application's CorsConfigurationSource
+    // and per-profile settings (see application-dev.properties). Remove per-controller
+    // @CrossOrigin to centralize CORS policy for dev vs. prod environments.
+
     private final PersonService service;
+
+    private static final Logger log = LoggerFactory.getLogger(PersonController.class);
 
     /**
      * Create a new instance of {@code PersonController}.
@@ -38,7 +45,7 @@ public class PersonController {
             Person created = service.createPerson(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(PersonDto.from(created));
         } catch (IllegalArgumentException e) {
-            e.printStackTrace();
+            log.warn("Failed to create person for request {}", request, e);
             return ResponseEntity.badRequest().build();
         }
     }

@@ -9,7 +9,7 @@ services:
     image: slowfall-backend:local
     container_name: slowfall-backend-local
     environment:
-      # Run in dev profile by default; change or remove as needed
+      # Run in the dev profile by default; change or remove as needed
       SPRING_PROFILES_ACTIVE: dev
     ports:
       - "8080:8080"
@@ -21,8 +21,8 @@ services:
       retries: 3
 
 # Notes:
-# - Run this file from the docker/ directory with: docker compose up --build
-#   but it's easier to run from the repo root so the build context (..) is correct:
+# - Run this file from the docker/ directory with: docker compose up --build,
+#   but it's easier to run from the repo root so the build context (.) is correct:
 #     cd "C:\Cloud Storage\BaseFolder\JavaProjects\slowfall"
 #     docker compose -f docker/docker-compose.yml up --build
 # - To enable remote JVM debugging temporarily, pass an override env var on the CLI:

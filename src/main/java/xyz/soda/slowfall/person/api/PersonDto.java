@@ -7,9 +7,9 @@ import xyz.soda.slowfall.person.domain.Person;
  * Data transfer object for Person API responses.
  *
  * @param id       the person unique identifier
- * @param name     the person's full name (first + last)
+ * @param name     the person's full name (first and last)
  * @param pilot    whether the person is a pilot
- * @param skydiver whether the person is a sky diver
+ * @param skydiver whether the person is a skydiver
  * @param weight   the person's weight in kilograms (nullable)
  * @param email    the person's email address
  */

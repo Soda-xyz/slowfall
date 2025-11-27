@@ -47,7 +47,7 @@ public final class PersonSpecifications {
     }
 
     /**
-     * Build a specification to filter by sky diver flag.
+     * Build a specification to filter by skydiver flag.
      * @param skydiver the skydiver flag to match (null to ignore)
      * @return a Specification for Person or null if {@code skydiver} is null
      */

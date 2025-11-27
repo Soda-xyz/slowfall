@@ -10,10 +10,13 @@ import xyz.soda.slowfall.airport.domain.Airport;
 
 @RestController
 @RequestMapping("/api/airports")
-@CrossOrigin(origins = "http://localhost:5173") // frontend dev server
 public class AirportController {
 
     private final AirportService service;
+
+    // Note: CORS is handled globally by the application's CorsConfigurationSource
+    // and per-profile settings (see application-dev.properties). Remove per-controller
+    // @CrossOrigin to centralize CORS policy for dev vs. prod environments.
 
     /**
      * Create a new AirportController.

@@ -5,17 +5,30 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -34,12 +47,15 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 
 /**
  * Spring Security configuration for the application.
  *
- * <p>This configuration class declares beans used by Spring Security including:
+ * <p>This configuration class declares beans used by Spring Security, including:
  * <ul>
  *   <li>a development bypass filter (DevBypassAuthFilter),</li>
  *   <li>the main {@link SecurityFilterChain},</li>
@@ -59,13 +75,14 @@ import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
  * </ul>
  */
 @Configuration
+@EnableConfigurationProperties(CorsProperties.class)
 public class SecurityConfig {
 
     /**
      * Create the development bypass filter.
      *
      * <p>The filter will inspect environment settings to determine whether to short-circuit
-     * authentication during local development. See {@link DevBypassAuthFilter} for behavior.
+     * authentication during local development. See {@link DevBypassAuthFilter} for behaviour.
      *
      * @param env Spring {@link Environment} used to read dev-mode flags
      * @return an instance of {@link DevBypassAuthFilter}
@@ -76,13 +93,42 @@ public class SecurityConfig {
     }
 
     /**
+     * CORS configuration source used by Spring Security's CORS support.
+     *
+     * <p>This builds the allowed origins from {@link CorsProperties} so they can be configured
+     * per-profile (application-dev.properties vs. application.properties).
+     *
+     * @param props typed CORS properties bound from configuration
+     * @return a configured {@link CorsConfigurationSource}
+     */
+    @Bean
+    @Primary
+    public CorsConfigurationSource corsConfigurationSource(CorsProperties props) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        List<String> origins = props.getAllowedOrigins();
+        if (origins == null || origins.isEmpty()) {
+            // default to nothing (safer) but keep the previous dev defaults as a fallback
+            origins = List.of("http://localhost:5173", "http://localhost:3000");
+        }
+        configuration.setAllowedOriginPatterns(origins);
+        configuration.setAllowCredentials(true); // set true if the frontend sends credentials
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Authorization", "Content-Type"));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    /**
      * Configure the main Spring Security filter chain.
      *
      * <p>This config:
      * <ul>
      *   <li>disables CSRF (stateless API),</li>
-     *   <li>permits access to authentication endpoints and health check,</li>
-     *   <li>requires authentication for other requests,</li>
+     *   <li>permits access to authentication endpoints and health check.</li>
+     *   <li>requires authentication for other requests.</li>
      *   <li>uses stateless session management,</li>
      *   <li>enables HTTP Basic for simple username/password auth, and</li>
      *   <li>configures JWT-based resource server support using the supplied converter.</li>
@@ -100,8 +146,17 @@ public class SecurityConfig {
             Converter<Jwt, AbstractAuthenticationToken> jwtAuthConverter,
             DevBypassAuthFilter devBypassAuthFilter)
             throws Exception {
+        // Ensure Spring Security uses the application's CorsConfigurationSource so CORS headers
+        // are applied before security decisions. This registers the CorsFilter inside the
+        // security filter chain.
+        http.cors(Customizer.withDefaults());
+
+        // CORS is handled by the CorsConfigurationSource bean registered above; avoid deprecated HttpSecurity.cors()
+
         http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/auth/**", "/actuator/health")
+                .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.OPTIONS)
+                        .permitAll() // allow preflight
+                        .requestMatchers("/auth/**", "/actuator/health")
                         .permitAll()
                         .anyRequest()
                         .authenticated())
@@ -118,18 +173,25 @@ public class SecurityConfig {
     /**
      * In-memory user details service used for simple username/password authentication.
      *
-     * <p>This creates a single user with username "dev" and password "devpass" (encoded).
+     * <p>This creates a single user with the username "dev" and password "devpass" (encoded).
      * Intended for local development and integration tests only.
      *
      * @param encoder the {@link PasswordEncoder} used to encode the in-memory user's password
+     * @param devUsername the username for the development user (from properties)
+     * @param devPassword the password for the development user (from properties)
      * @return a configured {@link UserDetailsService}
      */
     @Bean
-    public UserDetailsService users(PasswordEncoder encoder) {
-        // in-memory test user for simple username/password login
+    @org.springframework.context.annotation.Profile("dev")
+    public UserDetailsService users(
+            PasswordEncoder encoder,
+            @org.springframework.beans.factory.annotation.Value("${app.security.dev-username:dev}") String devUsername,
+            @org.springframework.beans.factory.annotation.Value("${app.security.dev-password:devpass}")
+                    String devPassword) {
+        // in-memory test user for simple username/password login (dev only)
         var uds = new InMemoryUserDetailsManager();
-        uds.createUser(User.withUsername("dev")
-                .password(encoder.encode("devpass"))
+        uds.createUser(User.withUsername(devUsername)
+                .password(encoder.encode(devPassword))
                 .roles("USER")
                 .build());
         return uds;
@@ -171,10 +233,11 @@ public class SecurityConfig {
      * <p>Intended for development and test environments only. Production deployments should
      * provide a stable key via an external key management system and publish a JWKS endpoint.
      *
-     * @return an {@link RSAKey} containing a newly-generated 2048-bit RSA keypair
-     * @throws Exception if the key generator cannot be initialized
+     * @return an {@link RSAKey} containing a newly generated 2048-bit RSA keypair
+     * @throws Exception if the key generator cannot be initialised
      */
     @Bean
+    @org.springframework.context.annotation.Profile("dev")
     public RSAKey rsaJwk() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
         kpg.initialize(2048);
@@ -185,6 +248,51 @@ public class SecurityConfig {
                 .privateKey(priv)
                 .keyID(java.util.UUID.randomUUID().toString())
                 .build();
+    }
+
+    /**
+     * Load an RSA key from a keystore provided via properties. This bean is conditional on the
+     * property 'app.security.jks.path' being set and will be used in production to provide
+     * a stable RSA key instead of the dev ephemeral key.
+     * Expected properties:
+     *   app.security.jks.path=/path/to/keystore.jks
+     *   app.security.jks.password=keystorePassword
+     *   app.security.jks.alias=keyAlias
+     *   app.security.jks.key-password=keyPassword (optional)
+     *
+     * @param keystorePath path to the JKS keystore file
+     * @param keystorePassword password for the keystore
+     * @param keyAlias alias of the private key entry inside the keystore
+     * @param keyPassword optional password for the key (if different from keystore password)
+     * @return an {@link RSAKey} constructed from the keystore's private key and certificate
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.security.jks", name = "path")
+    public RSAKey rsaKeyFromKeystore(
+            @Value("${app.security.jks.path}") String keystorePath,
+            @Value("${app.security.jks.password}") String keystorePassword,
+            @Value("${app.security.jks.alias}") String keyAlias,
+            @Value("${app.security.jks.key-password:}") String keyPassword)
+            throws Exception {
+        try (InputStream in = Files.newInputStream(Paths.get(keystorePath))) {
+            KeyStore ks = KeyStore.getInstance("JKS");
+            ks.load(in, keystorePassword.toCharArray());
+            Key key = ks.getKey(
+                    keyAlias,
+                    (keyPassword == null || keyPassword.isEmpty())
+                            ? keystorePassword.toCharArray()
+                            : keyPassword.toCharArray());
+            if (!(key instanceof PrivateKey)) {
+                throw new IllegalStateException("Key for alias '" + keyAlias + "' is not a PrivateKey");
+            }
+            Certificate cert = ks.getCertificate(keyAlias);
+            RSAPublicKey pub = (RSAPublicKey) cert.getPublicKey();
+            RSAPrivateKey priv = (RSAPrivateKey) key;
+            return new RSAKey.Builder(pub)
+                    .privateKey(priv)
+                    .keyID(UUID.randomUUID().toString())
+                    .build();
+        }
     }
 
     /**
@@ -215,7 +323,7 @@ public class SecurityConfig {
      *
      * @param rsaKey RSA key containing the public key to verify JWTs
      * @return a configured {@link JwtDecoder}
-     * @throws Exception if obtaining the public key fails
+     * @throws Exception if getting the public key fails
      */
     @Bean
     public JwtDecoder jwtDecoder(RSAKey rsaKey) throws Exception {

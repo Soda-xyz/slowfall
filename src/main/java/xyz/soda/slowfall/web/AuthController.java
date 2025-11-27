@@ -33,6 +33,10 @@ public class AuthController {
     private final JwtDecoder jwtDecoder;
     private final UserDetailsService userDetailsService;
 
+    private final boolean cookieSecure;
+    private final String cookieName;
+    private final String cookieSameSite;
+
     /**
      * Controller constructor wiring required authentication and JWT components.
      *
@@ -40,13 +44,28 @@ public class AuthController {
      * @param jwtEncoder encoder used to sign access and refresh JWTs
      * @param jwtDecoder decoder used to validate refresh tokens
      * @param uds user details service used to load user authorities for token claims
+     * @param cookieSecure whether the refresh cookie should be marked Secure
+     * @param cookieName the name of the refresh cookie
+     * @param cookieSameSite the SameSite attribute to apply to the refresh cookie
      */
     public AuthController(
-            AuthenticationManager authManager, JwtEncoder jwtEncoder, JwtDecoder jwtDecoder, UserDetailsService uds) {
+            AuthenticationManager authManager,
+            JwtEncoder jwtEncoder,
+            JwtDecoder jwtDecoder,
+            UserDetailsService uds,
+            @org.springframework.beans.factory.annotation.Value("${app.security.cookie-secure:false}")
+                    boolean cookieSecure,
+            @org.springframework.beans.factory.annotation.Value("${app.security.cookie-name:refresh_token}")
+                    String cookieName,
+            @org.springframework.beans.factory.annotation.Value("${app.security.cookie-same-site:Lax}")
+                    String cookieSameSite) {
         this.authManager = authManager;
         this.jwtEncoder = jwtEncoder;
         this.jwtDecoder = jwtDecoder;
         this.userDetailsService = uds;
+        this.cookieSecure = cookieSecure;
+        this.cookieName = cookieName;
+        this.cookieSameSite = cookieSameSite;
     }
 
     /**
@@ -77,7 +96,6 @@ public class AuthController {
 
         String token = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
 
-        // refresh token (signed JWT for simplicity here) - longer lived
         JwtClaimsSet refreshClaims = JwtClaimsSet.builder()
                 .issuedAt(now)
                 .expiresAt(now.plus(Duration.ofDays(30)))
@@ -86,12 +104,12 @@ public class AuthController {
         String refresh =
                 jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
 
-        ResponseCookie cookie = ResponseCookie.from("refresh_token", refresh)
+        ResponseCookie cookie = ResponseCookie.from(this.cookieName, refresh)
                 .httpOnly(true)
-                .secure(false) // set true when running behind TLS in prod
+                .secure(this.cookieSecure)
                 .path("/auth")
                 .maxAge(Duration.ofDays(30))
-                .sameSite("Lax")
+                .sameSite(this.cookieSameSite)
                 .build();
 
         return ResponseEntity.ok().header("Set-Cookie", cookie.toString()).body(Map.of("access_token", token));
@@ -100,7 +118,7 @@ public class AuthController {
     /**
      * Exchange a refresh token cookie for a new access token.
      *
-     * @param refreshToken the refresh token cookie value (may be null)
+     * @param refreshToken the refresh token cookie value (can be null)
      * @return 200 with a JSON map containing access_token on success, or 401 on failure
      */
     @PostMapping("/refresh")

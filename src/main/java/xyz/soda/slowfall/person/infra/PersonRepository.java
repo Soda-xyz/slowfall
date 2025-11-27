@@ -39,8 +39,8 @@ public interface PersonRepository extends JpaRepository<Person, UUID>, JpaSpecif
     List<Person> findByPilot(boolean pilot);
 
     /**
-     * Find persons by sky diver flag.
-     * @param skydiver sky diver status to match
+     * Find persons by skydiver flag.
+     * @param skydiver skydiver status to match
      * @return list of matching Person entities
      */
     List<Person> findBySkydiver(boolean skydiver);

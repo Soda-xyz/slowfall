@@ -20,7 +20,8 @@ body {
 	min-height: 100vh;
 	background-color: var(--bg, #fff);
 	color: var(--text, #000);
-	font-family: var(--font-family, Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial), sans-serif;
+	font-family:
+		var(--font-family, Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial), sans-serif;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }

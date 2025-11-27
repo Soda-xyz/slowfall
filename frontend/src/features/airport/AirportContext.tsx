@@ -25,13 +25,11 @@ export function AirportProvider({ children }: { children: React.ReactNode }) {
 	const [selectedAirportId, setSelectedAirportId] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 
-	// Make `load` stable (no selectedAirportId in deps) and use functional update to set initial selected id
 	const load = useCallback(async () => {
 		setLoading(true);
 		try {
 			const airportsResponse = await fetchAirports();
 			setAirports(airportsResponse);
-			// If there's no selected airport yet, set it to the first fetched value.
 			setSelectedAirportId((prev) => {
 				if (prev) return prev;
 				return airportsResponse.length > 0 ? String(airportsResponse[0].id) : prev;
@@ -66,7 +64,6 @@ export function AirportProvider({ children }: { children: React.ReactNode }) {
 export function useAirport() {
 	const ctx = useContext(AirportContext);
 	if (!ctx) {
-		// Return safe defaults when context is absent (useful for tests and isolated components)
 		return {
 			airports: [] as Airport[],
 			selectedAirportId: null,

@@ -46,7 +46,6 @@ export default function JumpForm({ onCreated, airportId }: Props) {
 	const [submitting, setSubmitting] = useState(false);
 	const mountedRef = useRef(true);
 
-	// Fetch pilots once on mount
 	useEffect(() => {
 		mountedRef.current = true;
 		fetchPilots()
@@ -62,7 +61,6 @@ export default function JumpForm({ onCreated, airportId }: Props) {
 		};
 	}, []);
 
-	// Fetch crafts once on mount
 	useEffect(() => {
 		let mounted = true;
 		fetchCrafts()
@@ -84,13 +82,11 @@ export default function JumpForm({ onCreated, airportId }: Props) {
 		};
 	}, []);
 
-	// Sync selected airport when globalAirportId changes and no explicit airportId prop is provided
 	useEffect(() => {
 		if (airportId) return;
 		setSelectedAirportId(globalAirportId ?? null);
 	}, [globalAirportId, airportId]);
 
-	// If no airports are available at mount, fetch them once to set an initial airport selection
 	useEffect(() => {
 		let mounted = true;
 		if (!airports || airports.length === 0) {

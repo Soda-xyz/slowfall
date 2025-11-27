@@ -24,7 +24,6 @@ export default function JumpPage() {
 	const mountedRef = useRef(true);
 	const loadAllRef = useRef<(signal?: AbortSignal) => Promise<void>>(async () => {});
 
-	// Define fetch inside effect and expose via ref to avoid 'set-state-in-effect' lint warning
 	useEffect(() => {
 		mountedRef.current = true;
 		const controller = new AbortController();
@@ -69,9 +68,7 @@ export default function JumpPage() {
 			}
 		};
 
-		// expose fetch function to handlers
 		loadAllRef.current = fetchAndSet;
-		// call it for initial load
 		fetchAndSet(controller.signal);
 		return () => {
 			mountedRef.current = false;

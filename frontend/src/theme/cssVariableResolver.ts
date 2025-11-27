@@ -17,7 +17,6 @@ import type { CSSVariablesResolver, MantineTheme } from "@mantine/core";
 export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineTheme) => {
 	const prefix = "--sf-";
 
-	// Treat theme.colors as a record of readonly color tuples to avoid mutable-array casts
 	const colorsRecord = theme.colors as unknown as Record<string, readonly string[] | undefined>;
 
 	const getPaletteColor = (name: string | undefined, shade = 6): string | undefined => {
@@ -27,7 +26,6 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 		return undefined;
 	};
 
-	// Access primaryShade safely without using `any` (use Partial assertion)
 	const maybePrimaryShade = (theme as Partial<{ primaryShade?: number }>).primaryShade;
 	const primaryShade = typeof maybePrimaryShade === "number" ? maybePrimaryShade : 6;
 
@@ -42,7 +40,6 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 	const gray0 = colorsRecord.gray?.[0] ?? theme.white ?? "#ffffff";
 	const gray5 = colorsRecord.gray?.[5] ?? "#868e96";
 
-	// Basic variable set that does not depend on color scheme
 	const variables: Record<string, string> = {
 		[`${prefix}font-family`]:
 			theme.fontFamily ?? "Inter, system-ui, Avenir, 'Helvetica Neue', Helvetica, Arial",
@@ -59,7 +56,6 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 		[`${prefix}shadow-md`]: theme.shadows?.md ?? "none",
 		[`${prefix}shadow-lg`]: theme.shadows?.lg ?? "none",
 
-		// Semantic colors (general/fallback)
 		[`${prefix}primary`]: primary,
 		[`${prefix}success`]: success,
 		[`${prefix}danger`]: danger,
@@ -68,8 +64,6 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 		[`${prefix}muted`]: gray5,
 	};
 
-	// Light color scheme overrides — avoid using theme.colorScheme here because the
-	// resolver returns separate light/dark objects and Mantine handles applying them.
 	const light: Record<string, string> = {
 		[`${prefix}background`]: theme.white ?? gray0,
 		[`${prefix}surface`]: gray0,
@@ -78,7 +72,6 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 		[`${prefix}accent-foreground`]: theme.black ?? "#000000",
 	};
 
-	// Dark color scheme overrides
 	const dark: Record<string, string> = {
 		[`${prefix}background`]: colorsRecord.dark?.[7] ?? theme.black ?? "#000000",
 		[`${prefix}surface`]: colorsRecord.dark?.[6] ?? theme.black ?? "#000000",

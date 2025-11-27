@@ -6,10 +6,10 @@ Files:
   produces a slim runtime image.
 - frontend/Dockerfile - multi-stage Dockerfile that builds the Vite React app and serves it with nginx (production).
 - frontend/nginx.conf - nginx config for SPA history API fallback and cache headers.
-- docker-compose.yml - simple CLI-friendly compose for local development / testing (builds & runs backend only).
+- docker-compose.yml—simple CLI-friendly compose for local development / testing (builds & runs backend only).
 - docker-compose.prod.yml - production-oriented compose file that builds and runs frontend + backend images.
 
-Quick local commands (from repository root):
+Quick local commands (from the repository root):
 
 Build backend image (production tag):
 
@@ -23,7 +23,7 @@ Build frontend image (production tag):
 docker build -t slowfall-frontend:prod -f docker\frontend\Dockerfile .
 ```
 
-Run production compose (builds images and runs):
+Run production composes (builds images and runs):
 
 ```powershell
 docker compose -f docker\docker-compose.prod.yml up --build -d
@@ -37,7 +37,7 @@ docker compose -f docker\docker-compose.prod.yml down --volumes
 
 CI/CD notes:
 
-- The provided GitHub Actions workflow (.github/workflows/ci-build.yml) builds the backend jar, builds frontend, then
+- The provided GitHub Actions workflow (.GitHub/workflows/ci-build.yml) builds the backend jar, builds the frontend, then
   builds and pushes images to GitHub Container Registry (GHCR). It tags images with the commit SHA.
 - Ensure the repository has package write permissions so the action can push to GHCR. The action uses the repo's
   GITHUB_TOKEN for authentication.
