@@ -1,7 +1,6 @@
 package xyz.soda.slowfall.person.domain;
 
 import jakarta.persistence.*;
-
 import java.util.Objects;
 import java.util.UUID;
 
@@ -34,8 +33,7 @@ public class Person {
     /**
      * Protected no-args constructor for JPA.
      */
-    protected Person() {
-    }
+    protected Person() {}
 
     /**
      * Create a new Person with provided attributes.

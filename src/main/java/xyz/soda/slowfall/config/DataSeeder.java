@@ -1,5 +1,6 @@
 package xyz.soda.slowfall.config;
 
+import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,8 +10,6 @@ import xyz.soda.slowfall.craft.domain.Craft;
 import xyz.soda.slowfall.craft.infra.CraftRepository;
 import xyz.soda.slowfall.person.domain.Person;
 import xyz.soda.slowfall.person.infra.PersonRepository;
-
-import java.util.List;
 
 /**
  * Seeds initial data for the application on startup.

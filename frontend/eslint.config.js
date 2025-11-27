@@ -31,12 +31,8 @@ export default defineConfig([
   {
     files: [
       '**/*.{spec.ts,spec.tsx,test.ts,test.tsx}',
-      'e2e/**',
       'test/**',
-      'e2e/**/*.ts',
-      'e2e/**/*.tsx',
-      'vitest.config.ts',
-      'playwright.config.ts',
+      'vitest.config.ts'
     ],
     plugins: {
       '@typescript-eslint': tsEslint,

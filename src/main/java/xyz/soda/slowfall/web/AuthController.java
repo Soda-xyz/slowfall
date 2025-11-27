@@ -1,6 +1,10 @@
 package xyz.soda.slowfall.web;
 
 import jakarta.servlet.http.HttpServletResponse;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -11,11 +15,15 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.stream.Collectors;
-
+/**
+ * Controller exposing authentication endpoints for issuing access and refresh tokens.
+ *
+ * <p>Endpoints:
+ * <ul>
+ *   <li>POST /auth/login - authenticate with username/password and receive an access token and refresh cookie</li>
+ *   <li>POST /auth/refresh - exchange a refresh cookie for a new access token</li>
+ * </ul>
+ */
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -25,16 +33,34 @@ public class AuthController {
     private final JwtDecoder jwtDecoder;
     private final UserDetailsService userDetailsService;
 
-    public AuthController(AuthenticationManager authManager, JwtEncoder jwtEncoder, JwtDecoder jwtDecoder, UserDetailsService uds) {
+    /**
+     * Controller constructor wiring required authentication and JWT components.
+     *
+     * @param authManager authentication manager used to authenticate username/password logins
+     * @param jwtEncoder encoder used to sign access and refresh JWTs
+     * @param jwtDecoder decoder used to validate refresh tokens
+     * @param uds user details service used to load user authorities for token claims
+     */
+    public AuthController(
+            AuthenticationManager authManager, JwtEncoder jwtEncoder, JwtDecoder jwtDecoder, UserDetailsService uds) {
         this.authManager = authManager;
         this.jwtEncoder = jwtEncoder;
         this.jwtDecoder = jwtDecoder;
         this.userDetailsService = uds;
     }
 
+    /**
+     * Authenticate the user and return an access token in the response body. A refresh token
+     * is set as an HttpOnly cookie on the response.
+     *
+     * @param req the authentication request containing username and password
+     * @param response the servlet response used to add the refresh cookie
+     * @return a ResponseEntity containing a JSON object with an access_token field
+     */
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody AuthRequest req, HttpServletResponse response) {
-        Authentication auth = authManager.authenticate(new UsernamePasswordAuthenticationToken(req.username(), req.password()));
+        Authentication auth =
+                authManager.authenticate(new UsernamePasswordAuthenticationToken(req.username(), req.password()));
 
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -42,7 +68,11 @@ public class AuthController {
                 .issuedAt(now)
                 .expiresAt(now.plus(Duration.ofMinutes(15)))
                 .subject(auth.getName())
-                .claim("roles", auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()))
+                .claim(
+                        "roles",
+                        auth.getAuthorities().stream()
+                                .map(GrantedAuthority::getAuthority)
+                                .collect(Collectors.toList()))
                 .build();
 
         String token = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
@@ -53,7 +83,8 @@ public class AuthController {
                 .expiresAt(now.plus(Duration.ofDays(30)))
                 .subject(auth.getName())
                 .build();
-        String refresh = jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
+        String refresh =
+                jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
 
         ResponseCookie cookie = ResponseCookie.from("refresh_token", refresh)
                 .httpOnly(true)
@@ -66,8 +97,15 @@ public class AuthController {
         return ResponseEntity.ok().header("Set-Cookie", cookie.toString()).body(Map.of("access_token", token));
     }
 
+    /**
+     * Exchange a refresh token cookie for a new access token.
+     *
+     * @param refreshToken the refresh token cookie value (may be null)
+     * @return 200 with a JSON map containing access_token on success, or 401 on failure
+     */
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, String>> refresh(@CookieValue(name = "refresh_token", required = false) String refreshToken) {
+    public ResponseEntity<Map<String, String>> refresh(
+            @CookieValue(name = "refresh_token", required = false) String refreshToken) {
         if (refreshToken == null) {
             return ResponseEntity.status(401).build();
         }
@@ -81,15 +119,25 @@ public class AuthController {
                     .issuedAt(now)
                     .expiresAt(now.plus(Duration.ofMinutes(15)))
                     .subject(username)
-                    .claim("roles", user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()))
+                    .claim(
+                            "roles",
+                            user.getAuthorities().stream()
+                                    .map(GrantedAuthority::getAuthority)
+                                    .collect(Collectors.toList()))
                     .build();
-            String newToken = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+            String newToken =
+                    jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
             return ResponseEntity.ok(Map.of("access_token", newToken));
         } catch (Exception e) {
             return ResponseEntity.status(401).build();
         }
     }
 
-    public record AuthRequest(String username, String password) {
-    }
+    /**
+     * Simple record representing an authentication request payload.
+     *
+     * @param username the username to authenticate
+     * @param password the user's password
+     */
+    public record AuthRequest(String username, String password) {}
 }

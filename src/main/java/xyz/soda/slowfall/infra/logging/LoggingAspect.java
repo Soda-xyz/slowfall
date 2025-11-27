@@ -1,6 +1,9 @@
 package xyz.soda.slowfall.infra.logging;
 
 import jakarta.annotation.PostConstruct;
+import java.lang.reflect.Method;
+import java.util.*;
+import java.util.stream.Collectors;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -10,10 +13,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.lang.reflect.Method;
-import java.util.*;
-import java.util.stream.Collectors;
-
+/**
+ * Aspect that provides centralized method entry/exit logging for the application.
+ *
+ * <p>Behavior is controlled via properties (see application.properties):
+ * <ul>
+ *   <li><code>app.logging.aspect.enabled</code> - enable/disable the aspect (default true)</li>
+ *   <li><code>app.logging.aspect.mode</code> - ALL, SERVICES, or ANNOTATED (default SERVICES)</li>
+ *   <li><code>app.logging.aspect.level</code> - log level for entry/exit lines (DEBUG or INFO)</li>
+ *   <li><code>app.logging.aspect.exclude-packages</code> - comma-separated package prefixes to skip</li>
+ * </ul>
+ */
 @Aspect
 @Component
 public class LoggingAspect {
@@ -38,6 +48,13 @@ public class LoggingAspect {
 
     private List<String> excludePackages = Collections.emptyList();
 
+    /**
+     * Initialize the aspect after properties are injected.
+     *
+     * <p>Parses the comma-separated {@code app.logging.aspect.exclude-packages} property and
+     * populates the internal excludePackages list. Also logs the resolved configuration at DEBUG
+     * level for troubleshooting.
+     */
     @PostConstruct
     public void init() {
         if (excludePackagesProp != null && !excludePackagesProp.isBlank()) {
@@ -46,12 +63,21 @@ public class LoggingAspect {
                     .filter(s -> !s.isEmpty())
                     .collect(Collectors.toList());
         }
-        log.debug("LoggingAspect initialized: enabled={}, mode={}, level={}, excludePackages={}", enabled, mode, level, excludePackages);
+        log.debug(
+                "LoggingAspect initialized: enabled={}, mode={}, level={}, excludePackages={}",
+                enabled,
+                mode,
+                level,
+                excludePackages);
     }
 
     /**
      * Pointcut: capture public methods in the application's base package. We decide at runtime
      * whether to actually emit logs based on configuration (mode, exclusions, annotations).
+     *
+     * @param joinPoint the current join point representing the method invocation
+     * @return the result of the invoked method
+     * @throws Throwable any exception thrown by the invoked method is propagated
      */
     @Around("execution(public * xyz.soda.slowfall..*(..))")
     public Object logAround(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -75,22 +101,15 @@ public class LoggingAspect {
         boolean shouldLog = false;
         String modeUpper = mode == null ? "" : mode.toUpperCase().trim();
 
-        switch (modeUpper) {
-            case "ALL":
-                shouldLog = true;
-                break;
-            case "SERVICES":
-                // Log only service layer classes by convention (package contains '.service.')
-                shouldLog = classPackage.contains(".service.") || classPackage.endsWith(".service");
-                break;
-            case "ANNOTATED":
-                shouldLog = isAnnotated(joinPoint, signature);
-                break;
-            default:
-                // Unknown mode -> default to SERVICES
-                shouldLog = classPackage.contains(".service.") || classPackage.endsWith(".service");
-                break;
-        }
+        shouldLog = switch (modeUpper) {
+            case "ALL" -> true;
+            case "SERVICES" ->
+            // Log only service layer classes by convention (package contains '.service.')
+            classPackage.contains(".service.") || classPackage.endsWith(".service");
+            case "ANNOTATED" -> isAnnotated(joinPoint, signature);
+            default ->
+            // Unknown mode -> default to SERVICES
+            classPackage.contains(".service.") || classPackage.endsWith(".service");};
 
         if (!shouldLog) {
             return joinPoint.proceed();
@@ -142,6 +161,9 @@ public class LoggingAspect {
      * - Collections/arrays show type and size
      * - Large objects are truncated (toString limited)
      * - Known noisy/sensitive types are elided
+     *
+     * @param args the argument array passed to the method
+     * @return a one-line, human-readable summary of the arguments
      */
     private String formatArguments(Object[] args) {
         if (args == null || args.length == 0) return "[]";
@@ -155,12 +177,25 @@ public class LoggingAspect {
     }
 
     private String formatArg(Object arg) {
-        if (arg == null) return "null";
-        // Avoid logging servlet requests/responses, streams, or multipart files
-        if (arg instanceof jakarta.servlet.ServletRequest) return "<ServletRequest>";
-        if (arg instanceof jakarta.servlet.ServletResponse) return "<ServletResponse>";
-        if (arg instanceof java.io.InputStream) return "<InputStream>";
-        if (arg instanceof java.io.Reader) return "<Reader>";
+        switch (arg) {
+            case null -> {
+                return "null";
+            }
+                // Avoid logging servlet requests/responses, streams, or multipart files
+            case jakarta.servlet.ServletRequest servletRequest -> {
+                return "<ServletRequest>";
+            }
+            case jakarta.servlet.ServletResponse servletResponse -> {
+                return "<ServletResponse>";
+            }
+            case java.io.InputStream inputStream -> {
+                return "<InputStream>";
+            }
+            case java.io.Reader reader -> {
+                return "<Reader>";
+            }
+            default -> {}
+        }
         // Spring MultipartFile (if on classpath)
         try {
             if (arg.getClass().getName().equals("org.springframework.web.multipart.MultipartFile"))
@@ -188,6 +223,12 @@ public class LoggingAspect {
         return s;
     }
 
+    /**
+     * Produce a concise representation of a method result suitable for logging.
+     *
+     * @param result the returned object from the advised method
+     * @return a short, human-readable summary of the result
+     */
     private String formatResult(Object result) {
         if (result == null) return "null";
         // Keep result summary short

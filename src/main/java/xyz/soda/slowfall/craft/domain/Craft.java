@@ -1,7 +1,6 @@
 package xyz.soda.slowfall.craft.domain;
 
 import jakarta.persistence.*;
-
 import java.util.Objects;
 import java.util.UUID;
 
@@ -28,8 +27,7 @@ public class Craft {
     /**
      * Protected no-args constructor required by JPA.
      */
-    protected Craft() {
-    }
+    protected Craft() {}
 
     /**
      * Create a Craft with the specified attributes.

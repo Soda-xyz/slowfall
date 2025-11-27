@@ -1,5 +1,12 @@
 package xyz.soda.slowfall.craft.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -8,14 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import xyz.soda.slowfall.craft.api.CreateCraftRequest;
 import xyz.soda.slowfall.craft.domain.Craft;
 import xyz.soda.slowfall.craft.infra.CraftRepository;
-
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CraftServiceTest {

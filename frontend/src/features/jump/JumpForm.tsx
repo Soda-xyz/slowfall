@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { IconClock } from "@tabler/icons-react";
 import { Button, Group, Stack, NumberInput, Select, ActionIcon } from "@mantine/core";
 import { DateInput, TimePicker } from "@mantine/dates";
@@ -44,18 +44,27 @@ export default function JumpForm({ onCreated, airportId }: Props) {
 		airportId ?? globalAirportId ?? null,
 	);
 	const [submitting, setSubmitting] = useState(false);
+	const mountedRef = useRef(true);
 
+	// Fetch pilots once on mount
 	useEffect(() => {
-		let mounted = true;
+		mountedRef.current = true;
 		fetchPilots()
 			.then((pilotsList) => {
-				if (!mounted) return;
+				if (!mountedRef.current) return;
 				setPersonOptions(
 					pilotsList.map((pilot) => ({ value: String(pilot.id), label: pilot.name })),
 				);
 			})
 			.catch(() => {});
+		return () => {
+			mountedRef.current = false;
+		};
+	}, []);
 
+	// Fetch crafts once on mount
+	useEffect(() => {
+		let mounted = true;
 		fetchCrafts()
 			.then((craftsList) => {
 				if (!mounted) return;
@@ -65,34 +74,48 @@ export default function JumpForm({ onCreated, airportId }: Props) {
 						label: craftItem.name,
 					})),
 				);
-				if (!craftRegistrationNumber && craftsList.length > 0)
-					setCraftRegistrationNumber(String(craftsList[0].registrationNumber));
+				setCraftRegistrationNumber((prev) =>
+					prev ? prev : craftsList.length > 0 ? String(craftsList[0].registrationNumber) : "",
+				);
 			})
 			.catch(() => {});
-		if (!airports || airports.length === 0) {
-			fetchAirports()
-				.then((airportsResponse) => {
-					if (!mounted) return;
-					if (!selectedAirportId && airportsResponse.length > 0)
-						setSelectedAirportId(String(airportsResponse[0].id));
-				})
-				.catch(() => {});
-		} else {
-			if (!selectedAirportId)
-				setSelectedAirportId(
-					airportId ?? globalAirportId ?? (airports.length > 0 ? String(airports[0].id) : null),
-				);
-		}
-
 		return () => {
 			mounted = false;
 		};
-	}, [airportId, airports, craftRegistrationNumber, globalAirportId, selectedAirportId]);
+	}, []);
 
+	// Sync selected airport when globalAirportId changes and no explicit airportId prop is provided
 	useEffect(() => {
 		if (airportId) return;
 		setSelectedAirportId(globalAirportId ?? null);
 	}, [globalAirportId, airportId]);
+
+	// If no airports are available at mount, fetch them once to set an initial airport selection
+	useEffect(() => {
+		let mounted = true;
+		if (!airports || airports.length === 0) {
+			fetchAirports()
+				.then((airportsResponse) => {
+					if (!mounted) return;
+					setSelectedAirportId((prev) => {
+						if (prev) return prev;
+						return airportsResponse.length > 0 ? String(airportsResponse[0].id) : prev;
+					});
+				})
+				.catch(() => {});
+		} else {
+			setSelectedAirportId(
+				(prev) =>
+					prev ??
+					airportId ??
+					globalAirportId ??
+					(airports.length > 0 ? String(airports[0].id) : null),
+			);
+		}
+		return () => {
+			mounted = false;
+		};
+	}, [airports, airportId, globalAirportId]);
 
 	const handleDateChange = (value: Date | string | null) => {
 		if (!value) {

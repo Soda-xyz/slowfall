@@ -1,13 +1,11 @@
 package xyz.soda.slowfall.person.application;
 
+import java.util.Locale;
 import org.springframework.data.jpa.domain.Specification;
 import xyz.soda.slowfall.person.domain.Person;
 
-import java.util.Locale;
-
 public final class PersonSpecifications {
-    private PersonSpecifications() {
-    }
+    private PersonSpecifications() {}
 
     /**
      * Build a specification to match persons whose first name contains the provided text (case-insensitive).

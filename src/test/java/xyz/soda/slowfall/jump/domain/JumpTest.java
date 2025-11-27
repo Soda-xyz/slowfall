@@ -1,12 +1,11 @@
 package xyz.soda.slowfall.jump.domain;
 
-import org.junit.jupiter.api.Test;
-import xyz.soda.slowfall.person.domain.Person;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Instant;
 import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import xyz.soda.slowfall.person.domain.Person;
 
 class JumpTest {
 

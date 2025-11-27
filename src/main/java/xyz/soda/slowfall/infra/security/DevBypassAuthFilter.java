@@ -1,17 +1,15 @@
-// ...existing code...
 package xyz.soda.slowfall.infra.security;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Lightweight auth filter for early development.
@@ -28,12 +26,36 @@ public class DevBypassAuthFilter implements Filter {
 
     private final Environment env;
 
+    /**
+     * Create a new DevBypassAuthFilter backed by the provided {@link Environment}.
+     *
+     * @param env Spring environment used to read the 'app.security.dev-bypass' flag and active profiles
+     */
     public DevBypassAuthFilter(Environment env) {
         this.env = env;
     }
 
+    /**
+     * Filter implementation that either populates a simple development Authentication when
+     * the dev-bypass mode is enabled, or performs a minimal Authorization header check
+     * for production-like behaviour.
+     *
+     * <p>When dev-bypass is active this method:
+     * <ul>
+     *   <li>sets a request attribute named {@link #AUTHENTICATED_USER_ATTR} with the username,</li>
+     *   <li>sets a basic {@link UsernamePasswordAuthenticationToken} on the {@link SecurityContextHolder},</li>
+     *   <li>and clears the SecurityContext after the request completes.</li>
+     * </ul>
+     *
+     * @param request the current servlet request
+     * @param response the current servlet response
+     * @param chain the filter chain to continue processing the request
+     * @throws IOException if an I/O error occurs during processing
+     * @throws ServletException if a servlet error occurs during processing
+     */
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
         if (!(request instanceof HttpServletRequest req) || !(response instanceof HttpServletResponse res)) {
             chain.doFilter(request, response);
             return;
@@ -85,4 +107,3 @@ public class DevBypassAuthFilter implements Filter {
         chain.doFilter(request, response);
     }
 }
-// ...existing code...

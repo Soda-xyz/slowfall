@@ -1,13 +1,12 @@
 package xyz.soda.slowfall.airport.api;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.soda.slowfall.airport.application.AirportService;
 import xyz.soda.slowfall.airport.domain.Airport;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/airports")

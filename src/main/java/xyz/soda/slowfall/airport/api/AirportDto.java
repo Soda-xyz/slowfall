@@ -1,8 +1,7 @@
 package xyz.soda.slowfall.airport.api;
 
-import xyz.soda.slowfall.airport.domain.Airport;
-
 import java.util.UUID;
+import xyz.soda.slowfall.airport.domain.Airport;
 
 /**
  * Data transfer object for Airport API responses.

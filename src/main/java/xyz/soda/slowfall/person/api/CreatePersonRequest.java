@@ -8,5 +8,4 @@ public record CreatePersonRequest(
         boolean pilot,
         boolean skydiver,
         @NotNull @Positive Integer weight,
-        @Email String email) {
-}
+        @Email String email) {}

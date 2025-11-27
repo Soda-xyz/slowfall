@@ -1,7 +1,6 @@
 package xyz.soda.slowfall.airport.domain;
 
 import jakarta.persistence.*;
-
 import java.util.UUID;
 
 @Entity
@@ -23,8 +22,7 @@ public class Airport {
     /**
      * Protected no-args constructor for JPA.
      */
-    protected Airport() {
-    }
+    protected Airport() {}
 
     /**
      * Create a new Airport with the given properties.

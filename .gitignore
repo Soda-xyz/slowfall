@@ -40,3 +40,20 @@ out/
 frontend/dist/
 frontend/dist-ssr/
 frontend/node_modules/
+
+# Local environment files (do NOT commit secrets)
+.env.local
+.env.*.local
+
+# Vite / frontend caches and build artifacts
+.vite/
+.cache/
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+*.log
+
+# Optional local-only excludes: add to .git/info/exclude if you prefer machine-only ignores
+# .idea-local/

@@ -1,5 +1,11 @@
 package xyz.soda.slowfall.airport.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -8,13 +14,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import xyz.soda.slowfall.airport.api.CreateAirportRequest;
 import xyz.soda.slowfall.airport.domain.Airport;
 import xyz.soda.slowfall.airport.infra.AirportRepository;
-
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AirportServiceTest {

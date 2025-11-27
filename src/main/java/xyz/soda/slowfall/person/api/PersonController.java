@@ -1,6 +1,7 @@
 package xyz.soda.slowfall.person.api;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -9,8 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.soda.slowfall.person.application.PersonService;
 import xyz.soda.slowfall.person.domain.Person;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/person")

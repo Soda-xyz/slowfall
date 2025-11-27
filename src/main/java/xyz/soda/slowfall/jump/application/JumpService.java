@@ -1,5 +1,10 @@
 package xyz.soda.slowfall.jump.application;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.soda.slowfall.airport.domain.Airport;
@@ -9,12 +14,6 @@ import xyz.soda.slowfall.jump.domain.Jump;
 import xyz.soda.slowfall.jump.infra.JumpRepository;
 import xyz.soda.slowfall.person.domain.Person;
 import xyz.soda.slowfall.person.infra.PersonRepository;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.UUID;
 
 @Service
 public class JumpService {

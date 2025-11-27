@@ -1,15 +1,14 @@
 package xyz.soda.slowfall.jump.domain;
 
 import jakarta.persistence.*;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-import xyz.soda.slowfall.person.domain.Person;
-
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import xyz.soda.slowfall.person.domain.Person;
 
 @Entity
 @EntityListeners(AuditingEntityListener.class)
@@ -50,8 +49,7 @@ public class Jump {
     /**
      * Protected no-args constructor for JPA.
      */
-    protected Jump() {
-    }
+    protected Jump() {}
 
     /**
      * Create a new Jump with time, airport and altitude.

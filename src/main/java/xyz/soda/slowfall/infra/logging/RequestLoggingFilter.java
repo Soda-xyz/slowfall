@@ -2,13 +2,12 @@ package xyz.soda.slowfall.infra.logging;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-import java.util.UUID;
 
 /**
  * Servlet filter that extracts trace and user identifiers from HTTP headers
@@ -34,7 +33,8 @@ public class RequestLoggingFilter implements Filter {
     public static final String USER_ID_KEY = "userId";
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
         try {
             if (request instanceof HttpServletRequest http) {
                 String traceId = http.getHeader(TRACE_ID_HEADER);
@@ -61,4 +61,3 @@ public class RequestLoggingFilter implements Filter {
         }
     }
 }
-

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, Container, Group, Title, Select, Button } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import JumpForm from "./JumpForm";
@@ -21,49 +21,62 @@ export default function JumpPage() {
 	const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 	const [targetJumpId, setTargetJumpId] = useState<string | null>(null);
 	const [actionMode, setActionMode] = useState<"skydiver" | "pilot" | null>(null);
+	const mountedRef = useRef(true);
+	const loadAllRef = useRef<(signal?: AbortSignal) => Promise<void>>(async () => {});
 
-	const loadAll = async () => {
-		const controller = new AbortController();
-		try {
-			const [jumpsData, pilotsData, skydiversData] = await Promise.all([
-				fetchJumps(controller.signal),
-				fetchPilots(),
-				fetchSkydivers(),
-			]);
-			setJumps(jumpsData);
-			setPilots(
-				pilotsData.map((person) => ({
-					id: String(person.id),
-					name: person.name,
-					pilot: person.pilot,
-					skydiver: person.skydiver,
-					weight: person.weight,
-					email: person.email,
-				})),
-			);
-			setSkydivers(
-				skydiversData.map((person) => ({
-					id: String(person.id),
-					name: person.name,
-					pilot: person.pilot,
-					skydiver: person.skydiver,
-					weight: person.weight,
-					email: person.email,
-				})),
-			);
-		} catch (err) {
-			notifications.show({
-				color: "red",
-				title: "Load failed",
-				message: String(err instanceof Error ? err.message : err),
-			});
-		} finally {
-			controller.abort();
-		}
-	};
-
+	// Define fetch inside effect and expose via ref to avoid 'set-state-in-effect' lint warning
 	useEffect(() => {
-		loadAll();
+		mountedRef.current = true;
+		const controller = new AbortController();
+
+		const fetchAndSet = async (signal?: AbortSignal) => {
+			try {
+				const [jumpsData, pilotsData, skydiversData] = await Promise.all([
+					fetchJumps(signal),
+					fetchPilots(),
+					fetchSkydivers(),
+				]);
+
+				if (!mountedRef.current) return;
+				setJumps(jumpsData);
+				setPilots(
+					pilotsData.map((person) => ({
+						id: String(person.id),
+						name: person.name,
+						pilot: person.pilot,
+						skydiver: person.skydiver,
+						weight: person.weight,
+						email: person.email,
+					})),
+				);
+				setSkydivers(
+					skydiversData.map((person) => ({
+						id: String(person.id),
+						name: person.name,
+						pilot: person.pilot,
+						skydiver: person.skydiver,
+						weight: person.weight,
+						email: person.email,
+					})),
+				);
+			} catch (err) {
+				if (!mountedRef.current) return;
+				notifications.show({
+					color: "red",
+					title: "Load failed",
+					message: String(err instanceof Error ? err.message : err),
+				});
+			}
+		};
+
+		// expose fetch function to handlers
+		loadAllRef.current = fetchAndSet;
+		// call it for initial load
+		fetchAndSet(controller.signal);
+		return () => {
+			mountedRef.current = false;
+			controller.abort();
+		};
 	}, []);
 
 	const onCreated = (j: Jump) => setJumps((prev) => [...prev, j]);
@@ -84,7 +97,7 @@ export default function JumpPage() {
 			});
 			setSelectedPersonId(null);
 			setTargetJumpId(null);
-			await loadAll();
+			await loadAllRef.current();
 		} catch (err) {
 			notifications.show({
 				color: "red",
@@ -110,7 +123,7 @@ export default function JumpPage() {
 			});
 			setSelectedPersonId(null);
 			setTargetJumpId(null);
-			await loadAll();
+			await loadAllRef.current();
 		} catch (err) {
 			notifications.show({
 				color: "red",

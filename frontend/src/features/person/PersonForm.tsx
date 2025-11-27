@@ -19,9 +19,8 @@ type Props = {
  * @param props.onCreated optional callback called with the created Person
  */
 export default function PersonForm({ onCreated }: Props) {
-	const [firstName, setFirstName] = useState("");
-	const [lastName, setLastName] = useState("");
-	const [weight, setWeight] = useState<number | string>(""); //Look at this
+	const [name, setName] = useState("");
+	const [weight, setWeight] = useState<number | string>("");
 	const [email, setEmail] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 
@@ -36,9 +35,13 @@ export default function PersonForm({ onCreated }: Props) {
 			return;
 		}
 
+		const parts = name.trim().split(/\s+/);
+		const firstName = parts[0] ?? "";
+		const lastName = parts.slice(1).join(" ") || "";
+
 		const payload: CreatePersonRequest = {
-			firstName: firstName.trim(),
-			lastName: lastName.trim(),
+			firstName: firstName,
+			lastName: lastName,
 			weight: Number(weight),
 			pilot: false,
 			skydiver: true,
@@ -61,8 +64,7 @@ export default function PersonForm({ onCreated }: Props) {
 				title: "Person added",
 				message: `${created.firstName} has been added`,
 			});
-			setFirstName("");
-			setLastName("");
+			setName("");
 			setWeight("");
 			setEmail("");
 			onCreated?.(created);
@@ -78,18 +80,11 @@ export default function PersonForm({ onCreated }: Props) {
 		<form onSubmit={handleSubmit}>
 			<Stack gap="sm">
 				<TextInput
-					label="First Name"
-					placeholder="Jane"
+					label="Name"
+					placeholder="Jane Doe"
 					withAsterisk
-					value={firstName}
-					onChange={(e) => setFirstName(e.currentTarget.value)}
-				/>
-				<TextInput
-					label="Last Name"
-					placeholder="Doe"
-					withAsterisk
-					value={lastName}
-					onChange={(e) => setLastName(e.currentTarget.value)}
+					value={name}
+					onChange={(e) => setName(e.currentTarget.value)}
 				/>
 				<NumberInput
 					label="Weight"

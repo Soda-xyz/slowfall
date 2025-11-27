@@ -26,3 +26,6 @@ if (!window.requestAnimationFrame) {
   unobserve() {}
   disconnect() {}
 }
+
+// Add jest-dom matchers in Vitest environment only
+import '@testing-library/jest-dom/vitest';

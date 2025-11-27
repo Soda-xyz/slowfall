@@ -1,15 +1,14 @@
 package xyz.soda.slowfall.jump.api;
 
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.soda.slowfall.jump.application.JumpService;
 import xyz.soda.slowfall.jump.domain.Jump;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/jumps")

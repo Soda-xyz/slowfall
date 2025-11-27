@@ -1,8 +1,7 @@
 package xyz.soda.slowfall.craft.api;
 
-import xyz.soda.slowfall.craft.domain.Craft;
-
 import java.util.UUID;
+import xyz.soda.slowfall.craft.domain.Craft;
 
 /**
  * Data transfer object for Craft API responses.

@@ -1,12 +1,11 @@
 package xyz.soda.slowfall.jump.api;
 
-import xyz.soda.slowfall.jump.domain.Jump;
-import xyz.soda.slowfall.person.api.PersonDto;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import xyz.soda.slowfall.jump.domain.Jump;
+import xyz.soda.slowfall.person.api.PersonDto;
 
 /**
  * Data transfer object for Jump API responses.

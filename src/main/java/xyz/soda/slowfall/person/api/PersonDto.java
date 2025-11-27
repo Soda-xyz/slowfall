@@ -1,8 +1,7 @@
 package xyz.soda.slowfall.person.api;
 
-import xyz.soda.slowfall.person.domain.Person;
-
 import java.util.UUID;
+import xyz.soda.slowfall.person.domain.Person;
 
 /**
  * Data transfer object for Person API responses.
