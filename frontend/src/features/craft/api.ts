@@ -1,7 +1,11 @@
 import type { Craft, CreateCraftRequest } from "./types";
+import { API_BASE_URL } from "../../lib/apiBase";
 
-const API_BASE_URL = "http://localhost:8080";
-
+/**
+ * Craft API functions
+ *
+ * Small wrappers over the backend craft endpoints used by the UI.
+ */
 export async function fetchCrafts(signal?: AbortSignal): Promise<Craft[]> {
 	const res = await fetch(`${API_BASE_URL}/api/crafts`, { signal });
 	if (!res.ok) {
@@ -10,6 +14,10 @@ export async function fetchCrafts(signal?: AbortSignal): Promise<Craft[]> {
 	return res.json();
 }
 
+/**
+ * Create a new craft on the server
+ * @param payload CreateCraftRequest
+ */
 export async function createCraft(payload: CreateCraftRequest): Promise<Craft> {
 	const res = await fetch(`${API_BASE_URL}/api/crafts`, {
 		method: "POST",

@@ -33,12 +33,12 @@ public class JumpController {
      */
     @PostMapping
     public ResponseEntity<JumpDto> createJump(@Valid @RequestBody CreateJumpRequest request) {
-        //try {
+        try {
             Jump created = service.createJump(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(JumpDto.from(created));
-        //} catch (IllegalArgumentException e) {
-        //   return ResponseEntity.badRequest().build();
-        //}
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     /**

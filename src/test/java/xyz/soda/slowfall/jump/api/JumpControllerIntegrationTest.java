@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import xyz.soda.slowfall.airport.api.CreateAirportRequest;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,7 +39,7 @@ class JumpControllerIntegrationTest {
 
         String jumpUrl = "http://localhost:" + port + "/api/jumps";
         CreateJumpRequest jreq =
-                new CreateJumpRequest(LocalDateTime.now().plusDays(1), airportId, "REG-1", 12000, null);
+                new CreateJumpRequest(Instant.now().plus(Duration.ofDays(1)), airportId, "REG-1", 12000, null);
 
         ResponseEntity<JumpDto> postResp = restTemplate.postForEntity(jumpUrl, jreq, JumpDto.class);
         assertEquals(HttpStatus.CREATED, postResp.getStatusCode());
@@ -60,7 +61,7 @@ class JumpControllerIntegrationTest {
 
         String jumpUrl = "http://localhost:" + port + "/api/jumps";
         CreateJumpRequest jreq =
-                new CreateJumpRequest(LocalDateTime.now().plusDays(1), airportId, "REG-1", 12000, null);
+                new CreateJumpRequest(Instant.now().plus(Duration.ofDays(1)), airportId, "REG-1", 12000, null);
         ResponseEntity<JumpDto> postResp = restTemplate.postForEntity(jumpUrl, jreq, JumpDto.class);
         assertEquals(HttpStatus.CREATED, postResp.getStatusCode());
         JumpDto created = postResp.getBody();

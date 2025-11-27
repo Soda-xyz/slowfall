@@ -2,10 +2,18 @@ import { Badge, Card, Group, Loader, Table, Text } from "@mantine/core";
 import type { Person } from "./types";
 
 type Props = {
+	/** Array of persons to display */
 	person: Person[];
+	/** Whether the table is currently loading */
 	loading?: boolean;
 };
 
+/**
+ * PersonTable
+ *
+ * Displays a summary card and a table of persons. Shows a loader while
+ * `loading` is true and a friendly empty state when the list is empty.
+ */
 export default function PersonTable({ person, loading }: Props) {
 	return (
 		<Card withBorder shadow="sm" radius="md" p="md">

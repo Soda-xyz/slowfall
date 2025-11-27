@@ -15,10 +15,21 @@ import { fetchCrafts } from "../craft/api";
 import { useAirport } from "../airport/AirportContext";
 
 type Props = {
+	/** Called when a jump is successfully created */
 	onCreated?: (jump: Jump) => void;
+	/** Optional airport id to pre-select */
 	airportId?: string;
 };
 
+/**
+ * JumpForm
+ *
+ * Form component used to schedule a new jump. It composes Mantine Date/Time inputs
+ * and other selectors to collect a `CreateJumpRequest` payload and calls the
+ * backend `createJump` API. The component accepts an optional `airportId` to
+ * pre-select an airport and an `onCreated` callback that's invoked with the
+ * created `Jump` object after a successful create operation.
+ */
 export default function JumpForm({ onCreated, airportId }: Props) {
 	const { airports, selectedAirportId: globalAirportId } = useAirport();
 	const [jumpDate, setJumpDate] = useState<string | null>(null);

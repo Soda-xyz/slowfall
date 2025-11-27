@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    image: slowfall-backend:prod
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL","curl -f http://localhost:8080/actuator/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    image: slowfall-frontend:prod
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: slowfall-net
+

@@ -5,9 +5,19 @@ import type { CreatePersonRequest, Person } from "./types";
 import { createPerson } from "./api";
 
 type Props = {
+	/** Callback invoked with the created Person after successful submission */
 	onCreated?: (person: Person) => void;
 };
 
+/**
+ * PersonForm
+ *
+ * A controlled form component for creating a new person. Performs client-side
+ * validation (required fields and numeric weight) and calls the backend via
+ * `createPerson`. On success, it clears the form and calls `onCreated`.
+ *
+ * @param props.onCreated optional callback called with the created Person
+ */
 export default function PersonForm({ onCreated }: Props) {
 	const [firstName, setFirstName] = useState("");
 	const [lastName, setLastName] = useState("");

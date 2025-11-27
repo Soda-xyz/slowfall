@@ -7,6 +7,13 @@ import { fetchJumps, addSkydiverToJump, addPilotToJump } from "./api";
 import { fetchPilots, fetchSkydivers } from "../person/api";
 import type { Jump, PersonDto } from "./types";
 
+/**
+ * JumpPage
+ *
+ * Page component that loads jumps and available people (pilots/skydivers),
+ * renders the jump creation form and the upcoming-jumps table. Supports
+ * adding a selected person as a pilot or skydiver to a target jump.
+ */
 export default function JumpPage() {
 	const [jumps, setJumps] = useState<Jump[]>([]);
 	const [pilots, setPilots] = useState<PersonDto[]>([]);

@@ -5,9 +5,17 @@ import type { CreateAirportRequest, Airport } from "./types";
 import { createAirport } from "./api";
 
 type Props = {
+	/** Optional callback invoked with created airport */
 	onCreated?: (airport: Airport) => void;
 };
 
+/**
+ * AirportForm
+ *
+ * Small form for creating airports. Handles client-side trimming and defaulting
+ * the timezone from the client environment. Calls `createAirport` on submit and
+ * invokes `onCreated` with the created airport.
+ */
 export default function AirportForm({ onCreated }: Props) {
 	const [name, setName] = useState("");
 	const [icaoCode, setIcaoCode] = useState("");

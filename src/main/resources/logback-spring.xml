@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration debug="false">
+
+    <!--
+      Profile-aware configuration:
+      - In 'prod' profile, send JSON-formatted logs to Logstash (async, TCP)
+      - In 'prod-udp' profile, send JSON-formatted logs to Logstash via UDP (example)
+      - In non-prod profiles, use a human-friendly console appender
+
+      Environment variables (recommended):
+      - LOGSTASH_HOST (default: localhost)
+      - LOGSTASH_PORT (default: 5000)
+
+      To use UDP, activate the "prod-udp" Spring profile instead of "prod":
+      &#45;&#45;spring.profiles.active=prod-udp
+    -->
+
+    <springProfile name="prod">
+
+        <!-- Synchronous Logstash appender which will be wrapped by an AsyncAppender -->
+        <appender name="LOGSTASH_SYNC" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${LOGSTASH_HOST:-localhost}:${LOGSTASH_PORT:-5000}</destination>
+
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <version/>
+                    <message/>
+                    <loggerName/>
+                    <logLevel/>
+                    <threadName/>
+                    <!-- Include only selected MDC keys to avoid leaking too much context -->
+                    <mdc>
+                        <includeMdcKeyName>traceId</includeMdcKeyName>
+                        <includeMdcKeyName>userId</includeMdcKeyName>
+                    </mdc>
+                    <stackTrace/>
+                </providers>
+            </encoder>
+        </appender>
+
+        <!-- Async wrapper for better throughput and to avoid blocking application threads -->
+        <appender name="LOGSTASH" class="ch.qos.logback.core.AsyncAppender">
+            <appender-ref ref="LOGSTASH_SYNC"/>
+            <queueSize>512</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="LOGSTASH"/>
+        </root>
+
+    </springProfile>
+
+    <!--
+      Example: UDP-based Logstash appender. Activate this profile with
+      &#45;&#45;spring.profiles.active=prod-udp
+
+      Note: The exact appender class and configuration keys depend on the
+      logstash-logback-encoder version. If you prefer UDP, enable this profile
+      and adapt the destination elements to your environment.
+      Reference: https://github.com/logstash/logstash-logback-encoder#usage
+    -->
+    <springProfile name="prod-udp">
+
+        <!-- UDP Logstash appender (example) -->
+        <appender name="LOGSTASH_UDP_SYNC" class="net.logstash.logback.appender.LogstashUdpSocketAppender">
+            <!-- Some versions of the encoder accept <destination> similarly to TCP; adapt if needed -->
+            <destination>${LOGSTASH_HOST:-localhost}:${LOGSTASH_PORT:-5000}</destination>
+
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <version/>
+                    <message/>
+                    <loggerName/>
+                    <logLevel/>
+                    <threadName/>
+                    <mdc>
+                        <includeMdcKeyName>traceId</includeMdcKeyName>
+                        <includeMdcKeyName>userId</includeMdcKeyName>
+                    </mdc>
+                    <stackTrace/>
+                </providers>
+            </encoder>
+        </appender>
+
+        <appender name="LOGSTASH_UDP" class="ch.qos.logback.core.AsyncAppender">
+            <appender-ref ref="LOGSTASH_UDP_SYNC"/>
+            <queueSize>512</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="LOGSTASH_UDP"/>
+        </root>
+
+    </springProfile>
+
+    <springProfile name="!prod">
+
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg %n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="DEBUG">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+
+    </springProfile>
+
+</configuration>

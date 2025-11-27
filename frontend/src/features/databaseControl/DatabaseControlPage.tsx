@@ -8,6 +8,12 @@ import { fetchAirports } from "../airport/api";
 import type { Person } from "../person";
 import type { Airport } from "../airport/types";
 
+/**
+ * DatabaseControlPage
+ *
+ * Administrative UI that provides quick access to create and list people and airports.
+ * Loads both people and airports on mount and shows a loader while fetching.
+ */
 export default function DatabaseControlPage() {
 	const [people, setPeople] = useState<Person[] | null>(null);
 	const [airports, setAirports] = useState<Airport[] | null>(null);

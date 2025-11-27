@@ -1,7 +1,11 @@
 import type { CreateJumpRequest, Jump } from "./types";
+import { API_BASE_URL } from "../../lib/apiBase";
 
-const API_BASE_URL = "http://localhost:8080";
-
+/**
+ * Fetch all jumps. If the server endpoint is missing (404) returns an empty array
+ * so the UI can continue to render in a demo/local mode.
+ * @param signal optional AbortSignal
+ */
 export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
 	const res = await fetch(`${API_BASE_URL}/api/jumps`, { signal });
 	if (!res.ok) {
@@ -12,6 +16,10 @@ export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
 	return res.json();
 }
 
+/**
+ * Create a jump on the backend.
+ * @param payload CreateJumpRequest
+ */
 export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
 	const res = await fetch(`${API_BASE_URL}/api/jumps`, {
 		method: "POST",
@@ -25,6 +33,9 @@ export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
 	return res.json();
 }
 
+/**
+ * Add a skydiver to a jump.
+ */
 export async function addSkydiverToJump(jumpId: string, personId: string): Promise<void> {
 	const res = await fetch(`${API_BASE_URL}/api/jumps/${jumpId}/skydivers`, {
 		method: "POST",
@@ -34,6 +45,9 @@ export async function addSkydiverToJump(jumpId: string, personId: string): Promi
 	if (!res.ok) throw new Error(`Failed to add skydiver: ${res.status} ${res.statusText}`);
 }
 
+/**
+ * Add a pilot to a jump.
+ */
 export async function addPilotToJump(jumpId: string, personId: string): Promise<void> {
 	const res = await fetch(`${API_BASE_URL}/api/jumps/${jumpId}/pilots`, {
 		method: "POST",

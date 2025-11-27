@@ -6,6 +6,12 @@ import AirportTable from "./AirportTable";
 import { fetchAirports, deleteAirport } from "./api";
 import type { Airport } from "./types";
 
+/**
+ * AirportPage
+ *
+ * Page that lists and manages airports. Loads airports on mount, supports create
+ * and delete operations and displays notifications on success/failure.
+ */
 export default function AirportPage() {
 	const [airports, setAirports] = useState<Airport[]>([]);
 	const [loading, setLoading] = useState(false);

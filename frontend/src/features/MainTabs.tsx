@@ -3,6 +3,14 @@ import { Tabs, Box } from "@mantine/core";
 import { DashboardPage } from "./dashboard";
 import { DatabaseControlPage } from "./databaseControl";
 
+/**
+ * MainTabs
+ *
+ * A small wrapper component providing the primary tabs used in the app UI.
+ * Maintains local state for the active tab. Use when you need an isolated
+ * tabs component separate from the App shell.
+ */
+
 export default function MainTabs() {
 	const [active, setActive] = useState<string | null>("dashboard");
 	return (

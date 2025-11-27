@@ -1,6 +1,10 @@
 import { Card, Container, createTheme, Paper, rem, Select } from "@mantine/core";
 import type { MantineThemeOverride } from "@mantine/core";
 
+/**
+ * Container size tokens used by the application's Mantine Container override.
+ * Keys match the `size` prop values and values are valid CSS sizes (rem strings).
+ */
 const CONTAINER_SIZES: Record<string, string> = {
 	xxs: rem("200px"),
 	xs: rem("300px"),
@@ -11,10 +15,12 @@ const CONTAINER_SIZES: Record<string, string> = {
 	xxl: rem("1600px"),
 };
 
-// Centralized brand palette (10 shades). Change these hex values in one place to update
-// the primary/brand color of the entire app. Mantine expects arrays of 10 shades per
-// color name. Components that use the theme's primary color will use the shade determined
-// by `primaryShade` or the component-specific styles.
+/**
+ * Central brand palette: an array of 10 color shades from light to dark.
+ *
+ * Mantine expects a color palette to be an array of 10 shades. Use this to
+ * keep the app's primary/brand color consistent across components.
+ */
 const BRAND_PALETTE = [
 	"#f8fbff",
 	"#eaf5ff",
@@ -28,6 +34,17 @@ const BRAND_PALETTE = [
 	"#002e80",
 ] as const;
 
+/**
+ * Mantine theme override for the application.
+ *
+ * This object is exported as `theme` and consumed by `MantineProvider` in
+ * `src/main.tsx`. It centralizes colors, sizing, spacing, component defaults,
+ * and small app-specific design tokens.
+ *
+ * See Mantine docs — MantineProvider & theme object:
+ * https://mantine.dev/theming/mantine-provider/ and
+ * https://mantine.dev/theming/theme-object/
+ */
 export const theme: MantineThemeOverride = createTheme({
 	/** Put your mantine theme override here */
 	fontSizes: {

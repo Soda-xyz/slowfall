@@ -14,6 +14,12 @@ type AirportContextType = {
 
 const AirportContext = createContext<AirportContextType | undefined>(undefined);
 
+/**
+ * AirportProvider
+ *
+ * Provides airport data and selection state to descendants via React Context.
+ * It fetches airports on mount and exposes a `refresh` function to re-fetch.
+ */
 export function AirportProvider({ children }: { children: React.ReactNode }) {
 	const [airports, setAirports] = useState<Airport[]>([]);
 	const [selectedAirportId, setSelectedAirportId] = useState<string | null>(null);
@@ -46,12 +52,23 @@ export function AirportProvider({ children }: { children: React.ReactNode }) {
 	);
 }
 
+/**
+ * useAirport
+ *
+ * Hook to access airport context. Throws if used outside `AirportProvider`.
+ */
 export function useAirport() {
 	const ctx = useContext(AirportContext);
 	if (!ctx) throw new Error("useAirport must be used within AirportProvider");
 	return ctx;
 }
 
+/**
+ * AirportSelector
+ *
+ * A small select component bound to the airport context. Accepts any Mantine
+ * `Select` props and forwards them to the underlying component.
+ */
 export function AirportSelector(props: SelectProps) {
 	const { airports, selectedAirportId, setSelectedAirportId, loading } = useAirport();
 	const data = airports.map((airport) => ({ value: String(airport.id), label: airport.name }));

@@ -7,6 +7,12 @@ type Props = {
 	onAddPilot?: (jumpId: string) => void;
 };
 
+/**
+ * JumpTable
+ *
+ * Renders a list of upcoming jumps as a table. The list is sorted by jumpTime.
+ * Provides optional callbacks for adding skydivers or pilots to a given jump.
+ */
 export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
 	if (!jumps || jumps.length === 0) return <Text>No upcoming jumps</Text>;
 

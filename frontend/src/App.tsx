@@ -4,6 +4,15 @@ import { DashboardPage } from "./features/dashboard";
 import { DatabaseControlPage } from "./features/databaseControl";
 import "@mantine/core/styles.css";
 
+/**
+ * App
+ *
+ * Application root component. Wraps the app in feature-level providers (for example
+ * `AirportProvider`) and composes the main shell and navigation tabs.
+ *
+ * Keep this component thin — place page-specific logic in the page components
+ * under `src/features/*`.
+ */
 export default function App() {
 	return (
 		<AirportProvider>

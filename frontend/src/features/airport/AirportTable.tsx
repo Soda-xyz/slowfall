@@ -8,6 +8,11 @@ type Props = {
 	deletingId?: string | null;
 };
 
+/**
+ * AirportTable
+ *
+ * Displays a list of airports in a card and exposes a delete action per row.
+ */
 export default function AirportTable({ airports, loading, onDelete, deletingId }: Props) {
 	return (
 		<Card withBorder shadow="sm" radius="md" p="md">

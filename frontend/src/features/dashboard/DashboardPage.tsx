@@ -2,6 +2,11 @@ import { Stack, Title, Card } from "@mantine/core";
 import JumpForm from "../jump/JumpForm";
 import JumpTable from "../jump/JumpTable";
 
+/**
+ * DashboardPage
+ *
+ * High-level dashboard that surfaces quick actions (create jump) and upcoming data.
+ */
 export default function DashboardPage() {
 	return (
 		<Stack gap="md">

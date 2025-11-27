@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import xyz.soda.slowfall.jump.domain.Jump;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -18,7 +18,7 @@ class JumpRepositoryTest {
 
     @Test
     void saveAndFind() {
-        Jump j = new Jump(LocalDateTime.now(), UUID.randomUUID(), 12000);
+        Jump j = new Jump(Instant.now(), UUID.randomUUID(), 12000);
 
         repository.save(j);
 

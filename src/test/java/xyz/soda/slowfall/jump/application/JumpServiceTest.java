@@ -13,8 +13,9 @@ import xyz.soda.slowfall.jump.infra.JumpRepository;
 import xyz.soda.slowfall.person.domain.Person;
 import xyz.soda.slowfall.person.infra.PersonRepository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,7 +42,7 @@ class JumpServiceTest {
 
     @Test
     void createJumpThrowsWhenAirportMissing() {
-        CreateJumpRequest req = new CreateJumpRequest(LocalDateTime.now(), UUID.randomUUID(), "REG-1", 12000, null);
+        CreateJumpRequest req = new CreateJumpRequest(Instant.now(), UUID.randomUUID(), "REG-1", 12000, null);
         when(airportRepository.findById(req.airportId())).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> service.createJump(req));
@@ -54,7 +55,7 @@ class JumpServiceTest {
         when(airportRepository.findById(airportId)).thenReturn(Optional.of(airport));
 
         // schedule jump 2 days in the past relative to UTC
-        LocalDateTime past = LocalDateTime.now(ZoneId.of("UTC")).minusDays(2);
+        Instant past = ZonedDateTime.now(ZoneId.of("UTC")).minusDays(2).toInstant();
         CreateJumpRequest req = new CreateJumpRequest(past, airportId, "REG-1", 12000, null);
 
         assertThrows(IllegalArgumentException.class, () -> service.createJump(req));
@@ -71,7 +72,7 @@ class JumpServiceTest {
         when(personRepository.findById(pilotId)).thenReturn(Optional.of(pilot));
 
         CreateJumpRequest req = new CreateJumpRequest(
-                LocalDateTime.now(ZoneId.of("UTC")).plusDays(1), airportId, "REG-1", 12000, pilotId);
+                ZonedDateTime.now(ZoneId.of("UTC")).plusDays(1).toInstant(), airportId, "REG-1", 12000, pilotId);
         when(jumpRepository.save(any(Jump.class))).thenAnswer(i -> i.getArgument(0));
 
         Jump created = service.createJump(req);

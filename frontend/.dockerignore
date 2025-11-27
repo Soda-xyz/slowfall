@@ -1,0 +1,8 @@
+# Docker ignore for frontend build context
+node_modules
+dist
+.env
+.vscode
+.DS_Store
+Thumbs.db
+

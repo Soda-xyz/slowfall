@@ -6,6 +6,13 @@ import PersonTable from "./PersonTable";
 import { fetchPerson } from "./api";
 import type { Person } from "./types";
 
+/**
+ * PersonPage
+ *
+ * High-level page component that coordinates fetching persons from the backend,
+ * rendering the add-person form and the person table. Handles aborting fetches
+ * on unmount and displays notifications on error.
+ */
 export default function PersonPage() {
 	const [person, setPerson] = useState<Person[]>([]);
 	const [loading, setLoading] = useState(false);
