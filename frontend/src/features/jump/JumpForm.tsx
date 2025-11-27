@@ -30,7 +30,7 @@ type Props = {
  * pre-select an airport and an `onCreated` callback that's invoked with the
  * created `Jump` object after a successful create operation.
  */
-export default function JumpForm({ onCreated, airportId }: Props) {
+export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Element {
 	const { airports, selectedAirportId: globalAirportId } = useAirport();
 	const [jumpDate, setJumpDate] = useState<string | null>(null);
 	const [jumpTime, setJumpTime] = useState<string | undefined>(undefined);

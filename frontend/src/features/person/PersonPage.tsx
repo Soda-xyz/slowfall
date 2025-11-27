@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Card, Container, Grid, Group, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -13,7 +14,7 @@ import type { Person } from "./types";
  * rendering the add-person form and the person table. Handles aborting fetches
  * on unmount and displays notifications on error.
  */
-export default function PersonPage() {
+export default function PersonPage(): React.JSX.Element {
 	const [person, setPerson] = useState<Person[]>([]);
 	const [loading, setLoading] = useState(false);
 

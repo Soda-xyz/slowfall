@@ -7,7 +7,7 @@ import { API_BASE_URL } from "../../lib/apiBase";
 
 /**
  * Fetch all airports from the backend.
- * @param signal optional AbortSignal
+ * @param signal - optional AbortSignal
  * @returns Promise resolving to an array of Airport
  */
 export async function fetchAirports(signal?: AbortSignal): Promise<Airport[]> {
@@ -20,7 +20,7 @@ export async function fetchAirports(signal?: AbortSignal): Promise<Airport[]> {
 
 /**
  * Create a new airport.
- * @param payload CreateAirportRequest
+ * @param payload - CreateAirportRequest
  * @returns Promise resolving to the created Airport
  */
 export async function createAirport(payload: CreateAirportRequest): Promise<Airport> {
@@ -39,7 +39,7 @@ export async function createAirport(payload: CreateAirportRequest): Promise<Airp
 
 /**
  * Delete an airport by id.
- * @param payload object with id property
+ * @param payload - object with id property
  */
 export async function deleteAirport(payload: DeleteAirportRequest): Promise<void> {
 	const res = await fetch(`${API_BASE_URL}/api/airports/${payload.id}`, {

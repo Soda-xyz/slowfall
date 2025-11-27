@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card, Container, Group, Title, Select, Button } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import JumpForm from "./JumpForm";
@@ -14,7 +14,7 @@ import type { Jump, PersonDto } from "./types";
  * renders the jump creation form and the upcoming-jumps table. Supports
  * adding a selected person as a pilot or skydiver to a target jump.
  */
-export default function JumpPage() {
+export default function JumpPage(): React.JSX.Element {
 	const [jumps, setJumps] = useState<Jump[]>([]);
 	const [pilots, setPilots] = useState<PersonDto[]>([]);
 	const [skydivers, setSkydivers] = useState<PersonDto[]>([]);

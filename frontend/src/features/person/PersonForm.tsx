@@ -16,9 +16,9 @@ type Props = {
  * validation (required fields and numeric weight) and calls the backend via
  * `createPerson`. On success, it clears the form and calls `onCreated`.
  *
- * @param props.onCreated optional callback called with the created Person
+ * @param onCreated - optional callback called with the created Person
  */
-export default function PersonForm({ onCreated }: Props) {
+export default function PersonForm({ onCreated }: Props): React.JSX.Element {
 	const [name, setName] = useState("");
 	const [weight, setWeight] = useState<number | string>("");
 	const [email, setEmail] = useState("");

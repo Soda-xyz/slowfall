@@ -16,7 +16,7 @@ type Props = {
  * the timezone from the client environment. Calls `createAirport` on submit and
  * invokes `onCreated` with the created airport.
  */
-export default function AirportForm({ onCreated }: Props) {
+export default function AirportForm({ onCreated }: Props): React.JSX.Element {
 	const [name, setName] = useState("");
 	const [icaoCode, setIcaoCode] = useState("");
 	const [submitting, setSubmitting] = useState(false);

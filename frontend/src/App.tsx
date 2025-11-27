@@ -1,3 +1,4 @@
+import React from "react";
 import { AppShell, Group, Tabs, Title } from "@mantine/core";
 import { AirportProvider, AirportSelector } from "./features/airport/AirportContext";
 import { DashboardPage } from "./features/dashboard";
@@ -13,7 +14,7 @@ import "@mantine/core/styles.css";
  * Keep this component thin — place page-specific logic in the page components
  * under `src/features/*`.
  */
-export default function App() {
+export default function App(): React.JSX.Element {
 	return (
 		<AirportProvider>
 			<AppShell header={{ height: 64 }} padding="md">

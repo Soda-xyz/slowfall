@@ -1,3 +1,4 @@
+import React from "react";
 import { Table, Button, Text, Group } from "@mantine/core";
 import type { Jump } from "./types";
 
@@ -13,7 +14,7 @@ type Props = {
  * Renders a list of upcoming jumps as a table. The list is sorted by jumpTime.
  * Provides optional callbacks for adding skydivers or pilots to a given jump.
  */
-export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props) {
+export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props): React.JSX.Element {
 	if (!jumps || jumps.length === 0) return <Text>No upcoming jumps</Text>;
 
 	const rows = jumps

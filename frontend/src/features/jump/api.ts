@@ -2,22 +2,9 @@ import type { CreateJumpRequest, Jump } from "./types";
 import { API_BASE_URL } from "../../lib/apiBase";
 
 /**
- * Fetch all jumps. If the server endpoint is missing (404) returns an empty array
- * so the UI can continue to render in a demo/local mode.
- * @param signal optional AbortSignal
- */
-export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
-	const res = await fetch(`${API_BASE_URL}/api/jumps`, { signal, credentials: "include" });
-	if (!res.ok) {
-		if (res.status === 404) return [];
-		throw new Error(`Failed to fetch jumps: ${res.status} ${res.statusText}`);
-	}
-	return res.json();
-}
-
-/**
- * Create a jump on the backend.
- * @param payload CreateJumpRequest
+ * Create a new jump.
+ * @param payload - CreateJumpRequest
+ * @returns Promise resolving to the created Jump
  */
 export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
 	const res = await fetch(`${API_BASE_URL}/api/jumps`, {
@@ -29,6 +16,20 @@ export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
 	if (!res.ok) {
 		const text = await res.text().catch(() => "");
 		throw new Error(text || `Failed to create jump: ${res.status} ${res.statusText}`);
+	}
+	return res.json();
+}
+
+/**
+ * Fetch jumps from the backend.
+ * @param signal - optional AbortSignal
+ * @returns Promise resolving to Jump[]
+ */
+export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
+	const res = await fetch(`${API_BASE_URL}/api/jumps`, { signal, credentials: "include" });
+	if (!res.ok) {
+		if (res.status === 404) return [];
+		throw new Error(`Failed to fetch jumps: ${res.status} ${res.statusText}`);
 	}
 	return res.json();
 }

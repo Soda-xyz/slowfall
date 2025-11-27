@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Tabs, Box } from "@mantine/core";
 import { DashboardPage } from "./dashboard";
 import { DatabaseControlPage } from "./databaseControl";
@@ -11,7 +11,7 @@ import { DatabaseControlPage } from "./databaseControl";
  * tabs component separate from the App shell.
  */
 
-export default function MainTabs() {
+export default function MainTabs(): React.JSX.Element {
 	const [active, setActive] = useState<string | null>("dashboard");
 	return (
 		<Box>

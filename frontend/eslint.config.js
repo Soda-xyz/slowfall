@@ -7,6 +7,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import prettierPlugin from "eslint-plugin-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import importPlugin from "eslint-plugin-import";
+import tsdocPlugin from "eslint-plugin-tsdoc";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 const getRules = (cfg) => (cfg && cfg.rules ? cfg.rules : {});
@@ -59,6 +60,7 @@ export default defineConfig([
 			prettier: prettierPlugin,
 			"react-hooks": reactHooks,
 			import: importPlugin,
+			tsdoc: tsdocPlugin,
 		},
 		languageOptions: {
 			ecmaVersion: 2020,
@@ -98,6 +100,10 @@ export default defineConfig([
 				"ignorePackages",
 				{ js: "never", jsx: "never", ts: "never", tsx: "never" },
 			],
+			// Require explicit types on exported functions/classes (warn)
+			"@typescript-eslint/explicit-module-boundary-types": ["warn"],
+			// Validate TSDoc syntax (warn-level as requested)
+			"tsdoc/syntax": ["warn"],
 		},
 		settings: {
 			react: { version: "detect" },
@@ -108,6 +114,7 @@ export default defineConfig([
 					extensions: [".js", ".jsx", ".ts", ".tsx"],
 				},
 			},
+			// No special tsdoc settings required; plugin validates TSDoc syntax.
 		},
 	},
 ]);

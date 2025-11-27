@@ -1,5 +1,6 @@
 import { Badge, Card, Group, Loader, Table, Text, Button } from "@mantine/core";
 import type { Airport } from "./types";
+import React from "react";
 
 type Props = {
 	airports: Airport[];
@@ -13,7 +14,12 @@ type Props = {
  *
  * Displays a list of airports in a card and exposes a delete action per row.
  */
-export default function AirportTable({ airports, loading, onDelete, deletingId }: Props) {
+export default function AirportTable({
+	airports,
+	loading,
+	onDelete,
+	deletingId,
+}: Props): React.JSX.Element {
 	return (
 		<Card withBorder shadow="sm" radius="md" p="md">
 			<Group justify="space-between" mb="sm">

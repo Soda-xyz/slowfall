@@ -15,8 +15,9 @@ export async function fetchCrafts(signal?: AbortSignal): Promise<Craft[]> {
 }
 
 /**
- * Create a new craft on the server
- * @param payload CreateCraftRequest
+ * Create a new craft.
+ * @param payload - CreateCraftRequest
+ * @returns Craft
  */
 export async function createCraft(payload: CreateCraftRequest): Promise<Craft> {
 	const res = await fetch(`${API_BASE_URL}/api/crafts`, {

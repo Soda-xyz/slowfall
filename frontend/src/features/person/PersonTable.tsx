@@ -1,5 +1,6 @@
 import { Badge, Card, Group, Loader, Table, Text } from "@mantine/core";
 import type { Person } from "./types";
+import React from "react";
 
 type Props = {
 	/** Array of persons to display */
@@ -14,7 +15,7 @@ type Props = {
  * Displays a summary card and a table of persons. Shows a loader while
  * `loading` is true and a friendly empty state when the list is empty.
  */
-export default function PersonTable({ person, loading }: Props) {
+export default function PersonTable({ person, loading }: Props): React.JSX.Element {
 	return (
 		<Card withBorder shadow="sm" radius="md" p="md">
 			<Group justify="space-between" mb="sm">

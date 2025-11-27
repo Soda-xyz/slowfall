@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Grid, Card, Title, Stack, Group, Loader, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { PersonTable, PersonForm } from "../person";
@@ -14,7 +14,7 @@ import type { Airport } from "../airport/types";
  * Administrative UI that provides quick access to create and list people and airports.
  * Loads both people and airports on mount and shows a loader while fetching.
  */
-export default function DatabaseControlPage() {
+export default function DatabaseControlPage(): React.JSX.Element {
 	const [people, setPeople] = useState<Person[] | null>(null);
 	const [airports, setAirports] = useState<Airport[] | null>(null);
 	const [loading, setLoading] = useState(true);

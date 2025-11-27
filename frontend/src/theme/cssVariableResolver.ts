@@ -5,14 +5,11 @@ import type { CSSVariablesResolver, MantineTheme } from "@mantine/core";
  *
  * This resolver maps select theme tokens (colors, spacing, radii, shadows,
  * font-family, etc.) to a compact variable set prefixed with `--sf-`. It returns
- * an object compatible with Mantine's `CSSVariablesResolver` type: { variables, light, dark }.
+ * an object compatible with Mantine's CSSVariablesResolver type: variables, light, dark.
  *
- * The returned variables are intended for use with `MantineProvider`'s
- * `cssVariablesResolver` option and allow existing CSS Modules to read theme
- * values via `var(--sf-...)`.
- *
- * Example (Mantine docs — css variables resolver):
- * https://mantine.dev/theming/mantine-provider/#css-variables-resolver
+ * The returned variables are intended for use with MantineProvider's
+ * cssVariablesResolver option and allow existing CSS Modules to read theme
+ * values via var(--sf-...).
  */
 export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineTheme) => {
 	const prefix = "--sf-";

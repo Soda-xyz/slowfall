@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card, Container, Grid, Group, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import AirportForm from "./AirportForm";
@@ -12,7 +12,7 @@ import type { Airport } from "./types";
  * Page that lists and manages airports. Loads airports on mount, supports create
  * and delete operations and displays notifications on success/failure.
  */
-export default function AirportPage() {
+export default function AirportPage(): React.JSX.Element {
 	const [airports, setAirports] = useState<Airport[]>([]);
 	const [loading, setLoading] = useState(false);
 
