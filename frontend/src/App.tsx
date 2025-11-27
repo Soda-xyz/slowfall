@@ -1,4 +1,4 @@
-import { AppShell, Group, Tabs } from "@mantine/core";
+import { AppShell, Group, Tabs, Title } from "@mantine/core";
 import { AirportProvider, AirportSelector } from "./features/airport/AirportContext";
 import { DashboardPage } from "./features/dashboard";
 import { DatabaseControlPage } from "./features/databaseControl";
@@ -21,6 +21,8 @@ export default function App() {
 					<AppShell.Header>
 						<Group justify="space-between" p="md" align="center">
 							<Group>
+								{/* Add brand/title here so e2e tests can verify it exists */}
+								<Title order={3}>Slowfall</Title>
 								<Tabs.List>
 									<Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
 									<Tabs.Tab value="database">Database</Tabs.Tab>
