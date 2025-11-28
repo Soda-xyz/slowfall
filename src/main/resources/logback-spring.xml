@@ -17,38 +17,59 @@
 
     <springProfile name="prod">
 
-        <!-- Synchronous Logstash appender which will be wrapped by an AsyncAppender -->
-        <appender name="LOGSTASH_SYNC" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
-            <destination>${LOGSTASH_HOST:-localhost}:${LOGSTASH_PORT:-5000}</destination>
+        <!-- Allow LOGSTASH_HOST/PORT to be provided; default to empty if unset -->
+        <property name="LOGSTASH_HOST" source="LOGSTASH_HOST"/>
+        <property name="LOGSTASH_PORT" source="LOGSTASH_PORT"/>
 
-            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-                <providers>
-                    <timestamp/>
-                    <version/>
-                    <message/>
-                    <loggerName/>
-                    <logLevel/>
-                    <threadName/>
-                    <!-- Include only selected MDC keys to avoid leaking too much context -->
-                    <mdc>
-                        <includeMdcKeyName>traceId</includeMdcKeyName>
-                        <includeMdcKeyName>userId</includeMdcKeyName>
-                    </mdc>
-                    <stackTrace/>
-                </providers>
-            </encoder>
-        </appender>
+        <!-- If LOGSTASH_HOST is provided, configure TCP/async Logstash appender; otherwise fall back to console -->
+        <if condition="property('LOGSTASH_HOST') != null &amp;&amp; property('LOGSTASH_HOST').length() &gt; 0">
+            <then>
+                <!-- Synchronous Logstash appender which will be wrapped by an AsyncAppender -->
+                <appender name="LOGSTASH_SYNC" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+                    <destination>${LOGSTASH_HOST:-localhost}:${LOGSTASH_PORT:-5000}</destination>
 
-        <!-- Async wrapper for better throughput and to avoid blocking application threads -->
-        <appender name="LOGSTASH" class="ch.qos.logback.core.AsyncAppender">
-            <appender-ref ref="LOGSTASH_SYNC"/>
-            <queueSize>512</queueSize>
-            <discardingThreshold>0</discardingThreshold>
-        </appender>
+                    <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                        <providers>
+                            <timestamp/>
+                            <version/>
+                            <message/>
+                            <loggerName/>
+                            <logLevel/>
+                            <threadName/>
+                            <!-- Include only selected MDC keys to avoid leaking too much context -->
+                            <mdc>
+                                <includeMdcKeyName>traceId</includeMdcKeyName>
+                                <includeMdcKeyName>userId</includeMdcKeyName>
+                            </mdc>
+                            <stackTrace/>
+                        </providers>
+                    </encoder>
+                </appender>
 
-        <root level="INFO">
-            <appender-ref ref="LOGSTASH"/>
-        </root>
+                <!-- Async wrapper for better throughput and to avoid blocking application threads -->
+                <appender name="LOGSTASH" class="ch.qos.logback.core.AsyncAppender">
+                    <appender-ref ref="LOGSTASH_SYNC"/>
+                    <queueSize>512</queueSize>
+                    <discardingThreshold>0</discardingThreshold>
+                </appender>
+
+                <root level="INFO">
+                    <appender-ref ref="LOGSTASH"/>
+                </root>
+            </then>
+            <else>
+                <!-- Fallback to console when LOGSTASH_HOST is not configured (helps CI/tests) -->
+                <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+                    <encoder>
+                        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg %n</pattern>
+                    </encoder>
+                </appender>
+
+                <root level="INFO">
+                    <appender-ref ref="CONSOLE"/>
+                </root>
+            </else>
+        </if>
 
     </springProfile>
 

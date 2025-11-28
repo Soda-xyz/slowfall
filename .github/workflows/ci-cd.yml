@@ -24,7 +24,6 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/slowfall-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/slowfall-frontend
-  SPRING_PROFILES_ACTIVE: prod
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   # Leave VITE_API_BASE_URL empty by default so apiBase logic (which expects empty production value)
   # results in `${API_BASE_URL}/api/...` -> `/api/...` when VITE_API_BASE_URL is intentionally empty in production.
@@ -64,10 +63,11 @@ jobs:
 
       - name: Build & test backend (Gradle)
         working-directory: ./
-        env:
-          SPRING_PROFILES_ACTIVE: ${{ env.SPRING_PROFILES_ACTIVE }}
+        # Do NOT force the build to use the 'prod' Spring profile during tests; running tests under 'prod'
+        # activates networked logging appenders (Logstash) which can fail in CI. Let tests run with default
+        # profile (or local override) unless explicitly required.
         run: |
-          echo "SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE"
+          echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-<not-set>}"
           ./gradlew --no-daemon clean test
 
       - name: Set up Node 20
@@ -192,7 +192,7 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
             ${{ env.BACKEND_IMAGE }}:latest
           build-args: |
-            SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }}
+            SPRING_PROFILES_ACTIVE=prod
 
       - name: Build & push frontend image
         uses: docker/build-push-action@v4
