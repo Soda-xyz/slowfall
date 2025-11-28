@@ -215,7 +215,7 @@ public class SecurityConfig {
      * @return a configured {@link UserDetailsService}
      */
     @Bean
-    @org.springframework.context.annotation.Profile("dev")
+    @org.springframework.context.annotation.Profile({"dev", "pseudo"})
     public UserDetailsService users(
             PasswordEncoder encoder,
             @org.springframework.beans.factory.annotation.Value("${app.security.dev-username:dev}") String devUsername,
