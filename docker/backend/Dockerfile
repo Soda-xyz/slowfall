@@ -15,6 +15,9 @@ RUN chmod +x ./gradlew
 # Copy the rest of the source
 COPY . .
 
+# Ensure the wrapper is executable after the full copy (COPY . . can overwrite permissions)
+RUN chmod +x ./gradlew
+
 # Build the application jar (skip tests for faster local builds)
 RUN ./gradlew --no-daemon bootJar -x test
 
