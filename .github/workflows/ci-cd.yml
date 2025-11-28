@@ -22,8 +22,6 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  BACKEND_IMAGE: ghcr.io/${{ toLower(github.repository_owner) }}/slowfall-backend
-  FRONTEND_IMAGE: ghcr.io/${{ toLower(github.repository_owner) }}/slowfall-frontend
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   # Leave VITE_API_BASE_URL empty by default so apiBase logic (which expects empty production value)
   # results in `${API_BASE_URL}/api/...` -> `/api/...` when VITE_API_BASE_URL is intentionally empty in production.
@@ -155,8 +153,19 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    outputs:
+      owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
 
     steps:
+      - name: Normalize repository owner to lowercase
+        id: normalize_owner
+        run: |
+          # Use the github.repository_owner value passed via env to compute a lower-case owner
+          OWNER="${{ github.repository_owner }}"
+          echo "Computing lowercase owner from '$OWNER'"
+          LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lower=$LOWER" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -190,8 +199,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
             SPRING_PROFILES_ACTIVE=prod
 
@@ -203,8 +212,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
             VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
@@ -251,14 +260,14 @@ jobs:
           az webapp config container set \
             --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" \
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            --docker-custom-image-name "${{ env.BACKEND_IMAGE }}:${{ github.sha }}"
+            --docker-custom-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
 
       - name: Set frontend image on Azure Web App
         run: |
           az webapp config container set \
             --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" \
             --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            --docker-custom-image-name "${{ env.FRONTEND_IMAGE }}:${{ github.sha }}"
+            --docker-custom-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
