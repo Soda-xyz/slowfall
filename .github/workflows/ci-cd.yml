@@ -22,8 +22,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/slowfall-backend
-  FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/slowfall-frontend
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/slowfall-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/slowfall-frontend
   SPRING_PROFILES_ACTIVE: prod
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   # Leave VITE_API_BASE_URL empty by default so apiBase logic (which expects empty production value)
