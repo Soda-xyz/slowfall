@@ -231,20 +231,38 @@ jobs:
       - name: Validate required Azure secrets are present (fail early with clear message)
         run: |
           set -euo pipefail
-          echo "Validating Azure deploy secrets..."
+          echo "Validating Azure deploy secrets (using names from README_ENV.md)..."
+
+          # Only accept the secret names documented in README_ENV.md
+          AZ_SUBSCRIPTION_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          AZ_TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
+          AZ_CLIENT_ID="${{ secrets.AZURE_CLIENT_ID }}"
+
+          # Readme-named secrets
+          AZ_RESOURCE_GROUP="${{ secrets.AZURE_RG }}"
+          AZ_WEBAPP_BACKEND="${{ secrets.BACKEND_APP_NAME }}"
+          AZ_WEBAPP_FRONTEND="${{ secrets.FRONTEND_APP_NAME }}"
+
           missing=()
-          [ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
-          [ -z "${{ secrets.AZURE_TENANT_ID }}" ] && missing+=("AZURE_TENANT_ID") || true
-          [ -z "${{ secrets.AZURE_CLIENT_ID }}" ] && missing+=("AZURE_CLIENT_ID") || true
-          [ -z "${{ secrets.AZURE_RESOURCE_GROUP }}" ] && missing+=("AZURE_RESOURCE_GROUP") || true
-          [ -z "${{ secrets.AZURE_WEBAPP_BACKEND }}" ] && missing+=("AZURE_WEBAPP_BACKEND") || true
-          [ -z "${{ secrets.AZURE_WEBAPP_FRONTEND }}" ] && missing+=("AZURE_WEBAPP_FRONTEND") || true
+          [ -z "$AZ_SUBSCRIPTION_ID" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
+          [ -z "$AZ_TENANT_ID" ] && missing+=("AZURE_TENANT_ID") || true
+          [ -z "$AZ_CLIENT_ID" ] && missing+=("AZURE_CLIENT_ID") || true
+          [ -z "$AZ_RESOURCE_GROUP" ] && missing+=("AZURE_RG") || true
+          [ -z "$AZ_WEBAPP_BACKEND" ] && missing+=("BACKEND_APP_NAME") || true
+          [ -z "$AZ_WEBAPP_FRONTEND" ] && missing+=("FRONTEND_APP_NAME") || true
+
           if [ ${#missing[@]} -ne 0 ]; then
             echo "ERROR: Missing required Azure secrets: ${missing[*]}"
-            echo "Add the missing repository secrets or run this workflow manually with the appropriate secrets set."
+            echo "Add the missing repository secrets (exact names from README_ENV.md) or run this workflow manually with the appropriate secrets set."
             exit 1
           fi
+
           echo "All required Azure secrets present. Proceeding with deploy."
+
+          # Export resolved names for downstream steps in this job
+          echo "AZ_RESOURCE_GROUP=$AZ_RESOURCE_GROUP" >> "$GITHUB_ENV"
+          echo "AZ_WEBAPP_BACKEND=$AZ_WEBAPP_BACKEND" >> "$GITHUB_ENV"
+          echo "AZ_WEBAPP_FRONTEND=$AZ_WEBAPP_FRONTEND" >> "$GITHUB_ENV"
 
       # azure/login supports OIDC-based federated login when a federated credential
       # is configured on the Azure service principal. No client secret is required.
@@ -258,30 +276,30 @@ jobs:
       - name: Set backend image on Azure Web App
         run: |
           az webapp config container set \
-            --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --name "${AZ_WEBAPP_BACKEND}" \
+            --resource-group "${AZ_RESOURCE_GROUP}" \
             --docker-custom-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
 
       - name: Set frontend image on Azure Web App
         run: |
           az webapp config container set \
-            --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --name "${AZ_WEBAPP_FRONTEND}" \
+            --resource-group "${AZ_RESOURCE_GROUP}" \
             --docker-custom-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
           echo "Setting SPRING_PROFILES_ACTIVE=prod and ALLOWED_ORIGINS on backend and frontend Web Apps"
-          az webapp config appsettings set --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
-          az webapp config appsettings set --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
 
       - name: Restart backend Web App
         run: |
-          az webapp restart --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}"
+          az webapp restart --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}"
 
       - name: Restart frontend Web App
         run: |
-          az webapp restart --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}"
+          az webapp restart --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}"
 
 # End of workflow
 
@@ -290,8 +308,8 @@ jobs:
 #   with GITHUB_TOKEN, grant the Actions token permission to write packages: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
 #   (Repository Settings -> Actions -> General -> Workflow permissions -> "Read and write permissions" and ensure Packages permission enabled.)
 # - For Azure OIDC-based deploys, configure a federated credential on an Azure service principal and add the
-#   following repository secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP,
-#   AZURE_WEBAPP_BACKEND, AZURE_WEBAPP_FRONTEND. See README_CLOUD.md for details.
+#   following repository secrets (names from README_ENV.md): AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RG,
+#   BACKEND_APP_NAME, FRONTEND_APP_NAME. See README_CLOUD.md for details.
 # - If you prefer to use a PAT for GHCR push instead of GITHUB_TOKEN, create a secret GHCR_TOKEN and set
 #   the login step to use that instead (username: your GitHub username, password: ${{ secrets.GHCR_TOKEN }}).
 # - This workflow builds for linux/amd64 only by default; add additional platforms if you need multi-arch builds.
