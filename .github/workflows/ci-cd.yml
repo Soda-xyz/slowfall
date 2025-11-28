@@ -39,6 +39,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x ./gradlew
+        shell: bash
+
       - name: Set up JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
