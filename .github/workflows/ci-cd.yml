@@ -1,0 +1,283 @@
+name: CI / Build / Publish / Deploy
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      frontend_env:
+        description: 'Frontend build mode (development or production)'
+        required: false
+        default: 'production'
+
+# Required permissions for GHCR push and OIDC to work
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/slowfall-backend
+  FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/slowfall-frontend
+  SPRING_PROFILES_ACTIVE: prod
+  ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+  # Leave VITE_API_BASE_URL empty by default so apiBase logic (which expects empty production value)
+  # results in `${API_BASE_URL}/api/...` -> `/api/...` when VITE_API_BASE_URL is intentionally empty in production.
+  VITE_API_BASE_URL: ""
+
+jobs:
+  build-and-test:
+    name: Build & Test (backend + frontend)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      # Cache Gradle directories to speed up builds (wrapper + caches)
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            .gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/settings.gradle*', '**/build.gradle*', '**/build.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build & test backend (Gradle)
+        working-directory: ./
+        env:
+          SPRING_PROFILES_ACTIVE: ${{ env.SPRING_PROFILES_ACTIVE }}
+        run: |
+          echo "SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE"
+          ./gradlew --no-daemon clean test
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Lint frontend (if configured)
+        run: npm --prefix frontend run lint --if-present
+
+      - name: Test frontend (if configured)
+        run: npm --prefix frontend run test --if-present
+
+      - name: Build frontend
+        # VITE_FRONTEND_ENV is driven by the workflow_dispatch input 'frontend_env' when provided;
+        # defaults to 'production' for push/PR runs. Compute VITE_API_BASE_URL per-mode to avoid
+        # accidental '/api/api' duplication when the project expects an empty production value.
+        env:
+          VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env || 'production' }}
+          VITE_API_BASE_URL: ${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
+        run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
+
+      - name: Install brotli (so we can scan .br assets)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y brotli
+
+      - name: "CI assertion: ensure frontend build didn't bake \"/api/api\""
+        run: |
+          set -euo pipefail
+          echo "Scanning frontend/dist for '/api/api' occurrences in JS chunks and compressed assets..."
+          found=0
+
+          # 1) Check plain JS files (most relevant)
+          if ls frontend/dist/*.js frontend/dist/**/*.js >/dev/null 2>&1; then
+            if grep -R --line-number --binary-files=without-match "/api/api" frontend/dist/*.js frontend/dist/**/*.js 2>/dev/null; then
+              echo "ERROR: '/api/api' found in plain JS files under frontend/dist"
+              found=1
+            fi
+          fi
+
+          # 2) Check gzipped assets (.gz) by decompressing and scanning
+          while IFS= read -r -d '' f; do
+            if gzip -cd "$f" 2>/dev/null | grep -q -- "/api/api"; then
+              echo "ERROR: '/api/api' found inside gzipped asset: $f"
+              found=1
+            fi
+          done < <(find frontend/dist -type f -name '*.gz' -print0)
+
+          # 3) Check brotli compressed assets (.br) if brotli is available on the runner
+          if command -v brotli >/dev/null 2>&1; then
+            while IFS= read -r -d '' f; do
+              if brotli -d -c "$f" 2>/dev/null | grep -q -- "/api/api"; then
+                echo "ERROR: '/api/api' found inside brotli-compressed asset: $f"
+                found=1
+              fi
+            done < <(find frontend/dist -type f -name '*.br' -print0)
+          else
+            echo "Note: 'brotli' not installed on runner; skipping .br asset checks."
+          fi
+
+          if [ "$found" -ne 0 ]; then
+            echo "ERROR: Found '/api/api' in built frontend assets. This usually indicates VITE_API_BASE_URL was set incorrectly during build, causing duplicated '/api'."
+            echo "Ensure production builds use an empty VITE_API_BASE_URL (so API paths become '/api/...') or update frontend/src/lib/apiBase.ts accordingly."
+            exit 1
+          fi
+
+          echo "No '/api/api' occurrences found in JS chunks or compressed assets."
+
+      - name: Upload build artifacts (optional, for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  publish-images:
+    name: Build & Publish images (GHCR)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Dockerfiles exist (fail early with clear message)
+        run: |
+          set -euo pipefail
+          echo "Checking for required Dockerfiles in 'docker/'..."
+          missing=()
+          if [ ! -f docker/backend/Dockerfile ]; then missing+=("docker/backend/Dockerfile"); fi
+          if [ ! -f docker/frontend/Dockerfile ]; then missing+=("docker/frontend/Dockerfile"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "ERROR: Required Dockerfile(s) missing: ${missing[*]}"
+            echo "The publish-images job expects Dockerfiles at 'docker/backend/Dockerfile' and 'docker/frontend/Dockerfile' relative to the repository root."
+            echo "Update the repository layout or the workflow before re-running CI."
+            exit 1
+          fi
+          echo "Dockerfiles present. Proceeding to build images."
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/backend/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          build-args: |
+            SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }}
+
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/frontend/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          build-args: |
+            VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
+            VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
+
+  deploy-to-azure:
+    name: Deploy to Azure Web Apps (optional via OIDC)
+    needs: publish-images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required Azure secrets are present (fail early with clear message)
+        run: |
+          set -euo pipefail
+          echo "Validating Azure deploy secrets..."
+          missing=()
+          [ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
+          [ -z "${{ secrets.AZURE_TENANT_ID }}" ] && missing+=("AZURE_TENANT_ID") || true
+          [ -z "${{ secrets.AZURE_CLIENT_ID }}" ] && missing+=("AZURE_CLIENT_ID") || true
+          [ -z "${{ secrets.AZURE_RESOURCE_GROUP }}" ] && missing+=("AZURE_RESOURCE_GROUP") || true
+          [ -z "${{ secrets.AZURE_WEBAPP_BACKEND }}" ] && missing+=("AZURE_WEBAPP_BACKEND") || true
+          [ -z "${{ secrets.AZURE_WEBAPP_FRONTEND }}" ] && missing+=("AZURE_WEBAPP_FRONTEND") || true
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "ERROR: Missing required Azure secrets: ${missing[*]}"
+            echo "Add the missing repository secrets or run this workflow manually with the appropriate secrets set."
+            exit 1
+          fi
+          echo "All required Azure secrets present. Proceeding with deploy."
+
+      # azure/login supports OIDC-based federated login when a federated credential
+      # is configured on the Azure service principal. No client secret is required.
+      - name: Azure login (OIDC)
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set backend image on Azure Web App
+        run: |
+          az webapp config container set \
+            --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --docker-custom-image-name "${{ env.BACKEND_IMAGE }}:${{ github.sha }}"
+
+      - name: Set frontend image on Azure Web App
+        run: |
+          az webapp config container set \
+            --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --docker-custom-image-name "${{ env.FRONTEND_IMAGE }}:${{ github.sha }}"
+
+      - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
+        run: |
+          echo "Setting SPRING_PROFILES_ACTIVE=prod and ALLOWED_ORIGINS on backend and frontend Web Apps"
+          az webapp config appsettings set --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          az webapp config appsettings set --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+
+      - name: Restart backend Web App
+        run: |
+          az webapp restart --name "${{ secrets.AZURE_WEBAPP_BACKEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}"
+
+      - name: Restart frontend Web App
+        run: |
+          az webapp restart --name "${{ secrets.AZURE_WEBAPP_FRONTEND }}" --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}"
+
+# End of workflow
+
+# Notes for repository administrators / maintainers:
+# - This workflow pushes images to GHCR using the repository GITHUB_TOKEN. To allow pushing packages
+#   with GITHUB_TOKEN, grant the Actions token permission to write packages: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+#   (Repository Settings -> Actions -> General -> Workflow permissions -> "Read and write permissions" and ensure Packages permission enabled.)
+# - For Azure OIDC-based deploys, configure a federated credential on an Azure service principal and add the
+#   following repository secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP,
+#   AZURE_WEBAPP_BACKEND, AZURE_WEBAPP_FRONTEND. See README_CLOUD.md for details.
+# - If you prefer to use a PAT for GHCR push instead of GITHUB_TOKEN, create a secret GHCR_TOKEN and set
+#   the login step to use that instead (username: your GitHub username, password: ${{ secrets.GHCR_TOKEN }}).
+# - This workflow builds for linux/amd64 only by default; add additional platforms if you need multi-arch builds.

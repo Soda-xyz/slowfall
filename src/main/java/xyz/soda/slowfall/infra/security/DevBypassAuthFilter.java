@@ -3,13 +3,14 @@ package xyz.soda.slowfall.infra.security;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Lightweight auth filter for early development.
@@ -19,17 +20,20 @@ import org.springframework.security.core.context.SecurityContextHolder;
  * `http.addFilterBefore(devBypassAuthFilter, SecurityContextPersistenceFilter. Class)`
  * in `SecurityConfig` so the ordering is correct and the SecurityContext isn't overwritten.
  */
-public record DevBypassAuthFilter(Environment env) implements Filter {
+public class DevBypassAuthFilter implements Filter {
 
     public static final String AUTHENTICATED_USER_ATTR = "authenticatedUser";
     public static final String DEV_USER_HEADER = "X-Dev-User";
+
+    private final Environment env;
 
     /**
      * Create a new DevBypassAuthFilter backed by the provided {@link Environment}.
      *
      * @param env Spring environment used to read the 'app.security.dev-bypass' flag and active profiles
      */
-    public DevBypassAuthFilter {
+    public DevBypassAuthFilter(Environment env) {
+        this.env = env;
     }
 
     /**

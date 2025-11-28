@@ -5,10 +5,12 @@ WORKDIR /work
 # Copy Gradle wrapper and build files first to leverage layer caching
 COPY gradlew .
 COPY gradle gradle
-COPY settings.gradle settings.gradle.kts build.gradle* ./
+# COPY settings.gradle settings.gradle.kts build.gradle* ./
+# Allow either settings.gradle or settings.gradle.kts; use wildcard so COPY doesn't fail when one isn't present
+COPY settings.gradle* build.gradle* ./
 
 # Ensure wrapper is executable
-RUN chmod +x ./gradlew || true
+RUN chmod +x ./gradlew
 
 # Copy the rest of the source
 COPY . .
@@ -20,19 +22,19 @@ RUN ./gradlew --no-daemon bootJar -x test
 FROM eclipse-temurin:21-jre AS runtime
 
 # create a non-root user
-RUN addgroup --system app && adduser --system --ingroup app app || true
+RUN addgroup --system app && adduser --system --ingroup app app
 WORKDIR /app
 
-# Copy the Spring Boot fat jar from the builder stage
-COPY --from=builder /work/build/libs/*.jar app.jar
+# Copy the Spring Boot fat jar from the builder stage and set ownership to app user
+COPY --from=builder --chown=app:app /work/build/libs/*.jar app.jar
 
 # JVM options (override at runtime with JAVA_OPTS env var)
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"
 ENV PORT=8080
 EXPOSE 8080
 
-# Optional: install curl for HEALTHCHECK (kept minimal)
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* || true
+# Install curl for HEALTHCHECK (use minimal footprints and cleanup apt lists)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Run as non-root user
 USER app

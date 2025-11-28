@@ -1,8 +1,12 @@
-# Docker ignore for frontend build context
 node_modules
 dist
-.env
-.vscode
+.git
+.gitignore
+.env*
+*.local
 .DS_Store
-Thumbs.db
+*.log
+.vscode
+npm-debug.log
+coverage
 

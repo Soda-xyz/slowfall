@@ -1,5 +1,6 @@
 import type { CreatePersonRequest, Person } from "./types";
 import { API_BASE_URL } from "../../lib/apiBase";
+import { fetchWithAuth } from "../../lib/fetchClient";
 
 /**
  * Fetch person list.
@@ -7,7 +8,7 @@ import { API_BASE_URL } from "../../lib/apiBase";
  * @returns Promise resolving to Person[]
  */
 export async function fetchPerson(signal?: AbortSignal): Promise<Person[]> {
-	const res = await fetch(`${API_BASE_URL}/api/person`, { signal, credentials: "include" });
+	const res = await fetchWithAuth(`${API_BASE_URL}/api/person`, { signal, credentials: "include" });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch person: ${res.status} ${res.statusText}`);
 	}
@@ -20,7 +21,7 @@ export async function fetchPerson(signal?: AbortSignal): Promise<Person[]> {
  * @returns Promise resolving to created Person
  */
 export async function createPerson(payload: CreatePersonRequest): Promise<Person> {
-	const res = await fetch(`${API_BASE_URL}/api/person`, {
+	const res = await fetchWithAuth(`${API_BASE_URL}/api/person`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
@@ -39,7 +40,7 @@ export async function createPerson(payload: CreatePersonRequest): Promise<Person
  * @returns Promise resolving to Person[]
  */
 export async function fetchPilots(signal?: AbortSignal): Promise<Person[]> {
-	const res = await fetch(`${API_BASE_URL}/api/person/search?pilot=true`, {
+	const res = await fetchWithAuth(`${API_BASE_URL}/api/person/search?pilot=true`, {
 		signal,
 		credentials: "include",
 	});
@@ -62,7 +63,7 @@ export async function fetchPilots(signal?: AbortSignal): Promise<Person[]> {
  * @returns Promise resolving to Person[]
  */
 export async function fetchSkydivers(signal?: AbortSignal): Promise<Person[]> {
-	const res = await fetch(`${API_BASE_URL}/api/person/search?skydiver=true`, {
+	const res = await fetchWithAuth(`${API_BASE_URL}/api/person/search?skydiver=true`, {
 		signal,
 		credentials: "include",
 	});

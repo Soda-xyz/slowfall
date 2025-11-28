@@ -76,7 +76,38 @@ export default function JumpPage(): React.JSX.Element {
 		};
 	}, []);
 
-	const onCreated = (j: Jump) => setJumps((prev) => [...prev, j]);
+	// Listen for global jumpCreated events (dispatched by JumpForm after create)
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const handler = async (ev: Event) => {
+			const detail = (ev as CustomEvent).detail;
+			console.debug("JumpPage: received global jumpCreated event detail:", detail);
+			try {
+				await loadAllRef.current();
+				console.debug("JumpPage: reloaded jumps in response to global jumpCreated event");
+			} catch (err) {
+				console.debug("JumpPage: failed to reload after global event:", err);
+			}
+		};
+		window.addEventListener("jumpCreated", handler as EventListener);
+		return () => window.removeEventListener("jumpCreated", handler as EventListener);
+	}, []);
+
+	const onCreated = async (j: Jump) => {
+		console.debug("JumpPage: onCreated received:", j);
+		setJumps((prev) => {
+			const next = [...prev, j];
+			console.debug("JumpPage: updated jumps array:", next);
+			return next;
+		});
+
+		try {
+			await loadAllRef.current();
+			console.debug("JumpPage: reloaded jumps from server after create");
+		} catch (err) {
+			console.debug("JumpPage: failed to reload jumps after create:", err);
+		}
+	};
 
 	const handleAddSkydiver = async (jumpId: string) => {
 		setTargetJumpId(jumpId);

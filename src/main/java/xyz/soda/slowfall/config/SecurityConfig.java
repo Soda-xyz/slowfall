@@ -1,26 +1,19 @@
 package xyz.soda.slowfall.config;
 
+import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.security.keyvault.keys.KeyClient;
+import com.azure.security.keyvault.keys.KeyClientBuilder;
+import com.azure.security.keyvault.keys.models.JsonWebKey;
+import com.azure.security.keyvault.keys.models.KeyVaultKey;
+import com.azure.security.keyvault.secrets.SecretClient;
+import com.azure.security.keyvault.secrets.SecretClientBuilder;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.Key;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.KeyStore;
-import java.security.PrivateKey;
-import java.security.cert.Certificate;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -50,7 +43,24 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import xyz.soda.slowfall.auth.KeyVaultJwtSigner;
 import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
+
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.*;
+import java.security.cert.Certificate;
+import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPublicKeySpec;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Spring Security configuration for the application.
@@ -106,12 +116,35 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(CorsProperties props) {
         CorsConfiguration configuration = new CorsConfiguration();
         List<String> origins = props.getAllowedOrigins();
-        if (origins == null || origins.isEmpty()) {
-            // default to nothing (safer) but keep the previous dev defaults as a fallback
-            origins = List.of("http://localhost:5173", "http://localhost:3000");
+        // If the property was provided via an environment variable (comma-separated)
+        // it might bind to a list containing a single empty string when the env var
+        // is unset or empty. Filter blank entries to avoid that and treat the result
+        // as 'not configured' so we fall back to dev defaults.
+        if (origins != null) {
+            origins = origins.stream()
+                    .filter(o -> o != null && !o.trim().isEmpty())
+                    .collect(Collectors.toList());
         }
-        configuration.setAllowedOriginPatterns(origins);
-        configuration.setAllowCredentials(true); // set true if the frontend sends credentials
+        if (origins == null || origins.isEmpty()) {
+            // default to common local dev origins so developers running the frontend on
+            // different dev ports (5173, 5174, 3000) won't be blocked. Production should
+            // provide explicit values via app.cors.allowed-origins.
+            origins = List.of("http://localhost:5173", "http://localhost:5174", "http://localhost:3000");
+        }
+        // If any configured origin contains a wildcard, register as origin patterns so
+        // spring will match them; otherwise register exact origins so the framework will
+        // echo the explicit origin in Access-Control-Allow-Origin (required when
+        // allowCredentials is true).
+        boolean containsWildcard = origins.stream().anyMatch(o -> o.contains("*"));
+        if (containsWildcard) {
+            configuration.setAllowedOriginPatterns(origins);
+        } else {
+            configuration.setAllowedOrigins(origins);
+        }
+        // IMPORTANT: allow credentialed responses when the frontend sends credentials
+        // (cookies or fetch with credentials: 'include'). The browser requires
+        // Access-Control-Allow-Credentials: true to expose credentialed responses to JS.
+        configuration.setAllowCredentials(true);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization", "Content-Type"));
@@ -127,7 +160,7 @@ public class SecurityConfig {
      * <p>This config:
      * <ul>
      *   <li>disables CSRF (stateless API),</li>
-     *   <li>permits access to authentication endpoints and health check.</li>
+     *   <li>permits access to authentication endpoints and health check.</</li>
      *   <li>requires authentication for other requests.</li>
      *   <li>uses stateless session management,</li>
      *   <li>enables HTTP Basic for simple username/password auth, and</li>
@@ -156,7 +189,7 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.OPTIONS)
                         .permitAll() // allow preflight
-                        .requestMatchers("/auth/**", "/actuator/health")
+                        .requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
                         .permitAll()
                         .anyRequest()
                         .authenticated())
@@ -314,6 +347,7 @@ public class SecurityConfig {
      * @return a configured {@link JwtEncoder}
      */
     @Bean
+    @ConditionalOnMissingBean(JwtEncoder.class)
     public JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
         return new NimbusJwtEncoder(jwkSource);
     }
@@ -354,5 +388,104 @@ public class SecurityConfig {
             return Collections.emptyList();
         });
         return conv;
+    }
+
+    /**
+     * Load an RSA key from Azure Key Vault using the Secrets client.
+     *
+     * <p>This bean is conditional on the property 'app.security.azure.keyvault.secret-name' being
+     * set, and is intended for production use to load a stable RSA key.
+     * Expected properties:
+     * app.security.azure.keyvault.vault-url=https://<your-key-vault>.vault.azure.net/
+     * app.security.azure.keyvault.secret-name=<your-secret-name>
+     *
+     * @param vaultUrl   the URL of the Azure Key Vault
+     * @param secretName the name of the secret containing the PEM-encoded private key
+     * @return an {@link RSAKey} constructed from the private key loaded from Azure Key Vault
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "secret-name")
+    public RSAKey rsaKeyFromAzureKeyVault(
+            @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
+            @Value("${app.security.azure.keyvault.secret-name}") String secretName)
+            throws Exception {
+        // Build a SecretClient that uses DefaultAzureCredential (managed identity, env vars, etc.)
+        SecretClient secretClient = new SecretClientBuilder()
+                .vaultUrl(vaultUrl)
+                .credential(new DefaultAzureCredentialBuilder().build())
+                .buildClient();
+
+        String pem = secretClient.getSecret(secretName).getValue();
+        // Expect PEM containing -----BEGIN PRIVATE KEY----- base64 -----END PRIVATE KEY-----
+        String base64 = pem.replaceAll("-----BEGIN (.*)-----", "")
+                .replaceAll("-----END (.*)-----", "")
+                .replaceAll("\r", "")
+                .replaceAll("\n", "")
+                .trim();
+
+        byte[] keyBytes = Base64.getDecoder().decode(base64);
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
+        var kf = java.security.KeyFactory.getInstance("RSA");
+        PrivateKey priv = kf.generatePrivate(keySpec);
+
+        // Try to derive the public key from the private CRT key parameters
+        if (!(priv instanceof RSAPrivateCrtKey crt)) {
+            throw new IllegalStateException(
+                    "Private key is not an RSA private CRT key; cannot derive public key. Store a public key or JWK alongside the private key.");
+        }
+        RSAPublicKeySpec pubSpec = new RSAPublicKeySpec(crt.getModulus(), crt.getPublicExponent());
+        RSAPublicKey pub = (RSAPublicKey) kf.generatePublic(pubSpec);
+
+        return new RSAKey.Builder(pub)
+                .privateKey((RSAPrivateKey) priv)
+                .keyID(UUID.randomUUID().toString())
+                .build();
+    }
+
+    /**
+     * Load an RSA key from Azure Key Vault using the Keys client.
+     *
+     * <p>This bean is conditional on the property 'app.security.azure.keyvault.key-name' being
+     * set, and is intended for production use to load a stable RSA key.
+     * Expected properties:
+     * app.security.azure.keyvault.vault-url=https://<your-key-vault>.vault.azure.net/
+     * app.security.azure.keyvault.key-name=<your-key-name>
+     *
+     * @param vaultUrl the URL of the Azure Key Vault
+     * @param keyName  the name of the key to load
+     * @return an {@link RSAKey} constructed from the key loaded from Azure Key Vault
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
+    public RSAKey rsaKeyFromAzureKeyVaultKey(
+            @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
+            @Value("${app.security.azure.keyvault.key-name}") String keyName)
+            throws Exception {
+        KeyClient keyClient = new KeyClientBuilder()
+                .vaultUrl(vaultUrl)
+                .credential(new DefaultAzureCredentialBuilder().build())
+                .buildClient();
+        KeyVaultKey key = keyClient.getKey(keyName);
+        JsonWebKey jwk = key.getKey();
+        // Parse JsonWebKey into Nimbus RSAKey
+        return RSAKey.parse(jwk.toJsonString());
+    }
+
+    /**
+     * Create a JwtEncoder that uses Azure Key Vault to sign JWTs.
+     *
+     * <p>This encoder is configured with the vault URL and key name, and uses the
+     * KeyVaultJwtSigner to sign tokens.
+     *
+     * @param vaultUrl the URL of the Azure Key Vault
+     * @param keyName  the name of the key used for signing
+     * @return a configured {@link JwtEncoder}
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
+    public JwtEncoder keyVaultJwtEncoder(
+            @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
+            @Value("${app.security.azure.keyvault.key-name}") String keyName) {
+        return new KeyVaultJwtSigner(vaultUrl, keyName);
     }
 }

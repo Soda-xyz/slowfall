@@ -8,7 +8,7 @@ import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
 import type { CreateJumpRequest, Jump } from "./types";
-import { createJump } from "./api";
+import { createJump, fetchJumps } from "./api";
 import { fetchPilots } from "../person/api";
 import { fetchAirports } from "../airport/api";
 import { fetchCrafts } from "../craft/api";
@@ -32,9 +32,10 @@ type Props = {
  */
 export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Element {
 	const { airports, selectedAirportId: globalAirportId } = useAirport();
-	const [jumpDate, setJumpDate] = useState<string | null>(null);
-	const [jumpTime, setJumpTime] = useState<string | undefined>(undefined);
+	const [jumpDate, setJumpDate] = useState<string | null>(dayjs().format("YYYY-MM-DD"));
 	const [dropdownOpened, setDropdownOpened] = useState(false);
+	const [timeKey, setTimeKey] = useState(0);
+	const [jumpTime, setJumpTime] = useState<string | null>(null);
 	const [craftRegistrationNumber, setCraftRegistrationNumber] = useState("");
 	const [altitudeFeet, setAltitudeFeet] = useState<number | string>("");
 	const [pilotId, setPilotId] = useState<string | null>(null);
@@ -122,18 +123,26 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 		setJumpDate(dayjs(dateObj).format("YYYY-MM-DD"));
 	};
 
-	const handleTimeChange = (timeValue: string) => {
+	const handleTimeChange = (timeValue: string | null) => {
 		setJumpTime(timeValue);
 	};
 
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
 		const airportToUse = airportId ?? selectedAirportId ?? globalAirportId;
+		// Ensure we have a craft selected; if state is empty, fall back to the first loaded craft option
+		const fallbackCraft =
+			craftRegistrationNumber || (craftsOptions.length > 0 ? craftsOptions[0].value : "");
+		if (fallbackCraft && fallbackCraft !== craftRegistrationNumber) {
+			// persist the fallback into state so the UI reflects it
+			setCraftRegistrationNumber(fallbackCraft);
+			console.debug("JumpForm: applied fallback craftRegistrationNumber:", fallbackCraft);
+		}
 		if (
 			!jumpDate ||
 			!jumpTime ||
 			!airportToUse ||
-			!craftRegistrationNumber ||
+			!fallbackCraft ||
 			altitudeFeet === "" ||
 			Number.isNaN(Number(altitudeFeet))
 		) {
@@ -149,7 +158,7 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 		const payload: CreateJumpRequest = {
 			jumpTime: combined.utc().toISOString(),
 			airportId: airportToUse,
-			craftRegistrationNumber,
+			craftRegistrationNumber: fallbackCraft,
 			altitudeFeet: Number(altitudeFeet),
 			pilotId: pilotId || undefined,
 		};
@@ -157,13 +166,38 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 		try {
 			setSubmitting(true);
 			const created = await createJump(payload);
+			console.debug("JumpForm: created jump:", created);
 			notifications.show({ color: "green", title: "Jump created", message: "Jump scheduled" });
-			setJumpDate(null);
-			setJumpTime(undefined);
-			setCraftRegistrationNumber("");
+			// reset to today's date so the DateInput remains populated by default
+			setJumpDate(dayjs().format("YYYY-MM-DD"));
+			// clear time and altitude for the next jump but keep the selected craft
+			setJumpTime(null);
+			// force remount of TimePicker so its internal input is reset visually
+			setTimeKey((k) => k + 1);
 			setAltitudeFeet("");
 			setPilotId(null);
-			onCreated?.(created);
+			if (onCreated) {
+				onCreated?.(created);
+			} else {
+				// If parent didn't provide onCreated (e.g. Dashboard), refresh canonical list from server
+				try {
+					await fetchJumps();
+					console.debug("JumpForm: fetched latest jumps after create");
+				} catch (err) {
+					console.debug("JumpForm: failed to fetch jumps after create:", err);
+				}
+			}
+
+			// Broadcast a global event so other parts of the app can refresh their data
+			try {
+				console.debug("JumpForm: dispatching global jumpCreated event", created);
+				// bubbles & composed help the event reach listeners across shadow DOM boundaries
+				window?.dispatchEvent(
+					new CustomEvent("jumpCreated", { detail: created, bubbles: true, composed: true }),
+				);
+			} catch {
+				// ignore in non-browser or test environments
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to create jump";
 			notifications.show({ color: "red", title: "Error", message });
@@ -181,17 +215,21 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					withAsterisk
 					data={craftsOptions}
 					value={craftRegistrationNumber ?? undefined}
-					onChange={(value) => setCraftRegistrationNumber(value ?? "")}
+					onChange={(value) => {
+						setCraftRegistrationNumber(value ?? "");
+						console.debug("JumpForm: craft selected:", value);
+					}}
 				/>
 				<Group>
 					<DateInput
 						label="Date"
 						radius={"md"}
 						required
-						defaultValue={dayjs().toDate()}
+						value={jumpDate ? dayjs(jumpDate).toDate() : undefined}
 						onChange={handleDateChange}
 					/>
 					<TimePicker
+						key={timeKey}
 						label="Time"
 						required
 						clearable
@@ -203,8 +241,11 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 								<IconClock size={14} stroke={1.5} />
 							</ActionIcon>
 						}
-						value={jumpTime}
-						onChange={(timeValue: string) => {
+						/* Pass `jumpTime` directly (null when cleared). Mantine TimePicker treats
+						   null as an empty controlled value; using `undefined` can make it
+						   uncontrolled and retain the previous visual value. */
+						value={jumpTime ?? undefined}
+						onChange={(timeValue: string | null) => {
 							handleTimeChange(timeValue);
 							if (!timeValue) setDropdownOpened(false);
 						}}
@@ -253,6 +294,7 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					</Button>
 				</Group>
 			</Stack>
+			{/* debug: state after submit reset (use devtools or console elsewhere) */}
 		</form>
 	);
 }

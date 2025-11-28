@@ -6,47 +6,49 @@ Files:
   produces a slim runtime image.
 - frontend/Dockerfile - multi-stage Dockerfile that builds the Vite React app and serves it with nginx (production).
 - frontend/nginx.conf - nginx config for SPA history API fallback and cache headers.
-- docker-compose.yml—simple CLI-friendly compose for local development / testing (builds & runs backend only).
+- docker-compose.yml — development compose that builds and runs backend and frontend services (repo root used as build
+  context).
 - docker-compose.prod.yml - production-oriented compose file that builds and runs frontend + backend images.
 
 Quick local commands (from the repository root):
 
-Build backend image (production tag):
+- Images are built automatically by the compose command below; manual image builds are rarely necessary.
 
-```powershell
-docker build -t slowfall-backend:prod -f docker\backend\Dockerfile .
-```
+- Start development services (builds both backend and frontend):
 
-Build frontend image (production tag):
+  ```powershell
+  docker compose -f docker/docker-compose.yml up --build -d
+  ```
 
-```powershell
-docker build -t slowfall-frontend:prod -f docker\frontend\Dockerfile .
-```
+- Stop and remove volumes:
 
-Run production composes (builds images and runs):
+  ```powershell
+  docker compose -f docker/docker-compose.yml down --volumes
+  ```
 
-```powershell
-docker compose -f docker\docker-compose.prod.yml up --build -d
-```
+Notes:
 
-Tear down:
+- Both `docker/docker-compose.yml` (dev) and `docker/docker-compose.prod.yml` (prod) now build frontend and backend from
+  the canonical Dockerfiles under `docker/` using the repository root as the build context. This keeps builds consistent
+  between local dev and production flows.
+- If you prefer building the frontend image from the `frontend/` directory explicitly, use the
+  `docker/frontend/Dockerfile` with repo root context as shown above.
 
-```powershell
-docker compose -f docker\docker-compose.prod.yml down --volumes
-```
+CI/CD:
 
-CI/CD notes:
-
-- The provided GitHub Actions workflow (.GitHub/workflows/ci-build.yml) builds the backend jar, builds the frontend, then
-  builds and pushes images to GitHub Container Registry (GHCR). It tags images with the commit SHA.
-- Ensure the repository has package write permissions so the action can push to GHCR. The action uses the repo's
-  GITHUB_TOKEN for authentication.
+- See the repository root README for CI/CD workflow and image-publishing details (this avoids duplicating CI notes
+  here).
 
 Health & verification:
 
 - Backend actuator health: http://localhost:8080/actuator/health
 - Frontend served at: http://localhost/
 
-If you want Postgres included for production parity or a dev override file that mounts caches and enables the remote
-debugger, request `docker-compose.override.yml` and I will add it.
+Developer tips:
 
+- If you want Postgres included for production parity or a developer override that mounts caches and enables remote JVM
+  debugging, request a `docker-compose.override.yml` and I will add a small example.
+
+- Advanced: you can also enable remote JVM debugging temporarily by setting `JAVA_TOOL_OPTIONS` when running the backend
+  image
+  (see `docker/docker-compose.yml` for a sample command).

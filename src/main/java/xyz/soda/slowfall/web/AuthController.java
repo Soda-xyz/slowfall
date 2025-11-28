@@ -1,10 +1,6 @@
 package xyz.soda.slowfall.web;
 
 import jakarta.servlet.http.HttpServletResponse;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -15,6 +11,11 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * Controller exposing authentication endpoints for issuing access and refresh tokens.
  *
@@ -24,8 +25,8 @@ import org.springframework.web.bind.annotation.*;
  *   <li>POST /auth/refresh - exchange a refresh cookie for a new access token</li>
  * </ul>
  */
-@RestController
-@RequestMapping("/auth")
+@RestController("webAuthController")
+@RequestMapping("/web-auth")
 public class AuthController {
 
     private final AuthenticationManager authManager;

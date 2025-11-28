@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   backend:
-    # Build using the Dockerfile that lives at docker/backend/Dockerfile
+    # Build using the Dockerfile that lives at docker/backend/Dockerfile (repo-root context)
     build:
       context: ..
       dockerfile: docker/backend/Dockerfile
@@ -20,6 +20,24 @@ services:
       timeout: 5s
       retries: 3
 
+  # Frontend service for local/dev use. Builds from the repo-root canonical Dockerfile
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    image: slowfall-frontend:local
+    container_name: slowfall-frontend-local
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost/ || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 # Notes:
 # - Run this file from the docker/ directory with: docker compose up --build,
 #   but it's easier to run from the repo root so the build context (.) is correct:
@@ -30,4 +48,3 @@ services:
 #     docker run --rm --name slowfall-debug -p 5005:5005 -e JAVA_TOOL_OPTIONS='-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005' slowfall-backend:local
 #   (or add the env var to this service in a developer-only override file)
 # - If you want a Postgres service included, I can add a small db service and volumes in a follow-up.
-
