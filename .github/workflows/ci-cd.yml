@@ -22,8 +22,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/slowfall-backend
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/slowfall-frontend
+  BACKEND_IMAGE: ghcr.io/${{ toLower(github.repository_owner) }}/slowfall-backend
+  FRONTEND_IMAGE: ghcr.io/${{ toLower(github.repository_owner) }}/slowfall-frontend
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   # Leave VITE_API_BASE_URL empty by default so apiBase logic (which expects empty production value)
   # results in `${API_BASE_URL}/api/...` -> `/api/...` when VITE_API_BASE_URL is intentionally empty in production.
