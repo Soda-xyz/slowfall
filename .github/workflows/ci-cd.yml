@@ -153,6 +153,9 @@ jobs:
     name: Frontend Docker checks (nginx test, index.html, run & curl)
     runs-on: ubuntu-latest
     needs: build-and-test
+    env:
+      # baked FQDN used in the frontend image build (same expression as used when building)
+      BACKEND_FQDN: ${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
 
     steps:
       - name: Checkout
@@ -160,6 +163,22 @@ jobs:
 
       - name: Set up QEMU and Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Compute sanitized BACKEND_FQDN for CI checks
+        id: sanitize_backend
+        run: |
+          set -euo pipefail
+          RAW="${{ secrets.BACKEND_APP_NAME }}"
+          # Trim whitespace/newlines
+          SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
+          # If the secret already looks like a FQDN (contains a dot) use as-is; otherwise append azurewebsites.net
+          if echo "$SANITIZED" | grep -q '\.'; then
+            FQDN="$SANITIZED"
+          else
+            FQDN="$SANITIZED.azurewebsites.net"
+          fi
+          echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
+          echo "Computed BACKEND_FQDN=$FQDN"
 
       - name: Build frontend image (load into local Docker)
         uses: docker/build-push-action@v4
@@ -173,13 +192,14 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
-            # Bake the Azure App Service default host for the backend into the frontend image
-            # Use the App Service name from the BACKEND_APP_NAME secret and append the azurewebsites.net domain.
-            BACKEND_HOST=${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
+            # Use sanitized BACKEND_FQDN computed in a prior step
+            BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
       - name: nginx config syntax test inside image
-        # Add a hosts entry so the Docker-in-runner test resolves the 'backend' upstream used by nginx.conf
-        run: docker run --rm --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
+        # Add hosts entries for both the sanitized FQDN and a 'backend' fallback so CI tests don't fail due to name mismatches
+        run: |
+          echo "Testing nginx config using BACKEND_FQDN=${BACKEND_FQDN}"
+          docker run --rm --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
 
       - name: Ensure index.html exists in image
         run: docker run --rm slowfall-frontend:ci sh -c 'test -f /usr/share/nginx/html/index.html'
@@ -187,8 +207,8 @@ jobs:
       - name: Start container in background and curl root
         run: |
           set -euo pipefail
-          # Start container with backend host stubbed to localhost so nginx test/proxy won't fail resolution in CI
-          docker run -d --add-host backend:127.0.0.1 --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
+          # Start container with both the sanitized FQDN and 'backend' stubbed to localhost to match either baked config
+          docker run -d --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
           sleep 3
           # Attempt a simple curl; do not fail pipeline here — we'll gather logs on failure in a later step
           if ! curl -fsS --max-time 5 http://127.0.0.1:8080/ | head -c 200 >/tmp/frontend_curl.out; then
@@ -257,6 +277,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Compute sanitized BACKEND_FQDN for publish
+        id: sanitize_backend_publish
+        run: |
+          set -euo pipefail
+          RAW="${{ secrets.BACKEND_APP_NAME }}"
+          SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
+          if echo "$SANITIZED" | grep -q '\.'; then
+            FQDN="$SANITIZED"
+          else
+            FQDN="$SANITIZED.azurewebsites.net"
+          fi
+          echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
+          echo "Computed BACKEND_FQDN for publish: $FQDN"
+
       - name: Verify Dockerfiles exist (fail early with clear message)
         run: |
           set -euo pipefail
@@ -305,9 +339,8 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
-            # Bake the Azure App Service default host for the backend into the frontend image
-            # Use the App Service name from the BACKEND_APP_NAME secret and append the azurewebsites.net domain.
-            BACKEND_HOST=${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
+            # Use sanitized BACKEND_FQDN computed earlier for publish (accepts either short name or full FQDN)
+            BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
   deploy-to-azure:
     name: Deploy to Azure Web Apps (optional via OIDC)
