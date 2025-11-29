@@ -129,8 +129,8 @@ After the CI/CD pipeline pushes images to GHCR (GitHub Container Registry), you 
 
 For this repository, the published images are:
 
-- Backend: `https://github.com/orgs/<owner>/packages/container/slowfall-backend`
-- Frontend: `https://github.com/orgs/<owner>/packages/container/slowfall-frontend`
+- Backend: `https://github.com/<owner>/slowfall/pkgs/container/slowfall-backend`
+- Frontend: `https://github.com/<owner>/slowfall/pkgs/container/slowfall-frontend`
 
 **Via Docker CLI:**
 
@@ -146,8 +146,8 @@ docker image inspect ghcr.io/<owner>/slowfall-backend:latest
 **Via GitHub CLI (gh):**
 
 ```bash
-# List packages in a repository
-gh api /user/packages?package_type=container
+# List packages for a user or organization
+gh api /users/<owner>/packages?package_type=container
 
 # List versions/tags for a specific package
 gh api /users/<owner>/packages/container/slowfall-backend/versions
