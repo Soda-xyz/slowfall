@@ -37,7 +37,8 @@ server {
   index index.html;
 
   location /api/ {
-    proxy_pass http://{{BACKEND_HOST}}:8080;
+    # BACKEND_HOST may include a host:port already (for example 'backend:8080' or an FQDN).
+    proxy_pass http://{{BACKEND_HOST}};
     proxy_http_version 1.1;
     proxy_set_header Connection "";
     proxy_set_header Host $host;

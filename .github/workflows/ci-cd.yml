@@ -313,6 +313,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Azure login (OIDC) for resolving backend FQDN
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve backend defaultHostName (use as BACKEND_FQDN)
+        run: |
+          set -euo pipefail
+          RAW_NAME="${{ secrets.BACKEND_APP_NAME }}"
+          RG="${{ secrets.AZURE_RG }}"
+          echo "Resolving backend defaultHostName for app '$RAW_NAME' in resource group '$RG'..."
+          FQDN=$(az webapp show --name "$RAW_NAME" --resource-group "$RG" --query defaultHostName -o tsv)
+          if [ -z "$FQDN" ]; then
+            echo "ERROR: Unable to resolve defaultHostName for $RAW_NAME in $RG"
+            az webapp show --name "$RAW_NAME" --resource-group "$RG" || true
+            exit 1
+          fi
+          echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
+          echo "Resolved BACKEND_FQDN=$FQDN"
+
       - name: Build & push backend image
         uses: docker/build-push-action@v4
         with:
@@ -339,7 +361,7 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
-            # Use sanitized BACKEND_FQDN computed earlier for publish (accepts either short name or full FQDN)
+            # Use resolved BACKEND_FQDN computed earlier via Azure CLI
             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
   deploy-to-azure:
@@ -397,19 +419,38 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Verify App Services exist in the resource group
+        run: |
+          set -euo pipefail
+          echo "Checking App Services ${AZ_WEBAPP_BACKEND} and ${AZ_WEBAPP_FRONTEND} in resource group ${AZ_RESOURCE_GROUP}..."
+          missing=()
+          if ! az webapp show --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" > /dev/null 2>&1; then
+            missing+=("${AZ_WEBAPP_BACKEND}")
+          fi
+          if ! az webapp show --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" > /dev/null 2>&1; then
+            missing+=("${AZ_WEBAPP_FRONTEND}")
+          fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "ERROR: The following App Services were not found in resource group ${AZ_RESOURCE_GROUP}: ${missing[*]}"
+            echo "Available web apps in the resource group:"
+            az webapp list --resource-group "${AZ_RESOURCE_GROUP}" --query "[].{name:name,defaultHostName:defaultHostName}" -o table || true
+            echo "Ensure the GitHub secret values BACKEND_APP_NAME and FRONTEND_APP_NAME contain the exact App Service names (no domain suffix)."
+            exit 1
+          fi
+
       - name: Set backend image on Azure Web App
         run: |
           az webapp config container set \
             --name "${AZ_WEBAPP_BACKEND}" \
             --resource-group "${AZ_RESOURCE_GROUP}" \
-            --docker-custom-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
+            --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
 
       - name: Set frontend image on Azure Web App
         run: |
           az webapp config container set \
             --name "${AZ_WEBAPP_FRONTEND}" \
             --resource-group "${AZ_RESOURCE_GROUP}" \
-            --docker-custom-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
+            --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
