@@ -70,6 +70,9 @@ SH
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Ensure keystore dir exists and is writable by the non-root 'app' user
+RUN mkdir -p /etc/slowfall && chown app:app /etc/slowfall && chmod 750 /etc/slowfall
+
 # Run as non-root user
 USER app
 
