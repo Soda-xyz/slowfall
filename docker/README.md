@@ -38,6 +38,7 @@ CI/CD:
 
 - See the repository root README for CI/CD workflow and image-publishing details (this avoids duplicating CI notes
   here).
+- **Viewing published images:** After CI pushes images to GHCR, view them at `https://github.com/<owner>/<repo>/pkgs/container/<image-name>` or see `README_CLOUD.md` for detailed instructions.
 
 Health & verification:
 

@@ -26,6 +26,7 @@ them to a container registry (GHCR or ACR), and updates the App Service containe
 - [Azure resources & recommended setup](#azure-resources--recommended-setup)
 - [Azure CLI (PowerShell) example](#azure-cli-powershell-example)
 - [GitHub Actions recommended flow](#github-actions-recommended-flow)
+- [Viewing your GHCR images](#viewing-your-ghcr-images)
 - [Key Vault & JWKS](#key-vault--jwks)
 - [Health checks & fail-fast](#health-checks--fail-fast)
 - [Setting ALLOWED_ORIGINS in App Service](#setting-allowed_origins-in-app-service)
@@ -115,6 +116,49 @@ env:
   REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   SPRING_PROFILES_ACTIVE: prod
 ```
+
+## Viewing your GHCR images
+
+After the CI/CD pipeline pushes images to GHCR (GitHub Container Registry), you can view them in several ways:
+
+**Via GitHub UI:**
+
+1. Navigate to your repository on GitHub
+2. Click on the **Packages** link in the right sidebar (under "Releases")
+3. Alternatively, go directly to `https://github.com/<owner>/<repo>/pkgs/container/<image-name>`
+
+For this repository, the published images are:
+
+- Backend: `https://github.com/orgs/<owner>/packages/container/slowfall-backend`
+- Frontend: `https://github.com/orgs/<owner>/packages/container/slowfall-frontend`
+
+**Via Docker CLI:**
+
+```bash
+# List available tags for an image
+docker manifest inspect ghcr.io/<owner>/slowfall-backend:latest
+
+# Pull and inspect an image locally
+docker pull ghcr.io/<owner>/slowfall-backend:latest
+docker image inspect ghcr.io/<owner>/slowfall-backend:latest
+```
+
+**Via GitHub CLI (gh):**
+
+```bash
+# List packages in a repository
+gh api /user/packages?package_type=container
+
+# List versions/tags for a specific package
+gh api /users/<owner>/packages/container/slowfall-backend/versions
+```
+
+**Notes:**
+
+- Replace `<owner>` with the GitHub username or organization name (e.g., `soda-xyz`)
+- Images are tagged with both `latest` and the commit SHA (e.g., `ghcr.io/<owner>/slowfall-backend:abc123`)
+- Package visibility follows repository visibility; ensure the repository is public or you have appropriate access
+- See the [GHCR documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for more details
 
 Key Vault & JWKS
 
