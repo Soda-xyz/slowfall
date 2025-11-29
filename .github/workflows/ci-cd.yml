@@ -231,7 +231,7 @@ jobs:
       - name: Validate required Azure secrets are present (fail early with clear message)
         run: |
           set -euo pipefail
-          echo "Validating Azure deploy secrets (using names from README_ENV.md)..."
+          echo "Validating Azure deploy secrets..."
 
           # Only accept the secret names documented in README_ENV.md
           AZ_SUBSCRIPTION_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
@@ -253,7 +253,7 @@ jobs:
 
           if [ ${#missing[@]} -ne 0 ]; then
             echo "ERROR: Missing required Azure secrets: ${missing[*]}"
-            echo "Add the missing repository secrets (exact names from README_ENV.md) or run this workflow manually with the appropriate secrets set."
+            echo "Add the missing repository secrets or run this workflow manually with the appropriate secrets set."
             exit 1
           fi
 
