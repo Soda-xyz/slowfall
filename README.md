@@ -80,6 +80,13 @@ These MDC values are included in JSON logs by the logback config.
 - `src/main/java/xyz/soda/slowfall/infra/logging/RequestLoggingFilter.java`
 - `src/main/resources/logback-spring.xml`
 
+## Environment & Deployment (brief)
+
+- The CI/CD pipeline uses OIDC-based federated credentials for Azure deployments (no client secrets are required). See
+  `README_ENV.md` and `README_CLOUD.md` for full details.
+- The frontend image now bakes the backend proxy target at build time using a `BACKEND_HOST` build-arg; the pipeline
+  passes the `BACKEND_APP_NAME` secret as `BACKEND_HOST` during the frontend image build.
+
 ---
 
 **Security note:** Do not commit secrets into the repository. See `README_ENV.md` for details on environment variables,

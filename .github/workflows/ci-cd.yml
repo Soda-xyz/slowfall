@@ -173,9 +173,13 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
+            # Bake the Azure App Service default host for the backend into the frontend image
+            # Use the App Service name from the BACKEND_APP_NAME secret and append the azurewebsites.net domain.
+            BACKEND_HOST=${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
 
       - name: nginx config syntax test inside image
-        run: docker run --rm --entrypoint nginx slowfall-frontend:ci -t
+        # Add a hosts entry so the Docker-in-runner test resolves the 'backend' upstream used by nginx.conf
+        run: docker run --rm --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
 
       - name: Ensure index.html exists in image
         run: docker run --rm slowfall-frontend:ci sh -c 'test -f /usr/share/nginx/html/index.html'
@@ -183,7 +187,8 @@ jobs:
       - name: Start container in background and curl root
         run: |
           set -euo pipefail
-          docker run -d --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
+          # Start container with backend host stubbed to localhost so nginx test/proxy won't fail resolution in CI
+          docker run -d --add-host backend:127.0.0.1 --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
           sleep 3
           # Attempt a simple curl; do not fail pipeline here — we'll gather logs on failure in a later step
           if ! curl -fsS --max-time 5 http://127.0.0.1:8080/ | head -c 200 >/tmp/frontend_curl.out; then
@@ -300,6 +305,9 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
+            # Bake the Azure App Service default host for the backend into the frontend image
+            # Use the App Service name from the BACKEND_APP_NAME secret and append the azurewebsites.net domain.
+            BACKEND_HOST=${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
 
   deploy-to-azure:
     name: Deploy to Azure Web Apps (optional via OIDC)

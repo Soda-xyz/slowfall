@@ -100,13 +100,17 @@ GitHub Actions recommended flow
 - Update App Service container settings with new image tags
 - Restart the apps (or let App Service auto-deploy on tag update)
 
-Example GitHub Actions environment variables (set via secrets)
+# Example GitHub Actions environment variables (set via secrets). This repository uses OIDC-based federated credentials
+
+# for Azure deployments (no client secret stored in repository secrets). Configure OIDC in the Azure service principal
+
+# and provide the following secrets in the repository (used as identifiers rather than secrets):
 
 ```yaml
 env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   REGISTRY_USERNAME: ${{ github.actor }}
   REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   SPRING_PROFILES_ACTIVE: prod

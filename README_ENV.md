@@ -4,7 +4,7 @@ This file lists exactly which environment variables and CI/CD secrets must be se
 values (examples) in App Service application settings or your container orchestration environment.
 
 Important: this project uses Azure Key Vault Keys for signing and a Managed Identity on the backend App Service to
-access Key Vault. CI (deployment) uses a service principal stored in GitHub Secrets to run `az` commands.
+access Key Vault. CI (deployment) uses GitHub Actions with OIDC-based federated credentials to perform `az` commands.
 
 Required production environment variables (exact names and examples)
 
@@ -41,10 +41,10 @@ Required production environment variables (exact names and examples)
 CI / GitHub Actions secrets (exact names)
 
 These secrets are required by the GitHub Actions workflow to build/push images and perform Azure CLI deployment steps.
+This project uses OIDC-based federated credentials for Azure login; no client secrets are stored in the repository.
 
-- `AZURE_CLIENT_ID` — service principal client id
+- `AZURE_CLIENT_ID` — service principal client id (used by OIDC login)
 - `AZURE_TENANT_ID` — tenant id
-- `AZURE_CLIENT_SECRET` — service principal secret
 - `AZURE_SUBSCRIPTION_ID` — Azure subscription id
 - `AZURE_RG` — Azure resource group name (used in deploy steps)
 - `BACKEND_APP_NAME` — backend App Service name (used in deploy steps)
@@ -82,9 +82,8 @@ The secrets below are consumed only by the CI/deployment workflows (GitHub Actio
 Azure CLI deployment steps. They are not required as runtime environment variables inside the running backend App
 Service unless you explicitly choose to propagate them there.
 
-- AZURE_CLIENT_ID — CI (required for deployments that use a service principal).
-- AZURE_TENANT_ID — CI (required for deployments that use a service principal).
-- AZURE_CLIENT_SECRET — CI (required for deployments that use a service principal).
+- AZURE_CLIENT_ID — CI (required for OIDC-based deployments).
+- AZURE_TENANT_ID — CI (required for OIDC-based deployments).
 - AZURE_SUBSCRIPTION_ID — CI (required by deployment scripts).
 - AZURE_RG — CI (resource group used by deployment scripts).
 - BACKEND_APP_NAME — CI (name of the backend App Service to target during deploy).
