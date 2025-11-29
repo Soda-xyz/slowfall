@@ -148,9 +148,92 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+  # New job: frontend-docker-checks - build the frontend image locally and run basic runtime checks
+  frontend-docker-checks:
+    name: Frontend Docker checks (nginx test, index.html, run & curl)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU and Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image (load into local Docker)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/frontend/Dockerfile
+          push: false
+          load: true
+          tags: |
+            slowfall-frontend:ci
+          build-args: |
+            VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
+            VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
+
+      - name: nginx config syntax test inside image
+        run: docker run --rm --entrypoint nginx slowfall-frontend:ci -t
+
+      - name: Ensure index.html exists in image
+        run: docker run --rm slowfall-frontend:ci sh -c 'test -f /usr/share/nginx/html/index.html'
+
+      - name: Start container in background and curl root
+        run: |
+          set -euo pipefail
+          docker run -d --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
+          sleep 3
+          # Attempt a simple curl; do not fail pipeline here — we'll gather logs on failure in a later step
+          if ! curl -fsS --max-time 5 http://127.0.0.1:8080/ | head -c 200 >/tmp/frontend_curl.out; then
+            echo "Warning: curl failed; container may have exited."
+            ls -la /usr/share/nginx/html || true
+            echo "-- show collected curl output (may be empty) --"
+            cat /tmp/frontend_curl.out || true
+            # keep going; the failure-collection step will run if this step fails the job
+            exit 1
+          else
+            echo "Frontend HTTP root responded; sample output:"
+            head -c 200 /tmp/frontend_curl.out || true
+          fi
+
+      - name: Cleanup container and image (always)
+        if: always()
+        run: |
+          docker rm -f slowfall-frontend-ci >/dev/null 2>&1 || true
+          docker image rm slowfall-frontend:ci >/dev/null 2>&1 || true
+
+      - name: Collect Docker debug info on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-docker-debug
+          path: |
+            docker-ps.txt
+            docker-logs.txt
+            docker-inspect.txt
+            docker-images.txt
+        # generate the debug files and upload them
+      - name: Generate docker debug files (only on failure)
+        if: failure()
+        run: |
+          set -euo pipefail
+          echo "--- docker ps -a ---" > docker-ps.txt
+          docker ps -a >> docker-ps.txt 2>&1 || true
+
+          echo "--- docker images (local) ---" > docker-images.txt
+          docker images >> docker-images.txt 2>&1 || true
+
+          echo "--- docker inspect slowfall-frontend-ci (if present) ---" > docker-inspect.txt
+          docker inspect slowfall-frontend-ci >> docker-inspect.txt 2>&1 || true
+
+          echo "--- docker logs slowfall-frontend-ci (if present) ---" > docker-logs.txt
+          docker logs slowfall-frontend-ci >> docker-logs.txt 2>&1 || true
+
   publish-images:
     name: Build & Publish images (GHCR)
-    needs: build-and-test
+    needs: frontend-docker-checks
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     outputs:

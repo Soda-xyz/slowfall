@@ -4,7 +4,10 @@ FROM node:18-alpine AS build
 WORKDIR /app
 # Build args allow CI to control Vite mode and VITE_ env replacements
 ARG VITE_FRONTEND_ENV=production
-ARG VITE_API_BASE_URL=/api
+# Default VITE_API_BASE_URL is intentionally empty for production so that
+# the app's runtime API base becomes '/api/...' when intended. CI/workflows
+# can pass a different build-arg for development (for example 'http://localhost:8080').
+ARG VITE_API_BASE_URL=""
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 # Copy only package files first for efficient caching
