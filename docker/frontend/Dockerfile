@@ -38,10 +38,15 @@ server {
 
   location /api/ {
     # BACKEND_HOST may include a host:port already (for example 'backend:8080' or an FQDN).
-    proxy_pass http://{{BACKEND_HOST}};
+    # Use HTTPS to contact the backend public host so App Service TLS termination and redirects are preserved.
+    proxy_pass https://{{BACKEND_HOST}};
     proxy_http_version 1.1;
     proxy_set_header Connection "";
-    proxy_set_header Host $host;
+    # Set Host to the upstream host (so backend-generated absolute redirects use the backend FQDN)
+    proxy_set_header Host $proxy_host;
+    # Ensure TLS SNI uses the upstream host name
+    proxy_ssl_server_name on;
+    proxy_ssl_name $proxy_host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
