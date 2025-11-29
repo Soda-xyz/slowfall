@@ -12,14 +12,15 @@
       - LOGSTASH_PORT (default: 5000)
 
       To use UDP, activate the "prod-udp" Spring profile instead of "prod":
-      &#45;&#45;spring.profiles.active=prod-udp
+      (example) set JVM/system property: spring.profiles.active=prod-udp
     -->
 
     <springProfile name="prod">
 
         <!-- Allow LOGSTASH_HOST/PORT to be provided; default to empty if unset -->
-        <property name="LOGSTASH_HOST" source="LOGSTASH_HOST"/>
-        <property name="LOGSTASH_PORT" source="LOGSTASH_PORT"/>
+        <!-- Use springProperty so Spring Boot injects environment values correctly into Logback config -->
+        <springProperty name="LOGSTASH_HOST" source="LOGSTASH_HOST"/>
+        <springProperty name="LOGSTASH_PORT" source="LOGSTASH_PORT"/>
 
         <!-- If LOGSTASH_HOST is provided, configure TCP/async Logstash appender; otherwise fall back to console -->
         <if condition="property('LOGSTASH_HOST') != null &amp;&amp; property('LOGSTASH_HOST').length() &gt; 0">
@@ -75,7 +76,7 @@
 
     <!--
       Example: UDP-based Logstash appender. Activate this profile with
-      &#45;&#45;spring.profiles.active=prod-udp
+      set JVM/system property: spring.profiles.active=prod-udp
 
       Note: The exact appender class and configuration keys depend on the
       logstash-logback-encoder version. If you prefer UDP, enable this profile
