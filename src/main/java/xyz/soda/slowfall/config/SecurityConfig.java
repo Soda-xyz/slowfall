@@ -297,6 +297,127 @@ public class SecurityConfig {
         return new ProviderManager(p);
     }
 
+    /**
+     * Production UserDetailsService backed by credentials stored in Azure Key Vault.
+     *
+     * <p>This bean is active for the 'prod' profile and only created when
+     * `app.security.azure.keyvault.user-secret-name` is set. The secret may be stored
+     * in two supported formats:
+     * <ul>
+     *   <li>JSON: {"username":"<user>","password":"<pass>"}</li>
+     *   <li>plain: "username:password"</li>
+     * </ul>
+     * <p>
+     * Note: This is a temporary convenience to allow the application to read a single
+     * login from Key Vault for production. It's not recommended for long-term
+     * multi-user production authentication. Consider replacing with a database-backed
+     * UserDetailsService or an external identity provider.
+     */
+    @Bean
+    @org.springframework.context.annotation.Profile("prod")
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "user-secret-name")
+    public UserDetailsService keyVaultUserDetailsService(
+            com.azure.core.credential.TokenCredential credential,
+            PasswordEncoder encoder,
+            org.springframework.core.env.Environment env,
+            @org.springframework.beans.factory.annotation.Value("${app.security.azure.keyvault.vault-url:}") String vaultUrl) {
+        if (vaultUrl == null || vaultUrl.trim().isEmpty()) {
+            throw new IllegalStateException("app.security.azure.keyvault.vault-url must be set to read user credentials from Key Vault");
+        }
+
+        // Resolve secret name from multiple possible config properties for backwards compatibility
+        String userSecretName = env.getProperty("app.security.azure.keyvault.user-secret-name");
+        if (userSecretName == null || userSecretName.isBlank()) {
+            userSecretName = env.getProperty("app.security.azure.keyvault.credentials-secret-name");
+        }
+        if (userSecretName == null || userSecretName.isBlank()) {
+            throw new IllegalStateException("Neither 'app.security.azure.keyvault.user-secret-name' nor 'app.security.azure.keyvault.credentials-secret-name' is set; cannot read user credentials from Key Vault");
+        }
+
+        // Build a SecretClient locally (avoids changing KeyVaultConfig conditions)
+        com.azure.security.keyvault.secrets.SecretClient secretClient = new com.azure.security.keyvault.secrets.SecretClientBuilder()
+                .vaultUrl(vaultUrl)
+                .credential(credential)
+                .buildClient();
+
+        String secretValue;
+        try {
+            secretValue = secretClient.getSecret(userSecretName).getValue();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to read user secret '" + userSecretName + "' from Key Vault: " + e.getMessage(), e);
+        }
+
+        String username = null;
+        String password = null;
+        String passwordHash = null;
+
+        // Try parse JSON first
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            var node = om.readTree(secretValue);
+            if (node.has("username")) {
+                username = node.get("username").asText();
+            }
+            if (node.has("password")) {
+                password = node.get("password").asText();
+            }
+            if (node.has("passwordHash")) {
+                passwordHash = node.get("passwordHash").asText();
+            }
+        } catch (Exception ignored) {
+            // fallthrough to permissive parsing
+        }
+
+        if ((username == null || (password == null && passwordHash == null)) && secretValue != null) {
+            // Permissive parsing for non-standard formats like {username:kisse,passwordHash:$2a$...}
+            java.util.regex.Pattern userPattern = java.util.regex.Pattern.compile("username\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern passPattern = java.util.regex.Pattern.compile("password\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern passHashPattern = java.util.regex.Pattern.compile("passwordHash\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Matcher mu = userPattern.matcher(secretValue);
+            if (mu.find()) {
+                username = mu.group(1).trim();
+            }
+            java.util.regex.Matcher mph = passHashPattern.matcher(secretValue);
+            if (mph.find()) {
+                passwordHash = mph.group(1).trim();
+            }
+            java.util.regex.Matcher mp = passPattern.matcher(secretValue);
+            if (mp.find()) {
+                password = mp.group(1).trim();
+            }
+
+            // If still not found but value looks like plain 'user:pass' without braces
+            if ((username == null || (password == null && passwordHash == null)) && !secretValue.contains("{") && secretValue.contains(":")) {
+                int idx = secretValue.indexOf(':');
+                username = secretValue.substring(0, idx).trim();
+                password = secretValue.substring(idx + 1).trim();
+            }
+        }
+
+        if (username == null || username.isEmpty() || ((password == null || password.isEmpty()) && (passwordHash == null || passwordHash.isEmpty()))) {
+            throw new IllegalStateException("User secret '" + userSecretName + "' in Key Vault does not contain valid credentials (expected JSON with username/password or 'username:password' or a passwordHash)");
+        }
+
+        String storedPassword;
+        if (passwordHash != null && !passwordHash.isEmpty()) {
+            // Secret already contains an encoded password (bcrypt expected). Use as-is.
+            storedPassword = passwordHash;
+        } else {
+            // Encode provided plain password using the configured encoder
+            storedPassword = encoder.encode(password);
+        }
+
+        var uds = new InMemoryUserDetailsManager();
+        uds.createUser(User.withUsername(username)
+                .password(storedPassword)
+                .roles("USER")
+                .build());
+        return uds;
+    }
+
     // Generate an ephemeral RSA key pair for JWT signing in dev.
     // In production, replace this with a key loaded from Vault / KMS and expose JWKS.
 

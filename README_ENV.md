@@ -46,6 +46,18 @@ Required production environment variables (exact names and examples)
       set via the `app.security.azure.keyvault.credentials-secret-name` property.
     - Spring property mapping: `app.security.azure.keyvault.credentials-secret-name`
 
+7. APP_SECURITY_AZURE_KEYVAULT_USER_SECRET_NAME / APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME
+    - Purpose: Name of the Key Vault Secret that contains the single allowed username and password or password hash used
+      by the backend service in production.
+    - Confirmed value in this deployment: `slowfall-credentials` (stored in Key Vault `slowfall-vault`).
+    - Supported secret formats (the application accepts either):
+        - JSON: `{"username":"alice","passwordHash":"$2a$10$..."}` (preferred: store bcrypt hash in `passwordHash`)
+        - Plain: `"username:password"` (will be encoded at startup)
+    - Where to set: App Service application setting (Name = `APP_SECURITY_AZURE_KEYVAULT_USER_SECRET_NAME` or
+      `APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME`).
+    - Spring property mapping: `app.security.azure.keyvault.user-secret-name` or
+      `app.security.azure.keyvault.credentials-secret-name`
+
 CI / GitHub Actions secrets (exact names)
 
 These secrets are required by the GitHub Actions workflow to build/push images and perform Azure CLI deployment steps.
@@ -85,6 +97,9 @@ This section maps each environment variable and CI/GitHub Actions secret to the 
   Vault cannot be reached; default behavior depends on application configuration.
 
 - APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME — Backend (required). Name of the Key Vault Secret containing the
+  credentials for the backend service.
+
+- APP_SECURITY_AZURE_KEYVAULT_USER_SECRET_NAME — Backend (required). Name of the Key Vault Secret containing the
   credentials for the backend service.
 
 CI / GitHub Actions secrets (used by the deploy pipeline only)
