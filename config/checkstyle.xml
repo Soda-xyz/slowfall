@@ -17,5 +17,27 @@
 
         <!-- Optional: Check for Javadoc style -->
         <module name="JavadocStyle"/>
+
+        <!--
+            Naming rules: enforce a minimum identifier length similar to ESLint's `id-length`.
+            The regular expression below allows either one of the accepted single-letter
+            exceptions (e, E, i, j, k) OR identifiers with at least two characters.
+            This applies to local variables, method parameters, fields, and catch parameters.
+        -->
+        <module name="LocalVariableName">
+            <property name="format" value="^(?:[eEijk]|[A-Za-z][A-Za-z0-9_]{1,})$"/>
+        </module>
+
+        <module name="ParameterName">
+            <property name="format" value="^(?:[eEijk]|[A-Za-z][A-Za-z0-9_]{1,})$"/>
+        </module>
+
+        <module name="FieldName">
+            <property name="format" value="^(?:[eEijk]|[A-Za-z][A-Za-z0-9_]{1,})$"/>
+        </module>
+
+        <module name="CatchParameterName">
+            <property name="format" value="^(?:[eEijk]|[A-Za-z][A-Za-z0-9_]{1,})$"/>
+        </module>
     </module>
 </module>
