@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("dev")
 public class HeaderEchoControllerTest {
 
@@ -23,4 +23,3 @@ public class HeaderEchoControllerTest {
         mockMvc.perform(get("/internal/echo-headers")).andExpect(status().isOk());
     }
 }
-
