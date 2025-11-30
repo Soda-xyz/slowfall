@@ -129,6 +129,14 @@ This project uses OIDC-based federated credentials for Azure login; no client se
 - `ALLOWED_ORIGINS` — (optional) production ALLOWED_ORIGINS value to be set by the deploy pipeline
 - `DEPLOY_ENV` — (required) recommended CI secret controlling build mode (`prod`/`production` for production builds)
 
+Note about GHCR authentication (very brief)
+
+- If you rely on `GITHUB_TOKEN` to push images to GHCR, ensure repository Actions permissions allow write access and
+  package writes: Repository Settings → Actions → General → "Workflow permissions" set to "Read and write permissions"
+  and enable Packages access. If your org policy disallows using `GITHUB_TOKEN` for package pushes, create a PAT with
+  `read:packages` and `write:packages` and store it in secret `GHCR_TOKEN` (the workflow will prefer `GHCR_TOKEN` if
+  present). See GitHub docs: https://docs.github.com/en/actions/learn-github-actions/permissions-for-the-github-token
+
 References
 
 - Azure Key Vault Keys: https://learn.microsoft.com/azure/key-vault/keys/about-keys
