@@ -36,6 +36,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name:
+          CI pre-check: validate DEPLOY_ENV secret is set
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.DEPLOY_ENV }}" ]; then
+            echo "ERROR: Repository secret DEPLOY_ENV is not set. Please add DEPLOY_ENV (example: 'prod') in GitHub Settings -> Secrets -> Actions."
+            exit 1
+          fi
+
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
         shell: bash
@@ -190,10 +199,11 @@ jobs:
           tags: |
             slowfall-frontend:ci
           build-args: |
-            VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
-            VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
-            # Use sanitized BACKEND_FQDN computed in a prior step
-            BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            # Prefer the DEPLOY_ENV secret when present. Map 'prod' to Vite 'production'.
+            VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
+            VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
+             # Use sanitized BACKEND_FQDN computed in a prior step
+             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
       - name: nginx config syntax test inside image
         # Add hosts entries for both the sanitized FQDN and a 'backend' fallback so CI tests don't fail due to name mismatches
@@ -288,31 +298,6 @@ jobs:
           else
             FQDN="$SANITIZED.azurewebsites.net"
           fi
-          echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
-          echo "Computed BACKEND_FQDN for publish: $FQDN"
-
-      - name: Verify Dockerfiles exist (fail early with clear message)
-        run: |
-          set -euo pipefail
-          echo "Checking for required Dockerfiles in 'docker/'..."
-          missing=()
-          if [ ! -f docker/backend/Dockerfile ]; then missing+=("docker/backend/Dockerfile"); fi
-          if [ ! -f docker/frontend/Dockerfile ]; then missing+=("docker/frontend/Dockerfile"); fi
-          if [ ${#missing[@]} -ne 0 ]; then
-            echo "ERROR: Required Dockerfile(s) missing: ${missing[*]}"
-            echo "The publish-images job expects Dockerfiles at 'docker/backend/Dockerfile' and 'docker/frontend/Dockerfile' relative to the repository root."
-            echo "Update the repository layout or the workflow before re-running CI."
-            exit 1
-          fi
-          echo "Dockerfiles present. Proceeding to build images."
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Azure login (OIDC) for resolving backend FQDN
         uses: azure/login@v1
         with:
@@ -346,7 +331,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
-            SPRING_PROFILES_ACTIVE=prod
+            # Allow repo secret DEPLOY_ENV to drive the spring profile. Common values:
+            #  - 'prod' or 'production' -> use 'prod' Spring profile
+            #  - 'dev' or 'development'  -> use the same string (if you choose to support it)
+            SPRING_PROFILES_ACTIVE=${{ secrets.DEPLOY_ENV == 'production' && 'prod' || secrets.DEPLOY_ENV || 'prod' }}
 
       - name: Build & push frontend image
         uses: docker/build-push-action@v4
@@ -359,10 +347,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
-            VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}
-            VITE_API_BASE_URL=${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
-            # Use resolved BACKEND_FQDN computed earlier via Azure CLI
-            BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
+            VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
+             # Use resolved BACKEND_FQDN computed earlier via Azure CLI
+             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
   deploy-to-azure:
     name: Deploy to Azure Web Apps (optional via OIDC)
@@ -454,9 +442,11 @@ jobs:
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
-          echo "Setting SPRING_PROFILES_ACTIVE=prod and ALLOWED_ORIGINS on backend and frontend Web Apps"
-          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
-          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=prod" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          # Decide SPRING_PROFILES_ACTIVE based on DEPLOY_ENV secret when present (default: prod)
+          SPRING_PROFILE=${{ secrets.DEPLOY_ENV == 'production' && 'prod' || secrets.DEPLOY_ENV || 'prod' }}
+          echo "Setting SPRING_PROFILES_ACTIVE=$SPRING_PROFILE and ALLOWED_ORIGINS on backend and frontend Web Apps"
+          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=$SPRING_PROFILE" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=$SPRING_PROFILE" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
 
       - name: Restart backend Web App
         run: |

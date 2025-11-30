@@ -13,6 +13,11 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 # Copy only package files first for efficient caching
 COPY frontend/package.json frontend/package-lock.json* ./
 COPY frontend/ .
+# Ensure the frontend build uses the CI-provided values by overwriting
+# the .env.production file in the repository (if present) with the
+# build-arg values. This prevents a committed .env.production from
+# silently overriding CI build arguments.
+RUN printf 'VITE_API_BASE_URL=%s\nVITE_FRONTEND_ENV=%s\n' "${VITE_API_BASE_URL}" "${VITE_FRONTEND_ENV}" > .env.production || true
 # Enforce deterministic install when lockfile exists
 RUN npm ci --silent
 # Run the build with the requested Vite mode

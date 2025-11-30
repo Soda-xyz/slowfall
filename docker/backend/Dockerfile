@@ -34,6 +34,11 @@ COPY --from=builder --chown=app:app /work/build/libs/*.jar app.jar
 # JVM options (override at runtime with JAVA_OPTS env var)
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"
 ENV PORT=8080
+# Allow bake-in of SPRING_PROFILES_ACTIVE during image build via build-arg. CI should pass
+# SPRING_PROFILES_ACTIVE=prod when building production images. This ENV acts as a default and
+# can still be overridden via Azure App Service app settings or container runtime env.
+ARG SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
 EXPOSE 8080
 
 # Install curl for HEALTHCHECK and base64 if missing

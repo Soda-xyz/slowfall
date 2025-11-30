@@ -20,6 +20,32 @@ The recommended deployment approach uses two containerized Web Apps (frontend an
 Secrets and signing keys are stored in Azure Key Vault. CI/CD is handled by GitHub Actions which builds images, pushes
 them to a container registry (GHCR or ACR), and updates the App Service container configuration.
 
+## DEPLOY_ENV (CI secret) — short operator note
+
+The CI workflow expects a repository secret named `DEPLOY_ENV` to be present and uses it as the single source-of-truth
+for build mode and app settings mapping. Operator guidance:
+
+- Set `DEPLOY_ENV=prod` in the repository secrets for production deployments. The CI workflow maps this to:
+    - Frontend: `VITE_FRONTEND_ENV=production` (Vite build mode) and `VITE_API_BASE_URL` set to an empty string so the
+      frontend uses relative `/api` paths in production builds. See Vite
+      docs: https://vitejs.dev/guide/env-and-mode.html
+    - Backend: `SPRING_PROFILES_ACTIVE=prod` — the CI build passes this as a Docker build-arg and the deploy step sets
+      it
+      as an App Service application setting. App Service app settings override container environment variables at
+      runtime
+      (this is expected; CI also updates app settings during deploy).
+
+- If `DEPLOY_ENV` is absent, the workflow defaults to a safe `prod` value but we strongly recommend setting the secret
+  explicitly to avoid ambiguity.
+
+- The repository Dockerfiles include defensive behavior to ensure CI drive build-time values:
+    - `docker/frontend/Dockerfile` overwrites `frontend/.env.production` in the build stage from build-args so a
+      committed
+      `.env.production` cannot silently override CI provided values.
+    - `docker/backend/Dockerfile` accepts a `SPRING_PROFILES_ACTIVE` build-arg and writes it into the runtime image as
+      an
+      `ENV` so CI-baked images have sensible defaults.
+
 ## Table of contents
 
 - [Prerequisites](#prerequisites)

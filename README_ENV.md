@@ -6,6 +6,63 @@ values (examples) in App Service application settings or your container orchestr
 Important: this project uses Azure Key Vault Keys for signing and a Managed Identity on the backend App Service to
 access Key Vault. CI (deployment) uses GitHub Actions with OIDC-based federated credentials to perform `az` commands.
 
+## New CI secret: DEPLOY_ENV (how CI determines build mode)
+
+Starting with recent CI updates, the repository uses a single repository secret named `DEPLOY_ENV` to drive build and
+deploy modes across both the frontend and backend during GitHub Actions runs. Please create this secret in the repo
+Settings → Secrets → Actions and set its value to `prod` for production deployments.
+
+Why this exists
+
+- Vite (frontend) bakes environment variables at build time. To guarantee production-optimized assets are produced in
+  CI, we prefer a single build-time source-of-truth (`DEPLOY_ENV`). See Vite docs (Mode and environment variables):
+  https://vitejs.dev/guide/env-and-mode.html
+- The backend Docker build and the CI deploy use the same `DEPLOY_ENV` to ensure the Spring profile and baked image
+  defaults match the intended deployment mode.
+
+Accepted values and mapping
+
+- `prod` or `production` → frontend: Vite mode `production` (VITE_FRONTEND_ENV=production), VITE_API_BASE_URL is set to
+  an empty string for relative API paths; backend: `SPRING_PROFILES_ACTIVE=prod`.
+- `development` or `dev` → frontend: Vite mode `development` and VITE_API_BASE_URL is set (for example
+  `http://localhost:8080`), backend: `SPRING_PROFILES_ACTIVE=dev` (if you choose to support it in CI).
+
+Where to set
+
+- GitHub repository secret: `DEPLOY_ENV` (required for CI builds that should produce production images). The CI workflow
+  prefers this secret when present and will fallback to a safe default (`prod`) if it is absent, but we strongly
+  recommend setting the secret explicitly.
+
+GH CLI example (run locally; do not commit secrets):
+
+```powershell
+# Replace OWNER/REPO with your repository slug
+gh secret set DEPLOY_ENV --body 'prod' --repo OWNER/REPO
+```
+
+Notes about overrides and deterministic builds
+
+- Frontend: the Dockerfile build stage now overwrites `frontend/.env.production` with the CI-provided build-args (if
+  any)
+  before running the Vite build. This prevents a committed `.env.production` from silently overriding CI build-time
+  values when building Docker images in CI.
+- Backend: the backend runtime image accepts a build-arg `SPRING_PROFILES_ACTIVE` during image build; the Dockerfile
+  sets this value as an `ENV` so images baked by CI will contain a sensible default profile. App Service App Settings or
+  container runtime environment variables can still override `SPRING_PROFILES_ACTIVE` at runtime (this is expected and
+  intentional — CI also sets App Service app settings during deploy).
+
+Security / where secrets live (quick summary)
+
+- `DEPLOY_ENV` (Repository secret) — controls CI build mode; set in GitHub Actions secrets.
+- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RG`, `BACKEND_APP_NAME`, `FRONTEND_APP_NAME`,
+  `ALLOWED_ORIGINS` — GitHub Actions secrets used by the deploy workflow (see below for full list).
+- Key Vault secrets and keys (signed material) remain in Azure Key Vault. Do NOT store Key Vault values in repository
+  secrets unless absolutely required.
+
+---
+
+<!-- Existing content below remains unchanged -->
+
 Required production environment variables (exact names and examples)
 
 1. ALLOWED_ORIGINS
@@ -70,6 +127,7 @@ This project uses OIDC-based federated credentials for Azure login; no client se
 - `BACKEND_APP_NAME` — backend App Service name (used in deploy steps)
 - `FRONTEND_APP_NAME` (optional) — frontend App Service name
 - `ALLOWED_ORIGINS` — (optional) production ALLOWED_ORIGINS value to be set by the deploy pipeline
+- `DEPLOY_ENV` — (required) recommended CI secret controlling build mode (`prod`/`production` for production builds)
 
 References
 
