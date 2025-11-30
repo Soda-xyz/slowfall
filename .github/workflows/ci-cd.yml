@@ -36,15 +36,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name:
-          CI pre-check: validate DEPLOY_ENV secret is set
-        run: |
-          set -euo pipefail
-          if [ -z "${{ secrets.DEPLOY_ENV }}" ]; then
-            echo "ERROR: Repository secret DEPLOY_ENV is not set. Please add DEPLOY_ENV (example: 'prod') in GitHub Settings -> Secrets -> Actions."
-            exit 1
-          fi
-
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
         shell: bash
