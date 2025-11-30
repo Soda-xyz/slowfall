@@ -278,18 +278,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Explicit login to GHCR to ensure docker buildx can push successfully.
-      # Prefer a personal access token (GHCR_TOKEN) with package write permissions when available.
-      - name: Login to GitHub Container Registry (GHCR) using GHCR_TOKEN (recommended)
-        if: ${{ secrets.GHCR_TOKEN != '' }}
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Login to GitHub Container Registry (GHCR) using GITHUB_TOKEN (fallback)
-        if: ${{ secrets.GHCR_TOKEN == '' }}
+      - name: Login to GitHub Container Registry (GHCR)
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
