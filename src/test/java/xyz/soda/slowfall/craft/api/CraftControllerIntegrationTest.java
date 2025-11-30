@@ -31,6 +31,8 @@ class CraftControllerIntegrationTest {
         CreateCraftRequest req = new CreateCraftRequest("C1", "REG-1", 1000, 4);
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
+        // Use dev basic auth (dev:devpass) so requests reach the controller when security requires auth
+        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
 
         ResponseEntity<CraftDto> postResp =
                 restTemplate.postForEntity(url, new HttpEntity<>(req, headers), CraftDto.class);
@@ -44,6 +46,7 @@ class CraftControllerIntegrationTest {
         String url = "http://localhost:" + port + "/api/crafts";
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
+        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
 
         CreateCraftRequest req1 = new CreateCraftRequest("C-DUP", "REG-DUP", 1000, 4);
         ResponseEntity<CraftDto> r1 = restTemplate.postForEntity(url, new HttpEntity<>(req1, headers), CraftDto.class);
@@ -60,6 +63,7 @@ class CraftControllerIntegrationTest {
         String url = "http://localhost:" + port + "/api/crafts";
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
+        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
 
         // blank name
         CreateCraftRequest req = new CreateCraftRequest("   ", "REG-1", 1000, 4);

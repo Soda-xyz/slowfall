@@ -5,7 +5,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,14 +30,17 @@ class AirportControllerIntegrationTest {
         CreateAirportRequest req = new CreateAirportRequest("Heathrow", "EGLL", "Europe/London");
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
+        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
 
-        ResponseEntity<AirportDto> postResp =
-                restTemplate.postForEntity(url, new HttpEntity<>(req, headers), AirportDto.class);
+        ResponseEntity<AirportDto> postResp = restTemplate.postForEntity(
+                url, new org.springframework.http.HttpEntity<>(req, headers), AirportDto.class);
         assertEquals(HttpStatus.CREATED, postResp.getStatusCode());
         AirportDto created = postResp.getBody();
         assertTrue(created != null && "Heathrow".equals(created.name()));
 
-        ResponseEntity<AirportDto[]> listResp = restTemplate.getForEntity(url, AirportDto[].class);
+        // use authenticated rest template for the GET as well so security allows the request
+        ResponseEntity<AirportDto[]> listResp =
+                restTemplate.withBasicAuth("dev", "devpass").getForEntity(url, AirportDto[].class);
         assertEquals(HttpStatus.OK, listResp.getStatusCode());
         AirportDto[] list = listResp.getBody();
         boolean found = false;

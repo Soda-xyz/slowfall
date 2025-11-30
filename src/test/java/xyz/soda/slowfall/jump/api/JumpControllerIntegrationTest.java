@@ -30,10 +30,11 @@ class JumpControllerIntegrationTest {
     void createJumpEndToEnd() {
         String airportUrl = "http://localhost:" + port + "/api/airports";
         CreateAirportRequest areq = new CreateAirportRequest("Heathrow", "EGLL", "UTC");
-        restTemplate.postForEntity(airportUrl, areq, Object.class);
+        restTemplate.withBasicAuth("dev", "devpass").postForEntity(airportUrl, areq, Object.class);
 
         // fetch created airport id
-        ResponseEntity<Object[]> listResp = restTemplate.getForEntity(airportUrl, Object[].class);
+        ResponseEntity<Object[]> listResp =
+                restTemplate.withBasicAuth("dev", "devpass").getForEntity(airportUrl, Object[].class);
         Object[] airports = listResp.getBody();
         assertTrue(airports != null && airports.length > 0);
         java.util.Map<?, ?> first = (java.util.Map<?, ?>) airports[0];
@@ -43,7 +44,8 @@ class JumpControllerIntegrationTest {
         CreateJumpRequest jreq =
                 new CreateJumpRequest(Instant.now().plus(Duration.ofDays(1)), airportId, "REG-1", 12000, null);
 
-        ResponseEntity<JumpDto> postResp = restTemplate.postForEntity(jumpUrl, jreq, JumpDto.class);
+        ResponseEntity<JumpDto> postResp =
+                restTemplate.withBasicAuth("dev", "devpass").postForEntity(jumpUrl, jreq, JumpDto.class);
         assertEquals(HttpStatus.CREATED, postResp.getStatusCode());
         JumpDto created = postResp.getBody();
         assertTrue(created != null && created.altitudeFeet().equals(12000));
@@ -53,9 +55,10 @@ class JumpControllerIntegrationTest {
     void addSkydiverIntegration() {
         String airportUrl = "http://localhost:" + port + "/api/airports";
         CreateAirportRequest areq = new CreateAirportRequest("Heathrow", "EGLL", "UTC");
-        restTemplate.postForEntity(airportUrl, areq, Object.class);
+        restTemplate.withBasicAuth("dev", "devpass").postForEntity(airportUrl, areq, Object.class);
 
-        ResponseEntity<Object[]> listResp = restTemplate.getForEntity(airportUrl, Object[].class);
+        ResponseEntity<Object[]> listResp =
+                restTemplate.withBasicAuth("dev", "devpass").getForEntity(airportUrl, Object[].class);
         Object[] airports = listResp.getBody();
         assertTrue(airports != null && airports.length > 0);
         java.util.Map<?, ?> first = (java.util.Map<?, ?>) airports[0];
@@ -64,7 +67,8 @@ class JumpControllerIntegrationTest {
         String jumpUrl = "http://localhost:" + port + "/api/jumps";
         CreateJumpRequest jreq =
                 new CreateJumpRequest(Instant.now().plus(Duration.ofDays(1)), airportId, "REG-1", 12000, null);
-        ResponseEntity<JumpDto> postResp = restTemplate.postForEntity(jumpUrl, jreq, JumpDto.class);
+        ResponseEntity<JumpDto> postResp =
+                restTemplate.withBasicAuth("dev", "devpass").postForEntity(jumpUrl, jreq, JumpDto.class);
         assertEquals(HttpStatus.CREATED, postResp.getStatusCode());
         JumpDto created = postResp.getBody();
         assertNotNull(created);
@@ -73,7 +77,8 @@ class JumpControllerIntegrationTest {
         // attempt to add non-existent person -> expect 400
         String addSkydiverUrl = jumpUrl + "/" + jumpId + "/skydivers";
         var body = java.util.Map.of("personId", UUID.randomUUID());
-        ResponseEntity<String> addResp = restTemplate.postForEntity(addSkydiverUrl, body, String.class);
+        ResponseEntity<String> addResp =
+                restTemplate.withBasicAuth("dev", "devpass").postForEntity(addSkydiverUrl, body, String.class);
         assertEquals(HttpStatus.BAD_REQUEST, addResp.getStatusCode());
     }
 }

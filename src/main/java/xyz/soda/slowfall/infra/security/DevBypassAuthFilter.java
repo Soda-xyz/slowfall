@@ -45,15 +45,16 @@ public class DevBypassAuthFilter implements Filter {
             return;
         }
 
-        // If a JwtAuthenticationToken has been injected by test helpers but the token is expired,
-        // clear the SecurityContext so the request is treated as unauthenticated (returning 401).
         var existingAuth = SecurityContextHolder.getContext().getAuthentication();
         if (existingAuth instanceof JwtAuthenticationToken jwtAuth) {
             var jwt = jwtAuth.getToken();
             Instant exp = jwt.getExpiresAt();
             if (exp != null && exp.isBefore(Instant.now())) {
                 SecurityContextHolder.clearContext();
-                existingAuth = null;
+                // Mark the request so we don't apply the dev bypass after clearing an expired token.
+                // Without this marker the filter would see no authentication and inject a dev user,
+                // which causes tests that expect an expired JWT to be treated as unauthorized to fail.
+                req.setAttribute("xyz.soda.slowfall.security.EXPIRED_JWT", Boolean.TRUE);
             }
         }
 
@@ -67,7 +68,16 @@ public class DevBypassAuthFilter implements Filter {
         boolean alreadyAuthenticated = SecurityContextHolder.getContext().getAuthentication() != null
                 && SecurityContextHolder.getContext().getAuthentication().isAuthenticated();
 
-        if (devBypass && uri != null && uri.startsWith("/api/protected") && !hasAuthHeader && !alreadyAuthenticated) {
+        // Avoid applying dev bypass when an expired JWT was present on the request: tests expect
+        // the expired token to result in an unauthorized response rather than silently granting dev auth.
+        boolean expiredJwtPresent = Boolean.TRUE.equals(req.getAttribute("xyz.soda.slowfall.security.EXPIRED_JWT"));
+
+        if (devBypass
+                && uri != null
+                && uri.startsWith("/api/protected")
+                && !hasAuthHeader
+                && !alreadyAuthenticated
+                && !expiredJwtPresent) {
             String user = req.getHeader(DEV_USER_HEADER);
             if (user == null || user.isBlank()) {
                 user = "dev";

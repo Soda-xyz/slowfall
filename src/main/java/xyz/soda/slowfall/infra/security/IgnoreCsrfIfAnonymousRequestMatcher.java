@@ -21,7 +21,6 @@ public class IgnoreCsrfIfAnonymousRequestMatcher implements RequestMatcher {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return true; // no authentication -> ignore CSRF
         return auth instanceof AnonymousAuthenticationToken; // anonymous -> ignore CSRF
-// authenticated -> enforce CSRF
+        // authenticated -> enforce CSRF
     }
 }
-

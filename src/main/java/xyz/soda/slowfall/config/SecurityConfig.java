@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -211,15 +212,20 @@ public class SecurityConfig {
         // Read dev-bypass flag to optionally relax authentication for API endpoints
         boolean devBypass = Boolean.parseBoolean(env.getProperty("app.security.dev-bypass", "false"));
 
-        http
-                .authorizeHttpRequests(auth -> {
+        http.authorizeHttpRequests(auth -> {
                     var matcher = auth.requestMatchers(HttpMethod.OPTIONS).permitAll(); // allow preflight
                     if (devBypass) {
-                        // In dev with dev-bypass enabled, allow unauthenticated access to API endpoints
-                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**").permitAll();
-                        auth.requestMatchers("/api/**").permitAll();
+                        // In dev with dev-bypass enabled, allow unauthenticated access to auth and health endpoints.
+                        // IMPORTANT: do NOT globally permit /api/** here — the DevBypassAuthFilter is responsible
+                        // for selectively injecting a dev authentication for the dedicated test endpoints under
+                        // /api/protected/**. Granting blanket access to /api/** caused security tests to fail
+                        // because unauthenticated requests to regular API endpoints were being allowed.
+                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
+                                .permitAll();
+                        // NOTE: do NOT add `auth.requestMatchers("/api/**").permitAll();` here.
                     } else {
-                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**").permitAll();
+                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
+                                .permitAll();
                     }
                     auth.anyRequest().authenticated();
                 })
@@ -441,14 +447,19 @@ public class SecurityConfig {
     public org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
         // Use the RSA public key from the ephemeral JWK for decoding in dev/test
         RSAPublicKey pub = rsaJwk.toRSAPublicKey();
-        return org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey(pub).build();
+        return org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey(pub)
+                .build();
     }
 
     @Bean
-    public org.springframework.core.convert.converter.Converter<org.springframework.security.oauth2.jwt.Jwt, org.springframework.security.authentication.AbstractAuthenticationToken>
+    public org.springframework.core.convert.converter.Converter<
+            org.springframework.security.oauth2.jwt.Jwt,
+            org.springframework.security.authentication.AbstractAuthenticationToken>
     jwtAuthConverter() {
-        org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter =
-                new org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter();
+        org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
+                grantedAuthoritiesConverter =
+                new org.springframework.security.oauth2.server.resource.authentication
+                        .JwtGrantedAuthoritiesConverter();
         // Accept roles from a 'roles' claim and prefix with ROLE_ for compatibility with hasRole checks
         grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
         grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
@@ -459,7 +470,8 @@ public class SecurityConfig {
             if (authorities == null) {
                 authorities = java.util.List.of();
             }
-            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt, authorities);
+            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                    jwt, authorities);
         };
     }
 

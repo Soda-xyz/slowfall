@@ -21,4 +21,3 @@ public class ProtectedResourceController {
         return ResponseEntity.ok("ok");
     }
 }
-

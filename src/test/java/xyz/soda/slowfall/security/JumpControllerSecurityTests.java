@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class JumpControllerSecurityTests {
 
     private static final String DEV_BASIC_AUTH = "Basic ZGV2OmRldnBhc3M="; // dev:devpass
+
     @Autowired
     private MockMvc mockMvc;
 

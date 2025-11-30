@@ -83,13 +83,15 @@ public class KeyVaultConfig {
 
     private void validateVaultUrl(String vaultUrl, String clientType) {
         if (vaultUrl == null || vaultUrl.trim().isEmpty()) {
-            throw new IllegalStateException("Key Vault " + clientType + " requested but app.security.azure.keyvault.vault-url is not set or empty");
+            throw new IllegalStateException("Key Vault " + clientType
+                    + " requested but app.security.azure.keyvault.vault-url is not set or empty");
         }
         try {
             java.net.URL url = new java.net.URL(vaultUrl);
             String protocol = url.getProtocol();
             if (!"https".equalsIgnoreCase(protocol) && !"http".equalsIgnoreCase(protocol)) {
-                throw new IllegalStateException("Key Vault " + clientType + " vault-url must use http(s) protocol: " + vaultUrl);
+                throw new IllegalStateException(
+                        "Key Vault " + clientType + " vault-url must use http(s) protocol: " + vaultUrl);
             }
         } catch (java.net.MalformedURLException e) {
             throw new IllegalStateException("Invalid Key Vault " + clientType + " vault-url: " + vaultUrl, e);

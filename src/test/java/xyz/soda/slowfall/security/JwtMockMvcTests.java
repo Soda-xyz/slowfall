@@ -23,8 +23,7 @@ public class JwtMockMvcTests {
     @Test
     void requestWithValidJwt_isAuthorized() throws Exception {
         mockMvc.perform(get("/api/protected/resource")
-                        .with(jwt().authorities(
-                                java.util.List.of(new SimpleGrantedAuthority("ROLE_USER")))))
+                        .with(jwt().authorities(java.util.List.of(new SimpleGrantedAuthority("ROLE_USER")))))
                 .andExpect(status().isOk());
     }
 
