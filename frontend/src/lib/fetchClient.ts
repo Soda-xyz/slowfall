@@ -70,13 +70,18 @@ async function doRefresh(): Promise<boolean> {
 			const init: RequestInit = {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				// Use credentials so cookie-backed refresh flows still work when configured.
-				credentials: "include",
+				// For a cookieless JWT flow we DO NOT send credentials/cookies here. The refresh
+				// request will include the refresh token in the JSON body (if available).
+				credentials: "omit",
 			};
 
 			// Only include a JSON body when we actually have a refresh token stored.
 			if (refreshToken) {
 				init.body = JSON.stringify({ refresh_token: refreshToken });
+			} else {
+				// If there's no refresh token, we still perform a refresh attempt only because
+				// some server setups may rely on server-side state. In our cookieless flow
+				// this usually will fail and the client will clear tokens.
 			}
 
 			const res = await fetch(url, init);
@@ -133,10 +138,10 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 		const merged: RequestInit = {
 			...init,
 			headers,
-			// Default to include credentials so API calls include cookies where needed and
-			// tests that assert credentials see the expected value. Callers can override by
-			// passing an explicit `credentials` in `init`.
-			credentials: (init.credentials as RequestCredentials) ?? "include",
+			// Default to omit credentials for a cookieless JWT flow. Callers can override by
+			// passing an explicit `credentials` in `init` if they need cookies for other
+			// integrations.
+			credentials: (init.credentials as RequestCredentials) ?? "omit",
 		};
 
 		return fetch(input, merged);

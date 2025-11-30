@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchWithAuth, setAuthToken } from "./fetchClient";
 
 describe("fetchWithAuth", () => {
@@ -35,6 +35,7 @@ describe("fetchWithAuth", () => {
 		} else {
 			throw new Error("Request headers missing from mock fetch call");
 		}
-		expect(calledInit.credentials).toBe("include");
+		// Updated expectation: requests are cookieless by default in our JWT flow.
+		expect(calledInit.credentials).toBe("omit");
 	});
 });
