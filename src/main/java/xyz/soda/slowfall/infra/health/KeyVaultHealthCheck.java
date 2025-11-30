@@ -4,6 +4,7 @@ import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -34,6 +35,7 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
      * @param keyName the name of the key to check
      * @param failFast whether to throw on startup when key is unavailable
      */
+    @Autowired
     public KeyVaultHealthCheck(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
             @Value("${app.security.azure.keyvault.key-name}") String keyName,

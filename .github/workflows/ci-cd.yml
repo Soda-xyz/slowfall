@@ -264,6 +264,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     outputs:
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
+      spring_profile: ${{ steps.compute_spring_profile.outputs.spring_profile }}
 
     steps:
       - name: Normalize repository owner to lowercase
@@ -295,6 +296,10 @@ jobs:
           set -euo pipefail
           RAW="${{ secrets.BACKEND_APP_NAME }}"
           SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
+          if [ -z "$SANITIZED" ]; then
+            echo "ERROR: BACKEND_APP_NAME secret is empty"
+            exit 1
+          fi
           if echo "$SANITIZED" | grep -q '\.'; then
             FQDN="$SANITIZED"
           else
@@ -345,8 +350,11 @@ jobs:
               SPRING_PROFILE="$DEPLOY"
               ;;
           esac
+          # export for steps in this job
           echo "SPRING_PROFILE=$SPRING_PROFILE" >> "$GITHUB_ENV"
           echo "Computed SPRING_PROFILE=$SPRING_PROFILE"
+          # also export as a step output so other jobs can consume it via needs.publish-images.outputs.spring_profile
+          echo "spring_profile=$SPRING_PROFILE" >> "$GITHUB_OUTPUT"
 
       - name: Build & push backend image
         uses: docker/build-push-action@v4
@@ -384,6 +392,10 @@ jobs:
     needs: publish-images
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+
+    # Ensure we pick up the SPRING_PROFILE computed during the publish-images job
+    env:
+      SPRING_PROFILE: ${{ needs.publish-images.outputs.spring_profile }}
 
     steps:
       - name: Checkout
@@ -469,10 +481,25 @@ jobs:
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
-          # Use SPRING_PROFILE computed earlier from DEPLOY_ENV secret
-          echo "Setting SPRING_PROFILES_ACTIVE=${SPRING_PROFILE} and ALLOWED_ORIGINS on backend and frontend Web Apps"
-          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
-          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          set -euo pipefail
+          # Use SPRING_PROFILE computed earlier from DEPLOY_ENV secret (published as a job output).
+          echo "Deploy-time SPRING_PROFILE='${SPRING_PROFILE:-}'"
+
+          # Build up the app settings list. Only include SPRING_PROFILES_ACTIVE when non-empty so
+          # we don't overwrite an image-default value with an empty string in App Service.
+          SETTINGS=()
+          if [ -n "${SPRING_PROFILE:-}" ]; then
+            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}")
+          else
+            echo "Note: SPRING_PROFILE is empty; leaving SPRING_PROFILES_ACTIVE unset so image default applies."
+          fi
+          SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
+
+          echo "Setting app settings on backend: ${SETTINGS[*]}"
+          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "${SETTINGS[@]}"
+
+          echo "Setting app settings on frontend: ${SETTINGS[*]}"
+          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "${SETTINGS[@]}"
 
       - name: Restart backend Web App
         run: |
