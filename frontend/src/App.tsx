@@ -5,7 +5,7 @@ import { DashboardPage } from "./features/dashboard";
 import { DatabaseControlPage } from "./features/databaseControl";
 import LoginPage from "./features/login/LoginPage";
 import ProtectedRoute from "./features/login/ProtectedRoute";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "@mantine/core/styles.css";
 
 /**
@@ -33,11 +33,11 @@ export default function App(): React.JSX.Element {
 			<AppShell header={{ height: 64 }} padding="md">
 				<Tabs
 					value={tab}
-					onChange={(v: string | null) => {
-						if (!v) return;
-						if (v === "dashboard") navigate("/");
-						else if (v === "database") navigate("/database");
-						else if (v === "login") navigate("/login");
+					onChange={(value: string | null) => {
+						if (!value) return;
+						if (value === "dashboard") navigate("/");
+						else if (value === "database") navigate("/database");
+						else if (value === "login") navigate("/login");
 					}}
 				>
 					<AppShell.Header>

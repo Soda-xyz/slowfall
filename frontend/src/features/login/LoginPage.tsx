@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { TextInput, PasswordInput, Button, Group, Box, Title, Notification } from "@mantine/core";
+import { Box, Button, Group, Notification, PasswordInput, TextInput, Title } from "@mantine/core";
 import { setAuthToken } from "../../lib/fetchClient";
-import { useNavigate, useLocation } from "react-router-dom";
+import { setRefreshToken } from "../../lib/tokenStore";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface ViteEnv {
 	VITE_API_BASE_URL?: string;
@@ -28,27 +29,44 @@ export default function LoginPage(): React.JSX.Element {
 			const env = import.meta.env as unknown as ViteEnv;
 			const base = env.VITE_API_BASE_URL;
 			const url = (base ? base.replace(/\/$/, "") : "") + "/web-auth/login";
+
+			// POST username/password to the backend and expect JSON { access_token, refresh_token? }
 			const res = await fetch(url, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				credentials: "include",
 				body: JSON.stringify({ username, password }),
 			});
+
 			if (!res.ok) {
-				setError(`Login failed: ${res.status}`);
+				const text = await res.text().catch(() => "");
+				setError(text || `Login failed: ${res.status}`);
 				return;
 			}
+
 			const data = await res.json().catch(() => null);
 			if (!data || typeof data.access_token !== "string") {
 				setError("Invalid login response from server");
 				return;
 			}
+
+			// Store tokens
 			setAuthToken(data.access_token);
-			// On success navigate to original destination or home
-			const state = (location.state as unknown as LoginLocationState) ?? {};
-			const dest = state.from?.pathname ?? "/";
-			navigate(dest, { replace: true });
-		} catch {
+			if (data.refresh_token && typeof data.refresh_token === "string") {
+				try {
+					setRefreshToken(data.refresh_token);
+				} catch (loginError) {
+					// If storing the refresh token fails (storage quota, private mode), log for debug
+					// without exposing token values.
+					console.debug("Failed to persist refresh token in tokenStore", loginError);
+				}
+			}
+
+			// Navigate to original destination (if any)
+			const state = location.state as LoginLocationState | null;
+			navigate(state?.from?.pathname ?? "/", { replace: true });
+		} catch (loginError) {
+			// Provide a bit more debug information while keeping the user-facing error generic
+			console.debug("Login request failed", loginError);
 			setError("Network error during login");
 		} finally {
 			setLoading(false);

@@ -1,5 +1,5 @@
 import React from "react";
-import { Table, Button, Text, Group } from "@mantine/core";
+import { Button, Group, Table, Text } from "@mantine/core";
 import type { Jump } from "./types";
 
 type Props = {
@@ -19,7 +19,7 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props): 
 
 	const rows = jumps
 		.slice()
-		.sort((a, b) => new Date(a.jumpTime).getTime() - new Date(b.jumpTime).getTime())
+		.sort((left, right) => new Date(left.jumpTime).getTime() - new Date(right.jumpTime).getTime())
 		.map((jump) => (
 			<tr key={jump.id}>
 				<td>{new Date(jump.jumpTime).toLocaleString()}</td>

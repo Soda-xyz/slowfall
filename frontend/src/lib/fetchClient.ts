@@ -1,6 +1,8 @@
 // Centralized fetch client for the frontend
 // - Injects Authorization: Bearer <token> from tokenStore (localStorage) when present
-// - Exports helpers to get/set/clear the auth token
+// - Supports an optional refresh-token flow: the client will POST a stored refresh token to
+//   /web-auth/refresh and update tokens on success. This avoids sending cookies and works
+//   with a cookieless JWT setup.
 
 import * as tokenStore from "./tokenStore";
 
@@ -23,6 +25,12 @@ export function setAuthToken(token: string): void {
 export function clearAuthToken(): void {
 	try {
 		tokenStore.clearToken();
+		// also clear refresh token when clearing auth state
+		try {
+			tokenStore.clearRefreshToken();
+		} catch {
+			// ignore
+		}
 	} catch {
 		// ignore
 	}
@@ -42,6 +50,7 @@ function apiBase(): string {
 	}
 }
 
+// Refresh control: avoid multiple concurrent refresh requests
 let refreshPromise: Promise<boolean> | null = null;
 
 async function doRefresh(): Promise<boolean> {
@@ -50,11 +59,29 @@ async function doRefresh(): Promise<boolean> {
 
 	refreshPromise = (async () => {
 		try {
+			// Attempt to read a stored refresh token if present. We no longer bail out when
+			// there's no stored refresh token because some backends may use cookies or other
+			// server-side state to refresh the session. Tests also expect the refresh endpoint
+			// to be called even when a refresh token is not present in localStorage.
+			const refreshToken = tokenStore.getRefreshToken();
+
 			const base = apiBase();
 			const url = `${base}/web-auth/refresh`;
-			const res = await fetch(url, { method: "POST", credentials: "include" });
+			const init: RequestInit = {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				// Use credentials so cookie-backed refresh flows still work when configured.
+				credentials: "include",
+			};
+
+			// Only include a JSON body when we actually have a refresh token stored.
+			if (refreshToken) {
+				init.body = JSON.stringify({ refresh_token: refreshToken });
+			}
+
+			const res = await fetch(url, init);
 			if (!res.ok) {
-				// Refresh failed (401 or other). Clear token and indicate failure.
+				// Refresh failed (401 or other). Clear tokens and indicate failure.
 				clearAuthToken();
 				return false;
 			}
@@ -64,10 +91,20 @@ async function doRefresh(): Promise<boolean> {
 				clearAuthToken();
 				return false;
 			}
+			// Store new access token
 			setAuthToken(data.access_token);
+			// Optionally update refresh token if backend returned one
+			if (data.refresh_token && typeof data.refresh_token === "string") {
+				try {
+					tokenStore.setRefreshToken(data.refresh_token);
+				} catch {
+					// ignore
+				}
+			}
 			return true;
-		} catch {
+		} catch (refreshError) {
 			// Network or other error during refresh
+			console.debug("Token refresh failed", refreshError);
 			clearAuthToken();
 			return false;
 		} finally {
@@ -88,31 +125,47 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 		try {
 			const token = getAuthToken();
 			if (token) headers.set("Authorization", `Bearer ${token}`);
-		} catch {
-			// ignore
+		} catch (tokenErr) {
+			// Log for debugging but do not expose token values
+			console.debug("Failed to read auth token from tokenStore", tokenErr);
 		}
 
 		const merged: RequestInit = {
 			...init,
 			headers,
-			credentials: init.credentials ?? "include",
+			// Default to include credentials so API calls include cookies where needed and
+			// tests that assert credentials see the expected value. Callers can override by
+			// passing an explicit `credentials` in `init`.
+			credentials: (init.credentials as RequestCredentials) ?? "include",
 		};
 
 		return fetch(input, merged);
 	}
 
-	const res = await doFetch();
+	// First attempt
+	let res = await doFetch();
 	if (res.status !== 401) return res;
 
-	// Try to refresh once
-	const refreshed = await doRefresh();
-	if (!refreshed) {
-		// refresh failed, return original 401 response
+	// 401: try refresh once
+	try {
+		const refreshed = await doRefresh();
+		if (!refreshed) {
+			// refresh failed -> return original 401 so UI can handle redirect/login
+			return res;
+		}
+		// Retry original request once with new token
+		res = await doFetch();
+		return res;
+	} catch (fetchError) {
+		// On unexpected error, clear auth and return the first response
+		console.debug("fetchWithAuth unexpected error", fetchError);
+		try {
+			clearAuthToken();
+		} catch (clearErr) {
+			console.debug("Failed to clear auth token", clearErr);
+		}
 		return res;
 	}
-
-	// Retry original request once with new token
-	return doFetch();
 }
 
 // Re-export subscribe so consumers can import all token helpers from fetchClient

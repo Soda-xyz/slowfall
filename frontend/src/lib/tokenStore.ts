@@ -4,6 +4,8 @@
 
 export const KEY = "auth_access_token";
 export const CHANNEL = "slowfall-auth";
+// New: refresh token key stored in localStorage when using refresh-token flow
+export const REFRESH_KEY = "auth_refresh_token";
 type TokenSubscriber = (token: string | null) => void;
 
 // In-memory subscribers for same-tab notifications (important for test envs without BroadcastChannel)
@@ -101,6 +103,34 @@ export function clearToken(): void {
 		} catch {
 			// ignore
 		}
+	} catch {
+		// ignore
+	}
+}
+
+// New: refresh-token helpers
+export function getRefreshToken(): string | null {
+	if (!isWindowAvailable()) return null;
+	try {
+		return localStorage.getItem(REFRESH_KEY);
+	} catch {
+		return null;
+	}
+}
+
+export function setRefreshToken(token: string): void {
+	if (!isWindowAvailable()) return;
+	try {
+		localStorage.setItem(REFRESH_KEY, token);
+	} catch {
+		// ignore
+	}
+}
+
+export function clearRefreshToken(): void {
+	if (!isWindowAvailable()) return;
+	try {
+		localStorage.removeItem(REFRESH_KEY);
 	} catch {
 		// ignore
 	}
