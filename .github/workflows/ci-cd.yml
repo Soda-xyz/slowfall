@@ -300,6 +300,7 @@ jobs:
           else
             FQDN="$SANITIZED.azurewebsites.net"
           fi
+
       - name: Azure login (OIDC) for resolving backend FQDN
         uses: azure/login@v1
         with:
@@ -322,6 +323,31 @@ jobs:
           echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
           echo "Resolved BACKEND_FQDN=$FQDN"
 
+      # NEW: compute SPRING_PROFILE from repository secret DEPLOY_ENV and fail early if missing
+      - name: Compute SPRING_PROFILE from DEPLOY_ENV secret
+        id: compute_spring_profile
+        run: |
+          set -euo pipefail
+          # DEPLOY_ENV should be set as a repository secret to control CI deploy mode (e.g. 'prod' or 'production')
+          DEPLOY="${{ secrets.DEPLOY_ENV || '' }}"
+          if [ -z "$DEPLOY" ]; then
+            echo "ERROR: Repository secret DEPLOY_ENV is not set. Please create a repository secret named DEPLOY_ENV with value 'prod' (or 'production') to ensure CI builds in production mode."
+            exit 1
+          fi
+          case "$DEPLOY" in
+            production|prod)
+              SPRING_PROFILE="prod"
+              ;;
+            development|dev)
+              SPRING_PROFILE="dev"
+              ;;
+            *)
+              SPRING_PROFILE="$DEPLOY"
+              ;;
+          esac
+          echo "SPRING_PROFILE=$SPRING_PROFILE" >> "$GITHUB_ENV"
+          echo "Computed SPRING_PROFILE=$SPRING_PROFILE"
+
       - name: Build & push backend image
         uses: docker/build-push-action@v4
         with:
@@ -333,10 +359,8 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
-            # Allow repo secret DEPLOY_ENV to drive the spring profile. Common values:
-            #  - 'prod' or 'production' -> use 'prod' Spring profile
-            #  - 'dev' or 'development'  -> use the same string (if you choose to support it)
-            SPRING_PROFILES_ACTIVE=${{ secrets.DEPLOY_ENV == 'production' && 'prod' || secrets.DEPLOY_ENV || 'prod' }}
+            # Drive the spring profile in the container image via the DEPLOY_ENV repository secret
+            SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILE }}
 
       - name: Build & push frontend image
         uses: docker/build-push-action@v4
@@ -349,8 +373,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
-            VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
-            VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
+            # Map SPRING profile to Vite mode for the frontend build inside the image; allow DEPLOY_ENV-driven behavior
+            VITE_FRONTEND_ENV=${{ env.SPRING_PROFILE == 'prod' && 'production' || env.SPRING_PROFILE }}
+            VITE_API_BASE_URL=${{ env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '' }}
              # Use resolved BACKEND_FQDN computed earlier via Azure CLI
              BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
@@ -444,11 +469,10 @@ jobs:
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
-          # Decide SPRING_PROFILES_ACTIVE based on DEPLOY_ENV secret when present (default: prod)
-          SPRING_PROFILE=${{ secrets.DEPLOY_ENV == 'production' && 'prod' || secrets.DEPLOY_ENV || 'prod' }}
-          echo "Setting SPRING_PROFILES_ACTIVE=$SPRING_PROFILE and ALLOWED_ORIGINS on backend and frontend Web Apps"
-          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=$SPRING_PROFILE" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
-          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=$SPRING_PROFILE" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          # Use SPRING_PROFILE computed earlier from DEPLOY_ENV secret
+          echo "Setting SPRING_PROFILES_ACTIVE=${SPRING_PROFILE} and ALLOWED_ORIGINS on backend and frontend Web Apps"
+          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
+          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}" "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}"
 
       - name: Restart backend Web App
         run: |

@@ -13,6 +13,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
@@ -182,7 +183,7 @@ public class SecurityConfig {
             HttpSecurity http,
             Converter<Jwt, AbstractAuthenticationToken> jwtAuthConverter,
             DevBypassAuthFilter devBypassAuthFilter,
-            org.springframework.core.env.Environment env)
+            Environment env)
             throws Exception {
         // Ensure Spring Security uses the application's CorsConfigurationSource so CORS headers
         // are applied before security decisions. This registers the CorsFilter inside the
@@ -213,18 +214,17 @@ public class SecurityConfig {
         boolean devBypass = Boolean.parseBoolean(env.getProperty("app.security.dev-bypass", "false"));
 
         http.authorizeHttpRequests(auth -> {
-                    var matcher = auth.requestMatchers(HttpMethod.OPTIONS).permitAll(); // allow preflight
+                    auth.requestMatchers(HttpMethod.OPTIONS).permitAll();
                     if (devBypass) {
                         // In dev with dev-bypass enabled, allow unauthenticated access to auth and health endpoints.
                         // IMPORTANT: do NOT globally permit /api/** here — the DevBypassAuthFilter is responsible
                         // for selectively injecting a dev authentication for the dedicated test endpoints under
                         // /api/protected/**. Granting blanket access to /api/** caused security tests to fail
                         // because unauthenticated requests to regular API endpoints were being allowed.
-                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
+                        auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
-                        // NOTE: do NOT add `auth.requestMatchers("/api/**").permitAll();` here.
                     } else {
-                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
+                        auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
                     }
                     auth.anyRequest().authenticated();
@@ -258,9 +258,8 @@ public class SecurityConfig {
     @org.springframework.context.annotation.Profile({"dev", "pseudo"})
     public UserDetailsService users(
             PasswordEncoder encoder,
-            @org.springframework.beans.factory.annotation.Value("${app.security.dev-username:dev}") String devUsername,
-            @org.springframework.beans.factory.annotation.Value("${app.security.dev-password:devpass}")
-                    String devPassword) {
+            @Value("${app.security.dev-username:dev}") String devUsername,
+            @Value("${app.security.dev-password:devpass}") String devPassword) {
         // in-memory test user for simple username/password login (dev only)
         var uds = new InMemoryUserDetailsManager();
         uds.createUser(User.withUsername(devUsername)
@@ -315,27 +314,27 @@ public class SecurityConfig {
      */
     @Bean
     @org.springframework.context.annotation.Profile("prod")
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "user-secret-name")
+    @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "user-secret-name")
     public UserDetailsService keyVaultUserDetailsService(
             com.azure.core.credential.TokenCredential credential,
             PasswordEncoder encoder,
-            org.springframework.core.env.Environment env,
-            @org.springframework.beans.factory.annotation.Value("${app.security.azure.keyvault.vault-url:}") String vaultUrl) {
+            Environment env,
+            @Value("${app.security.azure.keyvault.vault-url:}") String vaultUrl) {
         if (vaultUrl == null || vaultUrl.trim().isEmpty()) {
-            throw new IllegalStateException("app.security.azure.keyvault.vault-url must be set to read user credentials from Key Vault");
+            throw new IllegalStateException(
+                    "app.security.azure.keyvault.vault-url must be set to read user credentials from Key Vault");
         }
 
-        // Resolve secret name from multiple possible config properties for backwards compatibility
         String userSecretName = env.getProperty("app.security.azure.keyvault.user-secret-name");
         if (userSecretName == null || userSecretName.isBlank()) {
             userSecretName = env.getProperty("app.security.azure.keyvault.credentials-secret-name");
         }
         if (userSecretName == null || userSecretName.isBlank()) {
-            throw new IllegalStateException("Neither 'app.security.azure.keyvault.user-secret-name' nor 'app.security.azure.keyvault.credentials-secret-name' is set; cannot read user credentials from Key Vault");
+            throw new IllegalStateException(
+                    "Neither 'app.security.azure.keyvault.user-secret-name' nor 'app.security.azure.keyvault.credentials-secret-name' is set; cannot read user credentials from Key Vault");
         }
 
-        // Build a SecretClient locally (avoids changing KeyVaultConfig conditions)
-        com.azure.security.keyvault.secrets.SecretClient secretClient = new com.azure.security.keyvault.secrets.SecretClientBuilder()
+        SecretClient secretClient = new com.azure.security.keyvault.secrets.SecretClientBuilder()
                 .vaultUrl(vaultUrl)
                 .credential(credential)
                 .buildClient();
@@ -344,14 +343,14 @@ public class SecurityConfig {
         try {
             secretValue = secretClient.getSecret(userSecretName).getValue();
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to read user secret '" + userSecretName + "' from Key Vault: " + e.getMessage(), e);
+            throw new IllegalStateException(
+                    "Failed to read user secret '" + userSecretName + "' from Key Vault: " + e.getMessage(), e);
         }
 
         String username = null;
         String password = null;
         String passwordHash = null;
 
-        // Try parse JSON first
         try {
             com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
             var node = om.readTree(secretValue);
@@ -365,17 +364,15 @@ public class SecurityConfig {
                 passwordHash = node.get("passwordHash").asText();
             }
         } catch (Exception ignored) {
-            // fallthrough to permissive parsing
         }
 
         if ((username == null || (password == null && passwordHash == null)) && secretValue != null) {
-            // Permissive parsing for non-standard formats like {username:kisse,passwordHash:$2a$...}
-            java.util.regex.Pattern userPattern = java.util.regex.Pattern.compile("username\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?",
-                    java.util.regex.Pattern.CASE_INSENSITIVE);
-            java.util.regex.Pattern passPattern = java.util.regex.Pattern.compile("password\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?",
-                    java.util.regex.Pattern.CASE_INSENSITIVE);
-            java.util.regex.Pattern passHashPattern = java.util.regex.Pattern.compile("passwordHash\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?",
-                    java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern userPattern = java.util.regex.Pattern.compile(
+                    "username\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern passPattern = java.util.regex.Pattern.compile(
+                    "password\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
+            java.util.regex.Pattern passHashPattern = java.util.regex.Pattern.compile(
+                    "passwordHash\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
             java.util.regex.Matcher mu = userPattern.matcher(secretValue);
             if (mu.find()) {
                 username = mu.group(1).trim();
@@ -389,24 +386,27 @@ public class SecurityConfig {
                 password = mp.group(1).trim();
             }
 
-            // If still not found but value looks like plain 'user:pass' without braces
-            if ((username == null || (password == null && passwordHash == null)) && !secretValue.contains("{") && secretValue.contains(":")) {
+            if ((username == null || (password == null && passwordHash == null))
+                    && !secretValue.contains("{")
+                    && secretValue.contains(":")) {
                 int idx = secretValue.indexOf(':');
                 username = secretValue.substring(0, idx).trim();
                 password = secretValue.substring(idx + 1).trim();
             }
         }
 
-        if (username == null || username.isEmpty() || ((password == null || password.isEmpty()) && (passwordHash == null || passwordHash.isEmpty()))) {
-            throw new IllegalStateException("User secret '" + userSecretName + "' in Key Vault does not contain valid credentials (expected JSON with username/password or 'username:password' or a passwordHash)");
+        if (username == null
+                || username.isEmpty()
+                || ((password == null || password.isEmpty()) && (passwordHash == null || passwordHash.isEmpty()))) {
+            throw new IllegalStateException(
+                    "User secret '" + userSecretName
+                            + "' in Key Vault does not contain valid credentials (expected JSON with username/password or 'username:password' or a passwordHash)");
         }
 
         String storedPassword;
         if (passwordHash != null && !passwordHash.isEmpty()) {
-            // Secret already contains an encoded password (bcrypt expected). Use as-is.
             storedPassword = passwordHash;
         } else {
-            // Encode provided plain password using the configured encoder
             storedPassword = encoder.encode(password);
         }
 
@@ -418,9 +418,6 @@ public class SecurityConfig {
         return uds;
     }
 
-    // Generate an ephemeral RSA key pair for JWT signing in dev.
-    // In production, replace this with a key loaded from Vault / KMS and expose JWKS.
-
     /**
      * Generate an ephemeral RSA JWK for signing JWTs.
      *
@@ -431,6 +428,7 @@ public class SecurityConfig {
      * @throws Exception if the key generator cannot be initialised
      */
     @Bean
+    @Profile("dev")
     @ConditionalOnMissingBean(RSAKey.class)
     public RSAKey rsaJwk() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
@@ -463,7 +461,7 @@ public class SecurityConfig {
     public RSAKey rsaKeyFromAzureKeyVault(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
             @Value("${app.security.azure.keyvault.secret-name}") String secretName,
-            SecretClient secretClient) // injected bean
+            SecretClient secretClient)
             throws Exception {
         String pem = secretClient.getSecret(secretName).getValue();
         // Expect PEM containing -----BEGIN PRIVATE KEY----- base64 -----END PRIVATE KEY-----
@@ -507,11 +505,12 @@ public class SecurityConfig {
      * @return an {@link RSAKey} constructed from the key loaded from Azure Key Vault
      */
     @Bean
+    @Primary
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
     public RSAKey rsaKeyFromAzureKeyVaultKey(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
             @Value("${app.security.azure.keyvault.key-name}") String keyName,
-            KeyClient keyClient) // injected bean
+            KeyClient keyClient)
             throws Exception {
         KeyVaultKey key = keyClient.getKey(keyName);
         JsonWebKey jwk = key.getKey();
@@ -573,10 +572,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public org.springframework.core.convert.converter.Converter<
-            org.springframework.security.oauth2.jwt.Jwt,
-            org.springframework.security.authentication.AbstractAuthenticationToken>
-    jwtAuthConverter() {
+    public Converter<org.springframework.security.oauth2.jwt.Jwt, AbstractAuthenticationToken> jwtAuthConverter() {
         org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
                 grantedAuthoritiesConverter =
                 new org.springframework.security.oauth2.server.resource.authentication
@@ -595,7 +591,4 @@ public class SecurityConfig {
                     jwt, authorities);
         };
     }
-
-    // Add Javadoc tags for parameters on methods where Checkstyle expects them
-    // (above methods already documented at their declarations)
 }
