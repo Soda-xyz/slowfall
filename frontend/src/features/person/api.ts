@@ -47,7 +47,7 @@ export async function fetchPilots(signal?: AbortSignal): Promise<Person[]> {
 	if (!res.ok) {
 		if (res.status === 404) {
 			const all = await fetchPerson(signal);
-			return all.filter((p) => p.pilot === true);
+			return all.filter((person) => person.pilot);
 		}
 		throw new Error(`Failed to fetch pilots: ${res.status} ${res.statusText}`);
 	}
@@ -70,7 +70,7 @@ export async function fetchSkydivers(signal?: AbortSignal): Promise<Person[]> {
 	if (!res.ok) {
 		if (res.status === 404) {
 			const all = await fetchPerson(signal);
-			return all.filter((p) => p.skydiver === true);
+			return all.filter((person) => person.skydiver);
 		}
 		throw new Error(`Failed to fetch skydivers: ${res.status} ${res.statusText}`);
 	}

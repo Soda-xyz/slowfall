@@ -29,6 +29,13 @@ public class KeyVaultJwtSigner implements JwtEncoder {
     private final CryptographyClient cryptoClient;
     private final RSAKey rsaPublicJwk;
 
+    /**
+     * Create a KeyVaultJwtSigner using vault URL and key name. This will build
+     * a KeyClient and CryptographyClient using DefaultAzureCredential.
+     *
+     * @param vaultUrl the Key Vault URL
+     * @param keyName  the key name inside the vault
+     */
     public KeyVaultJwtSigner(String vaultUrl, String keyName) {
         KeyClient keyClient = new KeyClientBuilder()
                 .vaultUrl(vaultUrl)
@@ -48,7 +55,12 @@ public class KeyVaultJwtSigner implements JwtEncoder {
         }
     }
 
-    // Test-friendly constructor to inject a mock CryptographyClient and RSA public JWK
+    /**
+     * Test-friendly constructor to inject a mock CryptographyClient and RSA public JWK.
+     *
+     * @param cryptoClient the CryptographyClient used to sign
+     * @param rsaPublicJwk the RSA public JWK for the key id
+     */
     public KeyVaultJwtSigner(CryptographyClient cryptoClient, RSAKey rsaPublicJwk) {
         this.cryptoClient = cryptoClient;
         this.rsaPublicJwk = rsaPublicJwk;

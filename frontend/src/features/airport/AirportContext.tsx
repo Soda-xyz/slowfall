@@ -3,7 +3,6 @@ import { Select } from "@mantine/core";
 import type { SelectProps } from "@mantine/core";
 import type { Airport } from "./types";
 import { fetchAirports } from "./api";
-import LoginControl from "../login/LoginControl";
 
 type AirportContextType = {
 	airports: Airport[];
@@ -96,14 +95,5 @@ export function AirportSelector(props: SelectProps): React.JSX.Element {
 			style={{ minWidth: 220 }}
 			{...props}
 		/>
-	);
-}
-
-export function AirportHeaderControls(props: SelectProps): React.JSX.Element {
-	return (
-		<>
-			<AirportSelector {...props} />
-			<LoginControl />
-		</>
 	);
 }

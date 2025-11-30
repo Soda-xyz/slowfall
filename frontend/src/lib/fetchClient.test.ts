@@ -8,12 +8,12 @@ describe("fetchWithAuth", () => {
 		originalFetch = globalThis.fetch;
 		vi.restoreAllMocks();
 		// clear storage
-		sessionStorage.clear();
+		localStorage.clear();
 	});
 
 	afterEach(() => {
 		if (originalFetch) globalThis.fetch = originalFetch;
-		sessionStorage.clear();
+		localStorage.clear();
 	});
 
 	it("adds Authorization header when auth token is present", async () => {

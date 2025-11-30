@@ -48,6 +48,7 @@ dependencies {
     runtimeOnly 'net.logstash.logback:logstash-logback-encoder:9.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.springframework.security:spring-security-test'
 
 }
 
@@ -74,4 +75,13 @@ tasks.register('bootRunDev', BootRun) {
     classpath = sourceSets.main.runtimeClasspath
     // specify the application's main class so BootRun can start the app
     mainClass.set('xyz.soda.slowfall.SlowfallApplication')
+}
+tasks.register('printHash', JavaExec) {
+    group = 'tools'
+    description = 'Print a BCrypt hash for the given password (use -Ppw=yourPassword)'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'xyz.soda.slowfall.tools.HashGen'
+    if (project.hasProperty('pw')) {
+        args project.property('pw')
+    }
 }

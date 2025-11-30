@@ -10,6 +10,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.web.bind.annotation.*;
+import xyz.soda.slowfall.auth.KeyVaultCredentialService;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -33,6 +34,9 @@ public class AuthController {
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
     private final UserDetailsService userDetailsService;
+    // KeyVaultCredentialService is optional: inject only when Key Vault SecretClient is configured
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private KeyVaultCredentialService credentialService;
 
     private final boolean cookieSecure;
     private final String cookieName;
@@ -79,8 +83,25 @@ public class AuthController {
      */
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody AuthRequest req, HttpServletResponse response) {
-        Authentication auth =
-                authManager.authenticate(new UsernamePasswordAuthenticationToken(req.username(), req.password()));
+        Authentication auth = null;
+        // If KeyVaultCredentialService is present, use it for single-user validation
+        boolean validated = false;
+        try {
+            if (this.credentialService != null) {
+                validated = this.credentialService.validate(req.username(), req.password());
+            }
+        } catch (Exception ignored) {
+            validated = false;
+        }
+
+        if (validated) {
+            // build a minimal Authentication-like subject using username only; authorities will be resolved via UDS
+            var user = userDetailsService.loadUserByUsername(req.username());
+            auth = new UsernamePasswordAuthenticationToken(user.getUsername(), null, user.getAuthorities());
+        } else {
+            // fall back to AuthenticationManager (dev / other flows)
+            auth = authManager.authenticate(new UsernamePasswordAuthenticationToken(req.username(), req.password()));
+        }
 
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -108,7 +129,7 @@ public class AuthController {
         ResponseCookie cookie = ResponseCookie.from(this.cookieName, refresh)
                 .httpOnly(true)
                 .secure(this.cookieSecure)
-                .path("/auth")
+                .path("/web-auth")
                 .maxAge(Duration.ofDays(30))
                 .sameSite(this.cookieSameSite)
                 .build();

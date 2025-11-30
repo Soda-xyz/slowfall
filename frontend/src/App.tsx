@@ -3,6 +3,9 @@ import { AppShell, Group, Tabs, Title } from "@mantine/core";
 import { AirportProvider, AirportSelector } from "./features/airport/AirportContext";
 import { DashboardPage } from "./features/dashboard";
 import { DatabaseControlPage } from "./features/databaseControl";
+import LoginPage from "./features/login/LoginPage";
+import ProtectedRoute from "./features/login/ProtectedRoute";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import "@mantine/core/styles.css";
 
 /**
@@ -15,10 +18,28 @@ import "@mantine/core/styles.css";
  * under `src/features/*`.
  */
 export default function App(): React.JSX.Element {
+	const navigate = useNavigate();
+	const location = useLocation();
+	// Derive the current tab from the location.pathname instead of setting state inside an effect
+	const tab = React.useMemo(() => {
+		const path = location.pathname;
+		if (path.startsWith("/database")) return "database";
+		if (path.startsWith("/login")) return "login";
+		return "dashboard";
+	}, [location.pathname]);
+
 	return (
 		<AirportProvider>
 			<AppShell header={{ height: 64 }} padding="md">
-				<Tabs defaultValue="dashboard">
+				<Tabs
+					value={tab}
+					onChange={(v: string | null) => {
+						if (!v) return;
+						if (v === "dashboard") navigate("/");
+						else if (v === "database") navigate("/database");
+						else if (v === "login") navigate("/login");
+					}}
+				>
 					<AppShell.Header>
 						<Group justify="space-between" p="md" align="center">
 							<Group>
@@ -27,8 +48,10 @@ export default function App(): React.JSX.Element {
 								<Tabs.List>
 									<Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
 									<Tabs.Tab value="database">Database</Tabs.Tab>
+									<Tabs.Tab value="login">Login</Tabs.Tab>
 								</Tabs.List>
 							</Group>
+
 							<Group>
 								<AirportSelector />
 							</Group>
@@ -36,12 +59,18 @@ export default function App(): React.JSX.Element {
 					</AppShell.Header>
 
 					<AppShell.Main>
-						<Tabs.Panel value="dashboard" pt="sm">
-							<DashboardPage />
-						</Tabs.Panel>
-						<Tabs.Panel value="database" pt="sm">
-							<DatabaseControlPage />
-						</Tabs.Panel>
+						<Routes>
+							<Route path="/" element={<DashboardPage />} />
+							<Route
+								path="/database"
+								element={
+									<ProtectedRoute>
+										<DatabaseControlPage />
+									</ProtectedRoute>
+								}
+							/>
+							<Route path="/login" element={<LoginPage />} />
+						</Routes>
 					</AppShell.Main>
 				</Tabs>
 			</AppShell>

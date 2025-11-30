@@ -24,6 +24,7 @@ and secrets, and `README_CLOUD.md` for cloud deployment and Key Vault setup.
 - [MDC (traceId / userId)](#mdc-traceid--userid)
 - [Where to look in the repository](#where-to-look-in-the-repository)
 - [Environment & Deployment](#)
+- [Azure Front Door & Key Vault TLS](#azure-front-door--key-vault-tls)
 
 ## Automatic method-level logging (LoggingAspect)
 
@@ -91,3 +92,79 @@ These MDC values are included in JSON logs by the logback config.
 
 **Security note:** Do not commit secrets into the repository. See `README_ENV.md` for details on environment variables,
 keystores, and CI/CD secret names.
+
+## Azure Front Door & Key Vault TLS
+
+Recommended deployment pattern: terminate public TLS at Azure Front Door and use Azure Key Vault as the single source of
+truth for certificates and signing keys.
+
+Why this repo follows that pattern
+
+- Centralizes certificate lifecycle (provisioning and rotation) at the CDN/edge layer (Front Door).
+- Avoids shipping server keystores inside container images or environment variables.
+- Keeps JWT signing keys and token lifecycle in Key Vault (single source of truth).
+
+High-level steps
+
+1. Create an Azure Front Door (Standard/Premium) profile and add a backend pool that points to your application (App
+   Service, AKS ingress, VM, or IP).
+2. Add a custom domain to Front Door and validate ownership (CNAME DNS validation).
+3. Configure HTTPS for the custom domain:
+    - Option A (recommended): Use Front Door-managed certificates (Front Door issues and auto-renews TLS certs).
+    - Option B: Use a certificate stored in Key Vault (upload PFX to Key Vault and give Front Door access to read the
+      secret/certificate). See Front Door docs for Key Vault integration.
+4. Configure routing rules and WAF policies as needed.
+5. Test end-to-end and switch DNS to point to Front Door.
+
+App configuration notes (what we changed in this repo)
+
+- Production configuration disables in-app server TLS. See `src/main/resources/application-prod.properties`:
+
+```properties
+# TLS is terminated at Azure Front Door
+server.ssl.enabled=false
+server.port=${PORT:8080}
+```
+
+- Key Vault is used for JWT signing keys. Relevant Spring properties (set via environment or
+  `application-*.properties`):
+
+    - `app.security.azure.keyvault.vault-url` — e.g. `https://{your-vault}.vault.azure.net/`
+    - `app.security.azure.keyvault.key-name` — name of the Key Vault Key used for signing (preferred)
+    - `app.security.azure.keyvault.secret-name` — alternative: secret containing PEM private key (if you store PEM in
+      Secrets)
+    - `AZURE_KEYVAULT_ENABLE` — set to `true` in production to enable Key Vault-backed beans and behavior
+
+Authentication to Key Vault
+
+- In Azure: prefer Managed Identity for the application (no client secret required). Grant the identity `get`
+  permissions on keys/secrets/certificates as needed.
+- Local dev: DefaultAzureCredential will fallback to developer credentials (Azure CLI) or use these env vars as a
+  service principal:
+    - `azure_client_id`
+    - `azure_client_secret`
+    - `azure_tenant_id`
+
+Health checks and probes
+
+- Front Door health probe path should be configured (e.g., `/actuator/health`) and must be accessible without
+  authentication or with a probe-specific header the backend accepts.
+- The container image `HEALTHCHECK` remains `http://localhost:${PORT}/actuator/health` for container runtime monitoring.
+
+Security & rotation notes
+
+- JWT signing keys must still be rotated and published to a JWKS endpoint or available to resource servers via Key
+  Vault.
+- If you need end-to-end TLS (Front Door -> backend HTTPS), you must provide a backend certificate (Key Vault or local)
+  and configure the backend to trust it. This reintroduces keystore handling inside the app; prefer Front Door-managed
+  certs unless your policy requires otherwise.
+
+Useful docs
+
+- Azure Front Door: https://learn.microsoft.com/azure/frontdoor/
+- Front Door HTTPS & Key Vault
+  integration: https://learn.microsoft.com/azure/frontdoor/standard-premium/secure-frontend-using-ssl
+- Front Door + Key Vault
+  certificates: https://learn.microsoft.com/azure/frontdoor/standard-premium/how-to-front-door-use-certificate-in-key-vault
+- Spring Boot SSL config (why server.ssl.* is safe to disable when using Front
+  Door): https://docs.spring.io/spring-boot/docs/3.5.7/reference/htmlsingle/#howto-configure-ssl

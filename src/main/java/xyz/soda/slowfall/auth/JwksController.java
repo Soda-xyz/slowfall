@@ -22,10 +22,20 @@ public class JwksController {
 
     private final RSAKey rsaKey;
 
+    /**
+     * Create a new JwksController.
+     *
+     * @param rsaKey the RSAKey containing the public key to expose
+     */
     public JwksController(RSAKey rsaKey) {
         this.rsaKey = rsaKey;
     }
 
+    /**
+     * Return the JWKS representation of the application's public key.
+     *
+     * @return a JSON object representing the JWKS set
+     */
     @GetMapping(path = "/jwks.json", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> jwks() {
         JWKSet set = new JWKSet(rsaKey.toPublicJWK());

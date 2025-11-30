@@ -38,6 +38,14 @@ Required production environment variables (exact names and examples)
     - Where to set: App Service app setting (Name = `APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST`).
     - Spring property mapping: `app.security.azure.keyvault.fail-fast` (true/false)
 
+6. APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME
+    - Purpose: Name of the Key Vault Secret that contains the single allowed username and BCrypt password hash (JSON or
+      separate secret). Default: `slowfall-credentials`.
+    - Example (JSON value): `{"username":"alice","passwordHash":"$2a$10$..."}`
+    - Where to set: App Service application setting (Name = `APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME`) or
+      set via the `app.security.azure.keyvault.credentials-secret-name` property.
+    - Spring property mapping: `app.security.azure.keyvault.credentials-secret-name`
+
 CI / GitHub Actions secrets (exact names)
 
 These secrets are required by the GitHub Actions workflow to build/push images and perform Azure CLI deployment steps.
@@ -75,6 +83,9 @@ This section maps each environment variable and CI/GitHub Actions secret to the 
 
 - APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST — Backend (optional). Controls whether the backend should fail startup if Key
   Vault cannot be reached; default behavior depends on application configuration.
+
+- APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME — Backend (required). Name of the Key Vault Secret containing the
+  credentials for the backend service.
 
 CI / GitHub Actions secrets (used by the deploy pipeline only)
 

@@ -157,9 +157,18 @@ public class AuthController {
         public String username;
         public String password;
 
+        /**
+         * Default constructor for frameworks.
+         */
         public LoginRequest() {
         }
 
+        /**
+         * Create a login request with username and password.
+         *
+         * @param username the username
+         * @param password the password
+         */
         public LoginRequest(String username, String password) {
             this.username = username;
             this.password = password;
@@ -175,6 +184,14 @@ public class AuthController {
         public String refreshToken;
         public long refreshTokenExpiresAt;
 
+        /**
+         * Create a TokenResponse.
+         *
+         * @param accessToken           access token value
+         * @param accessTokenExpiresAt  access token expiry epoch seconds
+         * @param refreshToken          refresh token value
+         * @param refreshTokenExpiresAt refresh token expiry epoch seconds
+         */
         public TokenResponse(
                 String accessToken, long accessTokenExpiresAt, String refreshToken, long refreshTokenExpiresAt) {
             this.accessToken = accessToken;
@@ -190,9 +207,17 @@ public class AuthController {
     public static class RefreshRequest {
         public String refreshToken;
 
+        /**
+         * Default constructor for frameworks.
+         */
         public RefreshRequest() {
         }
 
+        /**
+         * Create a refresh request with the provided refresh token.
+         *
+         * @param refreshToken the refresh token string
+         */
         public RefreshRequest(String refreshToken) {
             this.refreshToken = refreshToken;
         }

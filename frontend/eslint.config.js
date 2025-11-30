@@ -104,6 +104,17 @@ export default defineConfig([
 			"@typescript-eslint/explicit-module-boundary-types": ["warn"],
 			// Validate TSDoc syntax (warn-level as requested)
 			"tsdoc/syntax": ["warn"],
+			// Disallow single-letter variable names in most contexts to improve readability.
+			// Allows common loop indices and error variables: e, E, i, j, k.
+			// This uses ESLint core rule `id-length` (https://eslint.org/docs/latest/rules/id-length).
+			"id-length": [
+				"warn",
+				{
+					min: 2,
+					exceptions: ["e", "E", "i", "j", "k"],
+					properties: "never",
+				},
+			],
 		},
 		settings: {
 			react: { version: "detect" },

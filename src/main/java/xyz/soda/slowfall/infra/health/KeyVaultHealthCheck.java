@@ -10,6 +10,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
  * Active when 'app.security.azure.keyvault.key-name' is configured.
  */
 @Component
+@Profile("!dev")
 @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
 public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
 
@@ -27,6 +29,10 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
 
     /**
      * Production constructor used by Spring. Builds a KeyClient using DefaultAzureCredential.
+     *
+     * @param vaultUrl the Key Vault URL
+     * @param keyName the name of the key to check
+     * @param failFast whether to throw on startup when key is unavailable
      */
     public KeyVaultHealthCheck(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
@@ -44,6 +50,11 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
     /**
      * Test-friendly constructor that accepts an injected KeyClient. Use this in unit tests to
      * provide a mock KeyClient and control fail-fast behavior.
+     *
+     * @param keyClient the injected KeyClient to use for operations
+     * @param vaultUrl the Key Vault URL
+     * @param keyName the key name to check
+     * @param failFast whether to throw on startup when key is unavailable
      */
     public KeyVaultHealthCheck(KeyClient keyClient, String vaultUrl, String keyName, boolean failFast) {
         this.vaultUrl = vaultUrl;

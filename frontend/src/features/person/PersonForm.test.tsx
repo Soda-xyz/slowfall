@@ -34,7 +34,7 @@ test("renders PersonForm and submits with valid data", async () => {
 
 	fireEvent.click(submit);
 
-	await new Promise((r) => setTimeout(r, 50));
+	await new Promise((resolve) => setTimeout(resolve, 50));
 
 	expect(onCreated).toHaveBeenCalled();
 });

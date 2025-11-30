@@ -57,3 +57,4 @@ yarn-debug.log*
 
 # Optional local-only excludes: add to .git/info/exclude if you prefer machine-only ignores
 # .idea-local/
+/LocalFiles/

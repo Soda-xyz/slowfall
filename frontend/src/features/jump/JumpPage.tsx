@@ -93,10 +93,10 @@ export default function JumpPage(): React.JSX.Element {
 		return () => window.removeEventListener("jumpCreated", handler as EventListener);
 	}, []);
 
-	const onCreated = async (j: Jump) => {
-		console.debug("JumpPage: onCreated received:", j);
+	const onCreated = async (createdJump: Jump) => {
+		console.debug("JumpPage: onCreated received:", createdJump);
 		setJumps((prev) => {
-			const next = [...prev, j];
+			const next = [...prev, createdJump];
 			console.debug("JumpPage: updated jumps array:", next);
 			return next;
 		});
@@ -188,10 +188,10 @@ export default function JumpPage(): React.JSX.Element {
 								placeholder="Search person"
 								searchable
 								value={selectedPersonId ?? undefined}
-								onChange={(v) => setSelectedPersonId(v ?? null)}
-								data={(actionMode === "pilot" ? pilots : skydivers).map((p) => ({
-									value: p.id,
-									label: p.name,
+								onChange={(value) => setSelectedPersonId(value ?? null)}
+								data={(actionMode === "pilot" ? pilots : skydivers).map((person) => ({
+									value: person.id,
+									label: person.name,
 								}))}
 							/>
 							<Group mt="xs">

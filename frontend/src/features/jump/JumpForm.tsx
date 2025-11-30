@@ -173,7 +173,7 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 			// clear time and altitude for the next jump but keep the selected craft
 			setJumpTime(null);
 			// force remount of TimePicker so its internal input is reset visually
-			setTimeKey((k) => k + 1);
+			setTimeKey((prevKey) => prevKey + 1);
 			setAltitudeFeet("");
 			setPilotId(null);
 			if (onCreated) {

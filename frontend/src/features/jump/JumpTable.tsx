@@ -20,16 +20,16 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props): 
 	const rows = jumps
 		.slice()
 		.sort((a, b) => new Date(a.jumpTime).getTime() - new Date(b.jumpTime).getTime())
-		.map((j) => (
-			<tr key={j.id}>
-				<td>{new Date(j.jumpTime).toLocaleString()}</td>
-				<td>{j.altitudeFeet}</td>
+		.map((jump) => (
+			<tr key={jump.id}>
+				<td>{new Date(jump.jumpTime).toLocaleString()}</td>
+				<td>{jump.altitudeFeet}</td>
 				<td>
 					<Group>
-						<Button size="xs" onClick={() => onAddSkydiver?.(j.id)}>
+						<Button size="xs" onClick={() => onAddSkydiver?.(jump.id)}>
 							Add skydiver
 						</Button>
-						<Button size="xs" variant="outline" onClick={() => onAddPilot?.(j.id)}>
+						<Button size="xs" variant="outline" onClick={() => onAddPilot?.(jump.id)}>
 							Add pilot
 						</Button>
 					</Group>
@@ -38,16 +38,16 @@ export default function JumpTable({ jumps, onAddSkydiver, onAddPilot }: Props): 
 					<div>
 						<strong>Skydivers:</strong>
 						<ul>
-							{(j.skydivers ?? []).map((p) => (
-								<li key={p.id}>{p.name}</li>
+							{(jump.skydivers ?? []).map((person) => (
+								<li key={person.id}>{person.name}</li>
 							))}
 						</ul>
 					</div>
 					<div>
 						<strong>Pilots:</strong>
 						<ul>
-							{(j.pilots ?? []).map((p) => (
-								<li key={p.id}>{p.name}</li>
+							{(jump.pilots ?? []).map((person) => (
+								<li key={person.id}>{person.name}</li>
 							))}
 						</ul>
 					</div>

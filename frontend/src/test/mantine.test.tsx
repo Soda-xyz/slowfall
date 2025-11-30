@@ -17,8 +17,8 @@ describe("MantineProvider + theme integration", () => {
 
 	test("useMantineTheme provides the configured theme", () => {
 		const TestComp: React.FC = () => {
-			const t = useMantineTheme();
-			return <span data-testid="primary">{String(t.primaryColor)}</span>;
+			const theme = useMantineTheme();
+			return <span data-testid="primary">{String(theme.primaryColor)}</span>;
 		};
 
 		renderWithMantine(<TestComp />);

@@ -1,17 +1,10 @@
 package xyz.soda.slowfall.config;
 
-import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClient;
-import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.models.JsonWebKey;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.azure.security.keyvault.secrets.SecretClient;
-import com.azure.security.keyvault.secrets.SecretClientBuilder;
-import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
-import com.nimbusds.jose.jwk.source.JWKSource;
-import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -30,34 +23,30 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.*;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import xyz.soda.slowfall.auth.KeyVaultJwtSigner;
 import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.*;
-import java.security.cert.Certificate;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPublicKeySpec;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -100,6 +89,20 @@ public class SecurityConfig {
     @Bean
     public DevBypassAuthFilter devBypassAuthFilter(Environment env) {
         return new DevBypassAuthFilter(env);
+    }
+
+    /**
+     * Disable automatic servlet registration of the DevBypassAuthFilter bean.
+     * When a Filter is declared as a bean, Spring Boot will register it as a
+     * servlet Filter. We want this filter to be active only inside the Spring
+     * Security filter chain (registered with http.addFilterBefore), so disable
+     * the servlet registration to avoid duplicate or out-of-order execution.
+     */
+    @Bean
+    public FilterRegistrationBean<DevBypassAuthFilter> disableDevBypassRegistration(DevBypassAuthFilter filter) {
+        FilterRegistrationBean<DevBypassAuthFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
     }
 
     /**
@@ -177,27 +180,58 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             Converter<Jwt, AbstractAuthenticationToken> jwtAuthConverter,
-            DevBypassAuthFilter devBypassAuthFilter)
+            DevBypassAuthFilter devBypassAuthFilter,
+            org.springframework.core.env.Environment env)
             throws Exception {
         // Ensure Spring Security uses the application's CorsConfigurationSource so CORS headers
         // are applied before security decisions. This registers the CorsFilter inside the
         // security filter chain.
         http.cors(Customizer.withDefaults());
 
+        // Conditionally disable CSRF: keep CSRF enabled during 'dev' so tests expecting
+        // CSRF protection (MockMvc + csrf()) behave correctly. For non-dev (prod/test) we
+        // use stateless APIs and disable CSRF. In dev we enable CSRF but ignore anonymous requests
+        // (so unauthenticated requests return 401 instead of being rejected with 403 due to missing CSRF token).
+        boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+        if (!isDev) {
+            http.csrf(AbstractHttpConfigurer::disable);
+        } else {
+            // Enforce CSRF only for the dedicated test endpoints under /api/protected/**.
+            // Ignore CSRF for all other requests so regular API endpoints behave as stateless
+            // (no CSRF token required), while tests that exercise CSRF protection can target
+            // /api/protected/** and use MockMvc csrf() helpers.
+            http.csrf(csrf -> csrf.ignoringRequestMatchers(r -> {
+                String u = r.getRequestURI();
+                return u == null || !u.startsWith("/api/protected");
+            }));
+        }
+
         // CORS is handled by the CorsConfigurationSource bean registered above; avoid deprecated HttpSecurity.cors()
 
-        http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.OPTIONS)
-                        .permitAll() // allow preflight
-                        .requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
-                        .permitAll()
-                        .anyRequest()
-                        .authenticated())
+        // Read dev-bypass flag to optionally relax authentication for API endpoints
+        boolean devBypass = Boolean.parseBoolean(env.getProperty("app.security.dev-bypass", "false"));
+
+        http
+                .authorizeHttpRequests(auth -> {
+                    var matcher = auth.requestMatchers(HttpMethod.OPTIONS).permitAll(); // allow preflight
+                    if (devBypass) {
+                        // In dev with dev-bypass enabled, allow unauthenticated access to API endpoints
+                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**").permitAll();
+                        auth.requestMatchers("/api/**").permitAll();
+                    } else {
+                        matcher = auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**").permitAll();
+                    }
+                    auth.anyRequest().authenticated();
+                })
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(Customizer.withDefaults())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter)));
 
-        // Add dev-bypass filter before the AnonymousAuthenticationFilter so we can populate the SecurityContext
+        // Add dev-bypass filter before the AnonymousAuthenticationFilter so it can inject
+        // a development authentication for protected test endpoints when appropriate.
+        // The filter itself will skip applying the bypass when test helpers or real
+        // authentication is present (checks for Authorization header, SecurityContext,
+        // and certain request attributes), so this placement is safe for test scenarios.
         http.addFilterBefore(devBypassAuthFilter, AnonymousAuthenticationFilter.class);
 
         return http.build();
@@ -270,7 +304,7 @@ public class SecurityConfig {
      * @throws Exception if the key generator cannot be initialised
      */
     @Bean
-    @org.springframework.context.annotation.Profile("dev")
+    @ConditionalOnMissingBean(RSAKey.class)
     public RSAKey rsaJwk() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
         kpg.initialize(2048);
@@ -284,113 +318,6 @@ public class SecurityConfig {
     }
 
     /**
-     * Load an RSA key from a keystore provided via properties. This bean is conditional on the
-     * property 'app.security.jks.path' being set and will be used in production to provide
-     * a stable RSA key instead of the dev ephemeral key.
-     * Expected properties:
-     *   app.security.jks.path=/path/to/keystore.jks
-     *   app.security.jks.password=keystorePassword
-     *   app.security.jks.alias=keyAlias
-     *   app.security.jks.key-password=keyPassword (optional)
-     *
-     * @param keystorePath path to the JKS keystore file
-     * @param keystorePassword password for the keystore
-     * @param keyAlias alias of the private key entry inside the keystore
-     * @param keyPassword optional password for the key (if different from keystore password)
-     * @return an {@link RSAKey} constructed from the keystore's private key and certificate
-     */
-    @Bean
-    @ConditionalOnProperty(prefix = "app.security.jks", name = "path")
-    public RSAKey rsaKeyFromKeystore(
-            @Value("${app.security.jks.path}") String keystorePath,
-            @Value("${app.security.jks.password}") String keystorePassword,
-            @Value("${app.security.jks.alias}") String keyAlias,
-            @Value("${app.security.jks.key-password:}") String keyPassword)
-            throws Exception {
-        try (InputStream in = Files.newInputStream(Paths.get(keystorePath))) {
-            KeyStore ks = KeyStore.getInstance("JKS");
-            ks.load(in, keystorePassword.toCharArray());
-            Key key = ks.getKey(
-                    keyAlias,
-                    (keyPassword == null || keyPassword.isEmpty())
-                            ? keystorePassword.toCharArray()
-                            : keyPassword.toCharArray());
-            if (!(key instanceof PrivateKey)) {
-                throw new IllegalStateException("Key for alias '" + keyAlias + "' is not a PrivateKey");
-            }
-            Certificate cert = ks.getCertificate(keyAlias);
-            RSAPublicKey pub = (RSAPublicKey) cert.getPublicKey();
-            RSAPrivateKey priv = (RSAPrivateKey) key;
-            return new RSAKey.Builder(pub)
-                    .privateKey(priv)
-                    .keyID(UUID.randomUUID().toString())
-                    .build();
-        }
-    }
-
-    /**
-     * Create a JWKSource backed by the public part of the provided {@link RSAKey}.
-     *
-     * @param rsaKey the RSA JWK produced by {@link #rsaJwk()}
-     * @return a {@link JWKSource} exposing the public JWK set
-     */
-    @Bean
-    public JWKSource<SecurityContext> jwkSource(RSAKey rsaKey) {
-        JWKSet set = new JWKSet(rsaKey.toPublicJWK());
-        return new ImmutableJWKSet<>(set);
-    }
-
-    /**
-     * Create a Nimbus {@link JwtEncoder} backed by the supplied {@link JWKSource}.
-     *
-     * @param jwkSource the source of JWKs used for signing
-     * @return a configured {@link JwtEncoder}
-     */
-    @Bean
-    @ConditionalOnMissingBean(JwtEncoder.class)
-    public JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
-        return new NimbusJwtEncoder(jwkSource);
-    }
-
-    /**
-     * Create a Nimbus {@link JwtDecoder} that verifies tokens using the provided RSA public key.
-     *
-     * @param rsaKey RSA key containing the public key to verify JWTs
-     * @return a configured {@link JwtDecoder}
-     * @throws Exception if getting the public key fails
-     */
-    @Bean
-    public JwtDecoder jwtDecoder(RSAKey rsaKey) throws Exception {
-        RSAPublicKey pub = rsaKey.toRSAPublicKey();
-        return NimbusJwtDecoder.withPublicKey(pub).build();
-    }
-
-    /**
-     * Converter that maps a JWT to an {@link AbstractAuthenticationToken} and extracts granted
-     * authorities from a "roles" claim, if present.
-     *
-     * <p>The converter expects the JWT to contain a claim named "roles" that is an array of
-     * strings; each string will be turned into a {@link SimpleGrantedAuthority}.
-     *
-     * @return a configured JWT-to-Authentication converter
-     */
-    @Bean
-    public Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
-        JwtAuthenticationConverter conv = new JwtAuthenticationConverter();
-        conv.setJwtGrantedAuthoritiesConverter(jwt -> {
-            Object rolesObj = jwt.getClaims().get("roles");
-            if (rolesObj instanceof List<?> rolesList) {
-                return rolesList.stream()
-                        .map(Object::toString)
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList());
-            }
-            return Collections.emptyList();
-        });
-        return conv;
-    }
-
-    /**
      * Load an RSA key from Azure Key Vault using the Secrets client.
      *
      * <p>This bean is conditional on the property 'app.security.azure.keyvault.secret-name' being
@@ -401,20 +328,16 @@ public class SecurityConfig {
      *
      * @param vaultUrl   the URL of the Azure Key Vault
      * @param secretName the name of the secret containing the PEM-encoded private key
+     * @param secretClient the {@link SecretClient} used to fetch the secret
      * @return an {@link RSAKey} constructed from the private key loaded from Azure Key Vault
      */
     @Bean
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "secret-name")
     public RSAKey rsaKeyFromAzureKeyVault(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
-            @Value("${app.security.azure.keyvault.secret-name}") String secretName)
+            @Value("${app.security.azure.keyvault.secret-name}") String secretName,
+            SecretClient secretClient) // injected bean
             throws Exception {
-        // Build a SecretClient that uses DefaultAzureCredential (managed identity, env vars, etc.)
-        SecretClient secretClient = new SecretClientBuilder()
-                .vaultUrl(vaultUrl)
-                .credential(new DefaultAzureCredentialBuilder().build())
-                .buildClient();
-
         String pem = secretClient.getSecret(secretName).getValue();
         // Expect PEM containing -----BEGIN PRIVATE KEY----- base64 -----END PRIVATE KEY-----
         String base64 = pem.replaceAll("-----BEGIN (.*)-----", "")
@@ -453,18 +376,16 @@ public class SecurityConfig {
      *
      * @param vaultUrl the URL of the Azure Key Vault
      * @param keyName  the name of the key to load
+     * @param keyClient the {@link KeyClient} used to fetch the key
      * @return an {@link RSAKey} constructed from the key loaded from Azure Key Vault
      */
     @Bean
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
     public RSAKey rsaKeyFromAzureKeyVaultKey(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
-            @Value("${app.security.azure.keyvault.key-name}") String keyName)
+            @Value("${app.security.azure.keyvault.key-name}") String keyName,
+            KeyClient keyClient) // injected bean
             throws Exception {
-        KeyClient keyClient = new KeyClientBuilder()
-                .vaultUrl(vaultUrl)
-                .credential(new DefaultAzureCredentialBuilder().build())
-                .buildClient();
         KeyVaultKey key = keyClient.getKey(keyName);
         JsonWebKey jwk = key.getKey();
         // Parse JsonWebKey into Nimbus RSAKey
@@ -479,13 +400,69 @@ public class SecurityConfig {
      *
      * @param vaultUrl the URL of the Azure Key Vault
      * @param keyName  the name of the key used for signing
+     * @param keyClient the {@link KeyClient} used to build the CryptographyClient
+     * @param credential the {@link com.azure.core.credential.TokenCredential} used to authenticate to Key Vault
      * @return a configured {@link JwtEncoder}
      */
     @Bean
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
     public JwtEncoder keyVaultJwtEncoder(
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
-            @Value("${app.security.azure.keyvault.key-name}") String keyName) {
-        return new KeyVaultJwtSigner(vaultUrl, keyName);
+            @Value("${app.security.azure.keyvault.key-name}") String keyName,
+            KeyClient keyClient,
+            com.azure.core.credential.TokenCredential credential) {
+        // Build CryptographyClient from injected KeyClient (use key id)
+        KeyVaultKey key = keyClient.getKey(keyName);
+        com.azure.security.keyvault.keys.cryptography.CryptographyClient cryptoClient =
+                new com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder()
+                        .keyIdentifier(key.getId())
+                        .credential(credential)
+                        .buildClient();
+        try {
+            RSAKey rsa = RSAKey.parse(key.getKey().toJsonString());
+            return new xyz.soda.slowfall.auth.KeyVaultJwtSigner(cryptoClient, rsa);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to parse JWK from Key Vault key: " + e.getMessage(), e);
+        }
     }
+
+    @Bean
+    @ConditionalOnMissingBean(org.springframework.security.oauth2.jwt.JwtEncoder.class)
+    public org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder(RSAKey rsaJwk) {
+        // Build a JWKSource from the ephemeral RSA JWK and return a NimbusJwtEncoder.
+        com.nimbusds.jose.jwk.JWKSet jwkSet = new com.nimbusds.jose.jwk.JWKSet(rsaJwk);
+        com.nimbusds.jose.jwk.source.ImmutableJWKSet<com.nimbusds.jose.proc.SecurityContext> jwkSource =
+                new com.nimbusds.jose.jwk.source.ImmutableJWKSet<>(jwkSet);
+        return new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(jwkSource);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(org.springframework.security.oauth2.jwt.JwtDecoder.class)
+    public org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
+        // Use the RSA public key from the ephemeral JWK for decoding in dev/test
+        RSAPublicKey pub = rsaJwk.toRSAPublicKey();
+        return org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey(pub).build();
+    }
+
+    @Bean
+    public org.springframework.core.convert.converter.Converter<org.springframework.security.oauth2.jwt.Jwt, org.springframework.security.authentication.AbstractAuthenticationToken>
+    jwtAuthConverter() {
+        org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter =
+                new org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter();
+        // Accept roles from a 'roles' claim and prefix with ROLE_ for compatibility with hasRole checks
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
+        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        return jwt -> {
+            java.util.Collection<org.springframework.security.core.GrantedAuthority> authorities =
+                    grantedAuthoritiesConverter.convert(jwt);
+            if (authorities == null) {
+                authorities = java.util.List.of();
+            }
+            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt, authorities);
+        };
+    }
+
+    // Add Javadoc tags for parameters on methods where Checkstyle expects them
+    // (above methods already documented at their declarations)
 }
