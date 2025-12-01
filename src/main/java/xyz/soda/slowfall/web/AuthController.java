@@ -141,11 +141,24 @@ public class AuthController {
      * Exchange a refresh token cookie for a new access token.
      *
      * @param refreshToken the refresh token cookie value (can be null)
+     * @param body optional JSON body (fallback) containing {"refresh_token": "..."}
      * @return 200 with a JSON map containing access_token on success, or 401 on failure
      */
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, String>> refresh(
-            @CookieValue(name = "refresh_token", required = false) String refreshToken) {
+            @CookieValue(name = "refresh_token", required = false) String refreshToken,
+            @RequestBody(required = false) Map<String, String> body) {
+        // If cookie is absent, allow fallback to a JSON body (cookieless clients)
+        if (refreshToken == null && body != null) {
+            try {
+                String maybe = body.get("refresh_token");
+                if (maybe != null && !maybe.isBlank()) {
+                    refreshToken = maybe;
+                }
+            } catch (Exception ignored) {
+                // ignore and fall through to the 401 below
+            }
+        }
         if (refreshToken == null) {
             return ResponseEntity.status(401).build();
         }

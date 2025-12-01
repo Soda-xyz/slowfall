@@ -67,23 +67,28 @@ async function doRefresh(): Promise<boolean> {
 
 			const base = apiBase();
 			const url = `${base}/web-auth/refresh`;
+			// Build headers only when we will send a JSON body. Sending
+			// 'Content-Type: application/json' without a body (or when relying on cookies)
+			// triggers a CORS preflight (OPTIONS) in browsers. Many production front-doors
+			// or proxies (nginx) may not handle OPTIONS for this path and return 405.
+			const headers: Record<string, string> = {};
 			const init: RequestInit = {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				// For a cookieless JWT flow we DO NOT send credentials/cookies here. The refresh
-				// request will include the refresh token in the JSON body (if available).
 				// The backend issues an HttpOnly refresh cookie; include credentials so the
 				// browser will send that cookie on refresh requests.
 				credentials: "include",
 			};
 
-			// Only include a JSON body when we actually have a refresh token stored.
+			// Only include a JSON body and Content-Type header when we actually have a stored refresh token.
 			if (refreshToken) {
+				headers["Content-Type"] = "application/json";
 				init.body = JSON.stringify({ refresh_token: refreshToken });
-			} else {
-				// If there's no refresh token, we still perform a refresh attempt only because
-				// some server setups may rely on server-side state. In our cookieless flow
-				// this usually will fail and the client will clear tokens.
+			}
+
+			if (Object.keys(headers).length > 0) {
+				// assign headers only when needed
+				// @ts-ignore - RequestInit.headers accepts Record<string,string> in practice
+				init.headers = headers;
 			}
 
 			const res = await fetch(url, init);
