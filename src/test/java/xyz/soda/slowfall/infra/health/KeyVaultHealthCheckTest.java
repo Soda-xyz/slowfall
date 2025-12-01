@@ -1,13 +1,13 @@
 package xyz.soda.slowfall.infra.health;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.health.Status;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class KeyVaultHealthCheckTest {
 

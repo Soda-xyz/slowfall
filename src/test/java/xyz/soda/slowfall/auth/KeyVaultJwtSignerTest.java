@@ -1,20 +1,19 @@
 package xyz.soda.slowfall.auth;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.*;
+
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.models.SignResult;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.util.Base64URL;
-import org.junit.jupiter.api.Test;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 
 public class KeyVaultJwtSignerTest {
 
@@ -23,7 +22,7 @@ public class KeyVaultJwtSignerTest {
         // Prepare mock CryptographyClient and SignResult
         CryptographyClient crypto = mock(CryptographyClient.class);
         SignResult sr = mock(SignResult.class);
-        byte[] fakeSignature = new byte[]{0x01, 0x02, 0x03};
+        byte[] fakeSignature = new byte[] {0x01, 0x02, 0x03};
         when(sr.getSignature()).thenReturn(fakeSignature);
         when(crypto.sign(any(), any(byte[].class))).thenReturn(sr);
 

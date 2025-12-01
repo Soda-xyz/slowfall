@@ -1,6 +1,10 @@
 package xyz.soda.slowfall.web;
 
 import jakarta.servlet.http.HttpServletResponse;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -11,11 +15,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.web.bind.annotation.*;
 import xyz.soda.slowfall.auth.KeyVaultCredentialService;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Controller exposing authentication endpoints for issuing access and refresh tokens.

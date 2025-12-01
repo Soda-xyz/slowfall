@@ -1,17 +1,16 @@
 package xyz.soda.slowfall.config;
 
-import com.azure.security.keyvault.secrets.SecretClient;
-import com.azure.security.keyvault.secrets.models.KeyVaultSecret;
-import com.nimbusds.jose.jwk.RSAKey;
-import org.junit.jupiter.api.Test;
-
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.util.Base64;
-
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import com.azure.security.keyvault.secrets.SecretClient;
+import com.azure.security.keyvault.secrets.models.KeyVaultSecret;
+import com.nimbusds.jose.jwk.RSAKey;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
+import org.junit.jupiter.api.Test;
 
 public class SecurityConfigAzureKeyVaultTest {
 

@@ -15,11 +15,10 @@ import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.util.Base64URL;
 import com.nimbusds.jose.util.JSONObjectUtils;
-import org.springframework.security.oauth2.jwt.*;
-
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Map;
+import org.springframework.security.oauth2.jwt.*;
 
 /**
  * JwtEncoder that uses Azure Key Vault's CryptographyClient to perform RSA signing (RS256).

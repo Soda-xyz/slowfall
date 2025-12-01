@@ -3,6 +3,11 @@
  */
 package xyz.soda.slowfall.auth;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,12 +22,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * REST controller that implements a minimal cookie-less authentication API suitable for
@@ -160,8 +159,7 @@ public class AuthController {
         /**
          * Default constructor for frameworks.
          */
-        public LoginRequest() {
-        }
+        public LoginRequest() {}
 
         /**
          * Create a login request with username and password.
@@ -210,8 +208,7 @@ public class AuthController {
         /**
          * Default constructor for frameworks.
          */
-        public RefreshRequest() {
-        }
+        public RefreshRequest() {}
 
         /**
          * Create a refresh request with the provided refresh token.

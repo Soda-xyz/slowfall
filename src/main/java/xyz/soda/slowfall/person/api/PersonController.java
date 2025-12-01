@@ -1,6 +1,7 @@
 package xyz.soda.slowfall.person.api;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -11,8 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.soda.slowfall.person.application.PersonService;
 import xyz.soda.slowfall.person.domain.Person;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/person")
