@@ -221,10 +221,10 @@ public class SecurityConfig {
                         // for selectively injecting a dev authentication for the dedicated test endpoints under
                         // /api/protected/**. Granting blanket access to /api/** caused security tests to fail
                         // because unauthenticated requests to regular API endpoints were being allowed.
-                        auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
+                        auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
                     } else {
-                        auth.requestMatchers("/auth/**", "/actuator/health", "/.well-known/**")
+                        auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
                     }
                     auth.anyRequest().authenticated();

@@ -72,7 +72,9 @@ async function doRefresh(): Promise<boolean> {
 				headers: { "Content-Type": "application/json" },
 				// For a cookieless JWT flow we DO NOT send credentials/cookies here. The refresh
 				// request will include the refresh token in the JSON body (if available).
-				credentials: "omit",
+				// The backend issues an HttpOnly refresh cookie; include credentials so the
+				// browser will send that cookie on refresh requests.
+				credentials: "include",
 			};
 
 			// Only include a JSON body when we actually have a refresh token stored.
