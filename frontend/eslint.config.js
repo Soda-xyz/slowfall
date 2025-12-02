@@ -9,6 +9,10 @@ import reactHooks from "eslint-plugin-react-hooks";
 import importPlugin from "eslint-plugin-import";
 import tsdocPlugin from "eslint-plugin-tsdoc";
 import { defineConfig, globalIgnores } from "eslint/config";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const resolveTsConfig = (p) => resolve(__dirname, p);
 
 const getRules = (cfg) => (cfg && cfg.rules ? cfg.rules : {});
 
@@ -23,34 +27,6 @@ const combinedRules = Object.assign(
 
 export default defineConfig([
 	globalIgnores(["dist"]),
-	{
-		files: ["**/*.{spec.ts,spec.tsx,test.ts,test.tsx}", "test/**", "vitest.config.ts"],
-		plugins: {
-			"@typescript-eslint": tsEslint,
-			react: reactPlugin,
-			"jsx-a11y": jsxA11y,
-			prettier: prettierPlugin,
-			"react-hooks": reactHooks,
-			import: importPlugin,
-		},
-		languageOptions: {
-			ecmaVersion: 2020,
-			sourceType: "module",
-			globals: globals.browser,
-			parser: tsParser,
-			parserOptions: {
-				ecmaVersion: 2020,
-				sourceType: "module",
-				warnOnMultipleProjects: false,
-			},
-		},
-		rules: {
-			...combinedRules,
-		},
-		settings: {
-			react: { version: "detect" },
-		},
-	},
 	{
 		files: ["src/**/*.{ts,tsx}", "vite.config.ts", "src/types/**/*.d.ts"],
 		plugins: {
@@ -70,7 +46,7 @@ export default defineConfig([
 			parserOptions: {
 				ecmaVersion: 2020,
 				sourceType: "module",
-				project: ["./tsconfig.app.json", "./tsconfig.node.json"],
+				project: [resolveTsConfig("./tsconfig.app.json"), resolveTsConfig("./tsconfig.node.json")],
 				warnOnMultipleProjects: false,
 			},
 		},
@@ -120,7 +96,7 @@ export default defineConfig([
 			react: { version: "detect" },
 			"import/resolver": {
 				typescript: {
-					project: ["./tsconfig.app.json", "./tsconfig.node.json"],
+					project: [resolveTsConfig("./tsconfig.app.json"), resolveTsConfig("./tsconfig.node.json")],
 					alwaysTryTypes: true,
 					extensions: [".js", ".jsx", ".ts", ".tsx"],
 				},

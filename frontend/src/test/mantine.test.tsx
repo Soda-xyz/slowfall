@@ -1,7 +1,8 @@
 /* eslint-env vitest */
 
 import { describe, test, expect } from "vitest";
-import React from "react";
+import * as React from "react";
+import "@testing-library/jest-dom";
 import { screen, renderWithMantine } from "./test-utils";
 import { useMantineTheme } from "@mantine/core";
 import { mantineTheme as appTheme } from "../theme/theme";

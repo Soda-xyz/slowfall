@@ -22,5 +22,5 @@
 		"noUncheckedSideEffectImports": true
 	},
 	"include": ["src"],
-	"exclude": ["src/test", "e2e"]
+	"exclude": ["e2e"]
 }
