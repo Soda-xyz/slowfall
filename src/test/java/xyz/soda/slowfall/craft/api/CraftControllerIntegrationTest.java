@@ -29,8 +29,8 @@ class CraftControllerIntegrationTest {
     private String obtainAccessToken() throws Exception {
         ObjectMapper om = new ObjectMapper();
         var req = new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass");
-        ResponseEntity<String> resp = restTemplate.postForEntity(
-                "http://localhost:" + port + "/auth/login", req, String.class);
+        ResponseEntity<String> resp =
+                restTemplate.postForEntity("http://localhost:" + port + "/auth/login", req, String.class);
         if (resp.getStatusCode() != HttpStatus.OK) {
             throw new IllegalStateException("Failed to login: " + resp.getStatusCode());
         }

@@ -3,10 +3,9 @@ import { AppShell, Group, Tabs, Title } from "@mantine/core";
 import { AirportProvider, AirportSelector } from "./features/airport/AirportContext";
 import { DashboardPage } from "./features/dashboard";
 import { DatabaseControlPage } from "./features/databaseControl";
-import LoginPage from "./features/login/LoginPage";
-import ProtectedRoute from "./features/login/ProtectedRoute";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import "@mantine/core/styles.css";
+import AuthGate from "./auth/AuthGate";
+import { SignOutButton } from "./auth/MsalProvider";
 
 /**
  * App
@@ -20,11 +19,12 @@ import "@mantine/core/styles.css";
 export default function App(): React.JSX.Element {
 	const navigate = useNavigate();
 	const location = useLocation();
-	// Derive the current tab from the location.pathname instead of setting state inside an effect
+	/**
+	 * Derive the current tab from the location.pathname instead of setting state inside an effect.
+	 */
 	const tab = React.useMemo(() => {
 		const path = location.pathname;
 		if (path.startsWith("/database")) return "database";
-		if (path.startsWith("/login")) return "login";
 		return "dashboard";
 	}, [location.pathname]);
 
@@ -37,7 +37,6 @@ export default function App(): React.JSX.Element {
 						if (!value) return;
 						if (value === "dashboard") navigate("/");
 						else if (value === "database") navigate("/database");
-						else if (value === "login") navigate("/login");
 					}}
 				>
 					<AppShell.Header>
@@ -48,28 +47,34 @@ export default function App(): React.JSX.Element {
 								<Tabs.List>
 									<Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
 									<Tabs.Tab value="database">Database</Tabs.Tab>
-									<Tabs.Tab value="login">Login</Tabs.Tab>
 								</Tabs.List>
 							</Group>
 
 							<Group>
 								<AirportSelector />
+								<SignOutButton />
 							</Group>
 						</Group>
 					</AppShell.Header>
 
 					<AppShell.Main>
 						<Routes>
-							<Route path="/" element={<DashboardPage />} />
+							<Route
+								path="/"
+								element={
+									<AuthGate>
+										<DashboardPage />
+									</AuthGate>
+								}
+							/>
 							<Route
 								path="/database"
 								element={
-									<ProtectedRoute>
+									<AuthGate>
 										<DatabaseControlPage />
-									</ProtectedRoute>
+									</AuthGate>
 								}
 							/>
-							<Route path="/login" element={<LoginPage />} />
 						</Routes>
 					</AppShell.Main>
 				</Tabs>

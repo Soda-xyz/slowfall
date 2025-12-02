@@ -1,5 +1,4 @@
 import type { Craft, CreateCraftRequest } from "./types";
-import { API_BASE_URL } from "../../lib/apiBase";
 import { fetchWithAuth } from "../../lib/fetchClient";
 
 /**
@@ -8,7 +7,7 @@ import { fetchWithAuth } from "../../lib/fetchClient";
  * Small wrappers over the backend craft endpoints used by the UI.
  */
 export async function fetchCrafts(signal?: AbortSignal): Promise<Craft[]> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/crafts`, { signal });
+	const res = await fetchWithAuth(`/crafts`, { signal });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch crafts: ${res.status} ${res.statusText}`);
 	}
@@ -21,7 +20,7 @@ export async function fetchCrafts(signal?: AbortSignal): Promise<Craft[]> {
  * @returns Craft
  */
 export async function createCraft(payload: CreateCraftRequest): Promise<Craft> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/crafts`, {
+	const res = await fetchWithAuth(`/crafts`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),

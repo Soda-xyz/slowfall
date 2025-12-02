@@ -24,7 +24,6 @@ export default function DashboardPage(): React.JSX.Element {
 				if (!mountedRef.current) return;
 				setJumps(data);
 			} catch (err) {
-				// ignore load errors on dashboard for now
 				console.debug("DashboardPage: failed to load jumps:", err);
 			}
 		};

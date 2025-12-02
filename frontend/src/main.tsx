@@ -11,20 +11,23 @@ import App from "./App";
 import { mantineTheme } from "./theme/theme";
 import styles from "./theme/app-global.module.css";
 import mantineCssVariableResolver from "./theme/cssVariableResolver";
-// NOTE: react-router-dom must be installed in frontend for this import to resolve.
-// If you haven't yet run `npm install react-router-dom`, add it and then remove the ts-ignore.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: react-router-dom may be missing until install step is run
 import { BrowserRouter } from "react-router-dom";
+import { MsalAppProvider, SyncMsalToken } from "./auth/MsalProvider";
+
+const env = import.meta.env as unknown as Record<string, string | undefined>;
+const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
 		<MantineProvider theme={mantineTheme} cssVariablesResolver={mantineCssVariableResolver}>
 			<Notifications position="top-right" />
 			<div className={styles.appRoot}>
-				<BrowserRouter>
-					<App />
-				</BrowserRouter>
+				<MsalAppProvider>
+					<SyncMsalToken scopes={[`api://${backendClientId}/access_as_user`]} />
+					<BrowserRouter>
+						<App />
+					</BrowserRouter>
+				</MsalAppProvider>
 			</div>
 		</MantineProvider>
 	</StrictMode>,

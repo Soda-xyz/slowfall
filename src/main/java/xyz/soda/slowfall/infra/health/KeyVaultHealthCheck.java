@@ -1,8 +1,6 @@
 package xyz.soda.slowfall.infra.health;
 
-import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClient;
-import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,32 +35,14 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
      */
     @Autowired
     public KeyVaultHealthCheck(
+            KeyClient keyClient,
             @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
             @Value("${app.security.azure.keyvault.key-name}") String keyName,
             @Value("${app.security.azure.keyvault.fail-fast:true}") boolean failFast) {
         this.vaultUrl = vaultUrl;
         this.keyName = keyName;
         this.failFast = failFast;
-        this.keyClient = new KeyClientBuilder()
-                .vaultUrl(vaultUrl)
-                .credential(new DefaultAzureCredentialBuilder().build())
-                .buildClient();
-    }
-
-    /**
-     * Test-friendly constructor that accepts an injected KeyClient. Use this in unit tests to
-     * provide a mock KeyClient and control fail-fast behavior.
-     *
-     * @param keyClient the injected KeyClient to use for operations
-     * @param vaultUrl the Key Vault URL
-     * @param keyName the key name to check
-     * @param failFast whether to throw on startup when key is unavailable
-     */
-    public KeyVaultHealthCheck(KeyClient keyClient, String vaultUrl, String keyName, boolean failFast) {
-        this.vaultUrl = vaultUrl;
-        this.keyName = keyName;
         this.keyClient = keyClient;
-        this.failFast = failFast;
     }
 
     private KeyVaultKey fetchKey() {

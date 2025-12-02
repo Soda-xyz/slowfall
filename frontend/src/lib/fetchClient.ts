@@ -1,10 +1,24 @@
-// Centralized fetch client for the frontend
-// - Injects Authorization: Bearer <token> from tokenStore (localStorage) when present
-// - Supports an optional refresh-token flow: the client will POST a stored refresh token to
-//   /web-auth/refresh and update tokens on success. This avoids sending cookies and works
-//   with a cookieless JWT setup.
+/**
+ * Centralized fetch client for the frontend.
+ *
+ * Features:
+ * - Attaches `Authorization: Bearer token` when an access token is available in `tokenStore`.
+ * - Attempts MSAL silent token acquisition as a fallback when no token is stored.
+ * - Implements a refresh flow that POSTs to `/web-auth/refresh` and updates tokens on success.
+ * - Uses `credentials: 'include'` by default so cookies are preserved through the nginx proxy.
+ */
 
 import * as tokenStore from "./tokenStore";
+import { getApiBaseUrl } from "./apiBase";
+import { acquireTokenSilentIfPossible } from "../auth/msalClient";
+
+const env = import.meta.env as unknown as Record<string, string | undefined>;
+
+let tryAcquireMsalToken: ((scopes?: string[]) => Promise<string | null>) | null = async (
+	scopes?: string[],
+) => {
+	return acquireTokenSilentIfPossible(scopes ?? []);
+};
 
 export function getAuthToken(): string | null {
 	try {
@@ -18,7 +32,7 @@ export function setAuthToken(token: string): void {
 	try {
 		tokenStore.setToken(token);
 	} catch {
-		// ignore
+		// swallow storage errors
 	}
 }
 
@@ -29,25 +43,46 @@ export function clearAuthToken(): void {
 		try {
 			tokenStore.clearRefreshToken();
 		} catch {
-			// ignore
+			// swallow
 		}
 	} catch {
-		// ignore
+		// swallow
 	}
 }
 
-// Compose API base URL using Vite env variable. If blank, use relative paths.
-function apiBase(): string {
-	try {
-		const raw = (import.meta.env as unknown as Record<string, unknown>)["VITE_API_BASE_URL"] as
-			| string
-			| undefined;
-		if (!raw) return "";
-		// strip trailing slash
-		return raw.replace(/\/$/, "");
-	} catch {
-		return "";
-	}
+/**
+ * Compute a normalized API prefix using Vite-provided API_BASE_URL.
+ *
+ * Behavior:
+ * - If VITE_API_BASE_URL is defined at build time and is an empty string, treat it as root and use relative paths -> '/api'.
+ * - If VITE_API_BASE_URL is a full origin (e.g. 'https://api.example.com'), append '/api' -> 'https://api.example.com/api'.
+ * - If VITE_API_BASE_URL already ends with '/api', return it as-is to avoid '/api/api'.
+ */
+function apiPrefix(): string {
+	const raw = (getApiBaseUrl() ?? "") as string;
+	const trimmed = raw.replace(/\/+$/, "");
+	if (trimmed === "") return "/api";
+	if (trimmed.endsWith("/api")) return trimmed;
+	return `${trimmed}/api`;
+}
+
+/**
+ * Normalize an input RequestInfo into a final URL for API calls.
+ *
+ * Rules:
+ * - Absolute URLs (http(s)://...) are returned unchanged.
+ * - Paths that already start with '/api' are returned unchanged.
+ * - Paths starting with '/' (but not '/api') are prefixed with `apiPrefix()` (so '/protected' -> '/api/protected').
+ * - Other strings are prefixed as '/api/{input}'.
+ */
+function normalizeApiUrl(input: RequestInfo): string | Request {
+	if (typeof input !== "string") return input;
+	const url = input;
+	if (/^https?:\/\//i.test(url)) return url;
+	if (url.startsWith("/api")) return url;
+	const prefix = apiPrefix();
+	if (url.startsWith("/")) return `${prefix}${url}`;
+	return `${prefix}/${url}`;
 }
 
 // Refresh control: avoid multiple concurrent refresh requests
@@ -59,27 +94,22 @@ async function doRefresh(): Promise<boolean> {
 
 	refreshPromise = (async () => {
 		try {
-			// Attempt to read a stored refresh token if present. We no longer bail out when
-			// there's no stored refresh token because some backends may use cookies or other
-			// server-side state to refresh the session. Tests also expect the refresh endpoint
-			// to be called even when a refresh token is not present in localStorage.
+			// Attempt to read a stored refresh token if present. When no refresh token is stored
+			// some backends may still use server-side state (cookies) to refresh sessions; therefore
+			// we don't bail out early. Tests also assume the refresh endpoint may be called.
 			const refreshToken = tokenStore.getRefreshToken();
 
-			const base = apiBase();
-			const url = `${base}/web-auth/refresh`;
-			// Build headers only when we will send a JSON body. Sending
-			// 'Content-Type: application/json' without a body (or when relying on cookies)
-			// triggers a CORS preflight (OPTIONS) in browsers. Many production front-doors
-			// or proxies (nginx) may not handle OPTIONS for this path and return 405.
+			const prefix = apiPrefix();
+			const url = `${prefix}/web-auth/refresh`;
+			// Build headers only when we will send a JSON body. Sending 'Content-Type: application/json'
+			// without a body can trigger a CORS preflight OPTIONS request; some proxies may not handle OPTIONS.
 			const headers: Record<string, string> = {};
 			const init: RequestInit = {
 				method: "POST",
-				// The backend issues an HttpOnly refresh cookie; include credentials so the
-				// browser will send that cookie on refresh requests.
+				// The backend issues an HttpOnly refresh cookie; include credentials so the browser will send that cookie on refresh requests.
 				credentials: "include",
 			};
 
-			// Only include a JSON body and Content-Type header when we actually have a stored refresh token.
 			if (refreshToken) {
 				headers["Content-Type"] = "application/json";
 				init.body = JSON.stringify({ refresh_token: refreshToken });
@@ -113,7 +143,7 @@ async function doRefresh(): Promise<boolean> {
 			}
 			return true;
 		} catch (refreshError) {
-			// Network or other error during refresh
+			// Network or other error during refresh - clear auth state.
 			console.debug("Token refresh failed", refreshError);
 			clearAuthToken();
 			return false;
@@ -133,7 +163,27 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 
 		// Attach Authorization header if auth token available
 		try {
-			const token = getAuthToken();
+			let token = getAuthToken();
+			// If no token in tokenStore, attempt to acquire silently from MSAL (optional)
+			if (!token && tryAcquireMsalToken) {
+				try {
+					const msalScopes: string[] = [
+						`api://${env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID}/access_as_user`,
+					];
+					const acquired = await tryAcquireMsalToken(msalScopes);
+					if (acquired) {
+						token = acquired;
+						// Mirror into tokenStore for other consumers
+						try {
+							tokenStore.setToken(acquired);
+						} catch {
+							// swallow storage errors
+						}
+					}
+				} catch {
+					// swallow msal errors and continue without token
+				}
+			}
 			if (token) headers.set("Authorization", `Bearer ${token}`);
 		} catch (tokenErr) {
 			// Log for debugging but do not expose token values
@@ -143,13 +193,13 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 		const merged: RequestInit = {
 			...init,
 			headers,
-			// Default to omit credentials for a cookieless JWT flow. Callers can override by
-			// passing an explicit `credentials` in `init` if they need cookies for other
-			// integrations.
-			credentials: (init.credentials as RequestCredentials) ?? "omit",
+			// Default to include credentials so cookies and Authorization headers are preserved behind the proxy.
+			// Callers can override by passing an explicit `credentials` in `init` if they need a different behaviour.
+			credentials: (init.credentials as RequestCredentials) ?? "include",
 		};
 
-		return fetch(input, merged);
+		const finalUrl = normalizeApiUrl(input);
+		return fetch(finalUrl, merged);
 	}
 
 	// First attempt

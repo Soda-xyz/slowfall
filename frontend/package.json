@@ -20,7 +20,9 @@
 		"dayjs": "^1.11.9",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
-		"react-router-dom": "^6.30.2"
+		"react-router-dom": "^6.30.2",
+		"@azure/msal-browser": "^4.26.0",
+		"@azure/msal-react": "^3.0.22"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.39.1",

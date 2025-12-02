@@ -22,13 +22,11 @@ describe("tokenStore", () => {
 	it("subscribe should receive updates", () => {
 		const calls: Array<string | null> = [];
 		const unsub = subscribe((tokenValue) => calls.push(tokenValue));
-		// initial call
 		expect(calls.length).toBeGreaterThanOrEqual(1);
 		setToken("x");
 		setToken("y");
 		clearToken();
 		unsub();
-		// ensure at least the changes were observed
 		expect(calls.some((call) => call === "x")).toBe(true);
 		expect(calls.some((call) => call === "y")).toBe(true);
 	});

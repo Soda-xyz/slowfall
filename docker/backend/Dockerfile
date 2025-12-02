@@ -49,12 +49,7 @@ RUN cat > /usr/local/bin/entrypoint.sh <<'SH'
 #!/bin/sh
 set -e
 
-# In the new deployment model TLS is terminated at Azure Front Door and
-# Key Vault is the single source of truth for certificates/keys. The
-# application is responsible for accessing Key Vault via Managed Identity
-# or DefaultAzureCredential. No local keystore is written by the entrypoint.
 
-echo "[entrypoint] Starting application; TLS is terminated at Azure Front Door. Ensure AZURE_KEYVAULT_ENABLE=true in production."
 
 # Finally exec the java process
 exec java $JAVA_OPTS -jar /app/app.jar
@@ -62,7 +57,6 @@ SH
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# No local keystore dir is created; TLS is managed by Azure Front Door / Key Vault
 
 # Run as non-root user
 USER app

@@ -25,7 +25,6 @@ describe("fetchWithAuth refresh flow", () => {
 				);
 			}
 
-			// Protected API
 			if (url.includes("/api/")) {
 				if (!refreshed) return Promise.resolve(new Response(null, { status: 401 }));
 				return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
@@ -36,16 +35,13 @@ describe("fetchWithAuth refresh flow", () => {
 
 		globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
 
-		// Seed old token
 		setAuthToken("old-token");
 
 		const res = await fetchWithAuth("/api/protected");
 		expect(res.status).toBe(200);
 
-		// Verify token updated in storage
 		expect(getAuthToken()).toBe("new-token");
 
-		// Check that refresh endpoint was called
 		expect(
 			mockFetch.mock.calls.some((callArgs) =>
 				(callArgs[0] as string).endsWith("/web-auth/refresh"),
@@ -75,7 +71,6 @@ describe("fetchWithAuth refresh flow", () => {
 
 		globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
 
-		// seed token
 		setAuthToken("old-token-2");
 
 		const p1 = fetchWithAuth("/api/protected");
@@ -85,7 +80,6 @@ describe("fetchWithAuth refresh flow", () => {
 		expect(r1.status).toBe(200);
 		expect(r2.status).toBe(200);
 
-		// refresh should have been called exactly once
 		const refreshCalls = mockFetch.mock.calls.filter((callArgs) =>
 			(callArgs[0] as string).endsWith("/web-auth/refresh"),
 		).length;

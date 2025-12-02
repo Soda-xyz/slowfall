@@ -1,34 +1,29 @@
-version: "3.8"
+version: '3.8'
 
 services:
-  backend:
+  nginx:
     build:
-      context: ..
-      dockerfile: docker/backend/Dockerfile
-    image: slowfall-backend:prod
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    image: slowfall-proxy:local
+    ports:
+      - "8080:80"
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD-SHELL","curl -f http://localhost:8080/actuator/health || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=8080
+      - CLIENT_MAX_BODY_SIZE=20m
+      - PROXY_READ_TIMEOUT=90s
+      - PROXY_SEND_TIMEOUT=90s
+    volumes:
+      - static_content:/usr/share/nginx/html:ro
 
-  frontend:
-    build:
-      context: ..
-      dockerfile: docker/frontend/Dockerfile
-    image: slowfall-frontend:prod
-    ports:
-      - "80:80"
-    restart: unless-stopped
-    depends_on:
-      - backend
+  backend:
+    image: ghcr.io/soda-xyz/slowfall-backend:latest
+    environment:
+      - PORT=8080
+    expose:
+      - "8080"
 
-networks:
-  default:
-    name: slowfall-net
-
+volumes:
+  static_content:
+    driver: local

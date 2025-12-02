@@ -28,9 +28,12 @@ public class CorsMockMvcTest {
 
     private String getAccessToken() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        String payload = om.writeValueAsString(new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass"));
-        MvcResult r = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(payload))
+        String payload =
+                om.writeValueAsString(new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass"));
+        MvcResult r = mvc.perform(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(payload))
                 .andExpect(status().isOk())
                 .andReturn();
         String body = r.getResponse().getContentAsString();
@@ -50,8 +53,7 @@ public class CorsMockMvcTest {
     @Test
     @org.springframework.security.test.context.support.WithMockUser
     void request_allowsConfiguredOrigin() throws Exception {
-        mvc.perform(get("/api/airports")
-                        .header("Origin", "http://localhost:5174"))
+        mvc.perform(get("/api/airports").header("Origin", "http://localhost:5174"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5174"));
     }

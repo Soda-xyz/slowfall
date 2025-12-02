@@ -1,196 +1,176 @@
 # Environment & Secrets (README_ENV.md)
 
-This file lists exactly which environment variables and CI/CD secrets must be set for production. Use these names and
-values (examples) in App Service application settings or your container orchestration environment.
+This file is the canonical source of truth for where to set environment variables, repository secrets, Key Vault entries,
+and build-time arguments for the slowfall project. Each section below groups variables by *where* they should be configured
+so operators and developers know the authoritative location to set values.
 
-Important: this project uses Azure Key Vault Keys for signing and a Managed Identity on the backend App Service to
-access Key Vault. CI (deployment) uses GitHub Actions with OIDC-based federated credentials to perform `az` commands.
-
-## New CI secret: DEPLOY_ENV (how CI determines build mode)
-
-Starting with recent CI updates, the repository uses a single repository secret named `DEPLOY_ENV` to drive build and
-deploy modes across both the frontend and backend during GitHub Actions runs. Please create this secret in the repo
-Settings → Secrets → Actions and set its value to `prod` for production deployments.
-
-Why this exists
-
-- Vite (frontend) bakes environment variables at build time. To guarantee production-optimized assets are produced in
-  CI, we prefer a single build-time source-of-truth (`DEPLOY_ENV`). See Vite docs (Mode and environment variables):
-  https://vitejs.dev/guide/env-and-mode.html
-- The backend Docker build and the CI deploy use the same `DEPLOY_ENV` to ensure the Spring profile and baked image
-  defaults match the intended deployment mode.
-
-Accepted values and mapping
-
-- `prod` or `production` → frontend: Vite mode `production` (VITE_FRONTEND_ENV=production), VITE_API_BASE_URL is set to
-  an empty string for relative API paths; backend: `SPRING_PROFILES_ACTIVE=prod`.
-- `development` or `dev` → frontend: Vite mode `development` and VITE_API_BASE_URL is set (for example
-  `http://localhost:8080`), backend: `SPRING_PROFILES_ACTIVE=dev` (if you choose to support it in CI).
-
-Where to set
-
-- GitHub repository secret: `DEPLOY_ENV` (required for CI builds that should produce production images). The CI workflow
-  prefers this secret when present and will fallback to a safe default (`prod`) if it is absent, but we strongly
-  recommend setting the secret explicitly.
-
-GH CLI example (run locally; do not commit secrets):
-
-```powershell
-# Replace OWNER/REPO with your repository slug
-gh secret set DEPLOY_ENV --body 'prod' --repo OWNER/REPO
-```
-
-Notes about overrides and deterministic builds
-
-- Frontend: the Dockerfile build stage now overwrites `frontend/.env.production` with the CI-provided build-args (if
-  any)
-  before running the Vite build. This prevents a committed `.env.production` from silently overriding CI build-time
-  values when building Docker images in CI.
-- Backend: the backend runtime image accepts a build-arg `SPRING_PROFILES_ACTIVE` during image build; the Dockerfile
-  sets this value as an `ENV` so images baked by CI will contain a sensible default profile. App Service App Settings or
-  container runtime environment variables can still override `SPRING_PROFILES_ACTIVE` at runtime (this is expected and
-  intentional — CI also sets App Service app settings during deploy).
-
-Security / where secrets live (quick summary)
-
-- `DEPLOY_ENV` (Repository secret) — controls CI build mode; set in GitHub Actions secrets.
-- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RG`, `BACKEND_APP_NAME`, `FRONTEND_APP_NAME`,
-  `ALLOWED_ORIGINS` — GitHub Actions secrets used by the deploy workflow (see below for full list).
-- Key Vault secrets and keys (signed material) remain in Azure Key Vault. Do NOT store Key Vault values in repository
-  secrets unless absolutely required.
+Note: If you rename or add any variable or secret, update this file and `README_CLOUD.md` / `infra/DEPLOY.md` so CI and
+operators remain consistent.
 
 ---
 
-<!-- Existing content below remains unchanged -->
+Recorded provision values (non-secret)
+- BACKEND_APP_ID=628940e9-8851-4a41-a023-ca8183a04263
+- FRONTEND_APP_ID=ce0f64ea-3635-4be7-ad93-7954f04cfa83
+- Key Vault secret (credentials) name: `slowfall-backend-client-secret`
+- Key Vault URI (example): `https://slowfall-keyvault-next.vault.azure.net/`
+- Public proxy domain (frontend): `https://www.oskarnilsson.net` (set as `ALLOWED_ORIGINS` for CORS)
 
-Required production environment variables (exact names and examples)
+Note: Do NOT store raw secret values in the repository. Store secret names, appIds, and Key Vault URIs here as a reference; actual secret values should be kept in Key Vault or GitHub Actions secrets.
 
-1. ALLOWED_ORIGINS
-    - Purpose: Comma-separated list of allowed frontend origins for CORS.
-    - Example value: `https://app.example.com,https://admin.example.com`
-    - Where to set: App Service -> Configuration -> Application settings (Name = `ALLOWED_ORIGINS`).
-    - Spring property mapping: `app.cors.allowed-origins=${ALLOWED_ORIGINS}`
+---
 
-2. SPRING_PROFILES_ACTIVE
-    - Purpose: Ensure the `prod` Spring profile is active.
-    - Example value: `prod`
-    - Where to set: App Service app setting (Name = `SPRING_PROFILES_ACTIVE`) or injected by your container runtime.
-    - Effect: Activates `application-prod.properties` behaviour.
+GitHub Actions / Repository secrets (set in GitHub → Settings → Secrets → Actions)
+- DEPLOY_ENV (required)
+  - Purpose: Controls publish/deploy mode used by CI (e.g., `prod`/`production` → production behavior; `dev`/`development` → dev behavior).
+  - Example: `prod`
+  - Notes: The `publish-images` job fails early if this secret is not set.
 
-3. APP_SECURITY_AZURE_KEYVAULT_VAULT_URL
-    - Purpose: URL of the Azure Key Vault used for signing keys.
-    - Example value: `https://slowfall-kv.vault.azure.net/`
-    - Where to set: App Service app setting (Name = `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`).
-    - Spring property mapping: `app.security.azure.keyvault.vault-url` (bound from env var above).
+- AZURE_SUBSCRIPTION_ID (required for Azure deploy steps)
+  - Purpose: Subscription used by `az` commands in deploy jobs.
+  - Example: `1e13e8d8-c624-405f-89c7-5f0e5f965399`
 
-4. APP_SECURITY_AZURE_KEYVAULT_KEY_NAME
-    - Purpose: Name of the Key Vault Key used for signing (Key resource, not a secret).
-    - Example value: `slowfall-sign-key`
-    - Where to set: App Service app setting (Name = `APP-SECURITY-AZURE-KEYVAULT-KEY-NAME`).
-    - Spring property mapping: `app.security.azure.keyvault.key-name` (bound from env var above).
+- AZURE_TENANT_ID (required for Azure deploy steps)
+  - Purpose: Azure tenant id for OIDC or az login.
+  - Example: `f3715782-d0db-4347-bd92-2800c9d5e645`
 
-5. APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST
-    - Purpose: Whether the app should fail startup if Key Vault is unavailable.
-    - Example value: `true`
-    - Where to set: App Service app setting (Name = `APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST`).
-    - Spring property mapping: `app.security.azure.keyvault.fail-fast` (true/false)
+- AZURE_CLIENT_ID (required for Azure OIDC / federated login)
+  - Purpose: Client id of the service principal used by `azure/login` (expect a federated credential configured for this id).
+  - Example: `f17c9149-9c99-4294-ada3-9a97f0cf7b0b`
 
-6. APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME
-    - Purpose: Name of the Key Vault Secret that contains the single allowed username and BCrypt password hash (JSON or
-      separate secret). Default: `slowfall-credentials`.
-    - Example (JSON value): `{"username":"alice","passwordHash":"$2a$10$..."}`
-    - Where to set: App Service application setting (Name = `APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME`) or
-      set via the `app.security.azure.keyvault.credentials-secret-name` property.
-    - Spring property mapping: `app.security.azure.keyvault.credentials-secret-name`
+- AZURE_RG (required)
+  - Purpose: Resource group used by deploy scripts (e.g., where App Services live).
+  - Example: `slowfall-appservice-prod`
 
-7. APP_SECURITY_AZURE_KEYVAULT_USER_SECRET_NAME / APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME
-    - Purpose: Name of the Key Vault Secret that contains the single allowed username and password or password hash used
-      by the backend service in production.
-    - Confirmed value in this deployment: `slowfall-credentials` (stored in Key Vault `slowfall-vault`).
-    - Supported secret formats (the application accepts either):
-        - JSON: `{"username":"alice","passwordHash":"$2a$10$..."}` (preferred: store bcrypt hash in `passwordHash`)
-        - Plain: `"username:password"` (will be encoded at startup)
-    - Where to set: App Service application setting (Name = `APP_SECURITY_AZURE_KEYVAULT_USER_SECRET_NAME` or
-      `APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME`).
-    - Spring property mapping: `app.security.azure.keyvault.user-secret-name` or
-      `app.security.azure.keyvault.credentials-secret-name`
+- BACKEND_APP_NAME (required)
+  - Purpose: Backend App Service name (used by CI to resolve FQDN and to set images/app settings).
+  - Example: `slowfall-backend`
 
-CI / GitHub Actions secrets (exact names)
+- FRONTEND_APP_NAME (required)
+  - Purpose: Frontend App Service name (used by CI to set images/app settings).
+  - Example: `slowfall-frontend`
 
-These secrets are required by the GitHub Actions workflow to build/push images and perform Azure CLI deployment steps.
-This project uses OIDC-based federated credentials for Azure login; no client secrets are stored in the repository.
+- PROXY_APP_NAME (optional)
+  - Purpose: Proxy App Service name (defaults to `slowfall-proxy` when not set in CI/deploy).
+  - Example: `slowfall-proxy`
 
-- `AZURE_CLIENT_ID` — service principal client id (used by OIDC login)
-- `AZURE_TENANT_ID` — tenant id
-- `AZURE_SUBSCRIPTION_ID` — Azure subscription id
-- `AZURE_RG` — Azure resource group name (used in deploy steps)
-- `BACKEND_APP_NAME` — backend App Service name (used in deploy steps)
-- `FRONTEND_APP_NAME` (optional) — frontend App Service name
-- `ALLOWED_ORIGINS` — (optional) production ALLOWED_ORIGINS value to be set by the deploy pipeline
-- `DEPLOY_ENV` — (required) recommended CI secret controlling build mode (`prod`/`production` for production builds)
+- ALLOWED_ORIGINS (optional)
+  - Purpose: Comma-separated allowed CORS origins that CI will configure on App Services if provided.
+  - Example: `https://slowfall-frontend.azurewebsites.net`
 
-Note about GHCR authentication (very brief)
+- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (optional)
+  - Purpose: Key Vault URI used by CI or the proxy as a fallback; prefer storing Key Vault URI in repository secrets if CI must know it.
+  - Example: `https://slowfall-keyvault-next.vault.azure.net/`
 
-- If you rely on `GITHUB_TOKEN` to push images to GHCR, ensure repository Actions permissions allow write access and
-  package writes: Repository Settings → Actions → General → "Workflow permissions" set to "Read and write permissions"
-  and enable Packages access. If your org policy disallows using `GITHUB_TOKEN` for package pushes, create a PAT with
-  `read:packages` and `write:packages` and store it in secret `GHCR_TOKEN` (the workflow will prefer `GHCR_TOKEN` if
-  present). See GitHub docs: https://docs.github.com/en/actions/learn-github-actions/permissions-for-the-github-token
+- GHCR_TOKEN (optional)
+  - Purpose: Personal access token for pushing to GHCR if your org disallows using the default `GITHUB_TOKEN` for package pushes.
 
-References
+---
 
-- Azure Key Vault Keys: https://learn.microsoft.com/azure/key-vault/keys/about-keys
-- DefaultAzureCredential (
-  Java): https://learn.microsoft.com/java/api/com.azure.identity.defaultazurecredentialbuilder?view=azure-java-stable
+App Service — Runtime App Settings (set in Azure Portal / App Service -> Configuration -> Application settings)
 
-## Which app needs which
+Backend App Service (runtime)
+- SPRING_PROFILES_ACTIVE
+  - Purpose: Spring profile for backend runtime (e.g., `prod`, `dev`). CI sets this during deploy when `DEPLOY_ENV` is present.
+  - Example: `prod`
 
-This section maps each environment variable and CI/GitHub Actions secret to the application or system that needs it.
+- ALLOWED_ORIGINS
+  - Purpose: Comma-separated list used by the backend for CORS (maps to `app.cors.allowed-origins`).
+  - Example: `https://slowfall-frontend.azurewebsites.net`
 
-- ALLOWED_ORIGINS — Backend (required). Used by the backend Spring app for CORS via `app.cors.allowed-origins`. Set as
-  an App Service application setting (or container env) for the backend. The CI/deploy pipeline may also provide this
-  value (see CI secrets) to update backend and/or frontend configuration during deployment.
+- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (optional)
+  - Purpose: Key Vault URI used by backend at runtime if reading secrets directly from Key Vault is required.
+  - Example: `https://slowfall-keyvault-next.vault.azure.net/`
 
-- SPRING_PROFILES_ACTIVE — Backend (required). Controls the active Spring profile (for production set `prod`). Set as an
-  App Service app setting for the backend.
+Frontend App Service (runtime)
+- ALLOWED_ORIGINS
+  - Purpose: Same as backend; set here only if you want the frontend App Service to be aware of allowed origins via app settings.
 
-- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL — Backend (required). URL of the Azure Key Vault used by the backend to fetch
-  signing keys.
+Proxy App Service (`slowfall-proxy`) — runtime settings
+- WEBSITES_PORT
+  - Purpose: Port Nginx listens on in the container.
+  - Example: `80`
 
-- APP_SECURITY_AZURE_KEYVAULT_KEY_NAME — Backend (required). Name of the Key Vault Key the backend uses for signing.
+- BACKEND_HOST
+  - Purpose: Backend FQDN used by the proxy for routing (e.g., `slowfall-backend.azurewebsites.net`). CI resolves this from `BACKEND_APP_NAME`.
+  - Example: `slowfall-backend.azurewebsites.net`
 
-- APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST — Backend (optional). Controls whether the backend should fail startup if Key
-  Vault cannot be reached; default behavior depends on application configuration.
+- BACKEND_PORT
+  - Purpose: Backend container port.
+  - Example: `8080`
 
-- APP_SECURITY_AZURE_KEYVAULT_CREDENTIALS_SECRET_NAME — Backend (required). Name of the Key Vault Secret containing the
-  credentials for the backend service.
+- CLIENT_MAX_BODY_SIZE (optional)
+  - Purpose: Nginx proxy client_max_body_size setting.
+  - Example: `20m`
 
-- APP_SECURITY_AZURE_KEYVAULT_USER_SECRET_NAME — Backend (required). Name of the Key Vault Secret containing the
-  credentials for the backend service.
+- PROXY_READ_TIMEOUT / PROXY_SEND_TIMEOUT (optional)
+  - Purpose: Proxy timeout tuning.
+  - Example: `90s`
 
-CI / GitHub Actions secrets (used by the deploy pipeline only)
+- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (optional)
+  - Purpose: If the proxy reads certs/secrets from Key Vault via a managed identity.
 
-The secrets below are consumed only by the CI/deployment workflows (GitHub Actions) to build, push images, and perform
-Azure CLI deployment steps. They are not required as runtime environment variables inside the running backend App
-Service unless you explicitly choose to propagate them there.
+---
 
-- AZURE_CLIENT_ID — CI (required for OIDC-based deployments).
-- AZURE_TENANT_ID — CI (required for OIDC-based deployments).
-- AZURE_SUBSCRIPTION_ID — CI (required by deployment scripts).
-- AZURE_RG — CI (resource group used by deployment scripts).
-- BACKEND_APP_NAME — CI (name of the backend App Service to target during deploy).
-- FRONTEND_APP_NAME — CI (optional; name of the frontend App Service to target during deploy).
-- ALLOWED_ORIGINS — CI (optional; the deploy pipeline can set this value into the backend/frontend App Service
-  configuration).
+Build-time / CI / Docker build-args (set at build-time in CI or local docker build args)
+- VITE_FRONTEND_ENV
+  - Purpose: Vite build mode passed into the frontend build (`production` or `development`). CI sets this based on `DEPLOY_ENV`.
+  - Example: `production`
 
-Notes
+- VITE_API_BASE_URL
+  - Purpose: Vite API base URL baked into the SPA at build-time. The production default is intentionally empty so the SPA uses relative paths like `/api/...`.
+  - Example (production): empty string `""`; Example (dev): `http://localhost:8080`
 
-- All Backend entries above should be set as App Service Application settings (or container environment variables) for
-  the backend App Service instance that runs the Java Spring Boot application.
-- FRONTEND runtime configuration: this repository's frontend is typically served from a separate App Service or static
-  hosting. If you need runtime environment values in the frontend (for example a different API URL), prefer build-time
-  injection or the hosting provider's configuration mechanism; only set frontend-specific environment variables on the
-  frontend hosting resource (see `FRONTEND_APP_NAME` for deploy-time naming).
-- There is an inconsistency in naming styles in this file (some vars use underscores, one uses hyphens). Use the exact
-  names shown here when configuring App Service application settings or GitHub Secrets — env var names are
-  case-sensitive in many CI systems and Linux containers.
+- VITE_MSAL_CLIENT_ID (build-time)
+  - Purpose: Client id for Entra (Azure AD) SPA integration; baked into the SPA at build-time.
+  - Example: `e4b1a2c3-...`
+
+- VITE_MSAL_TENANT_ID or VITE_MSAL_AUTHORITY (build-time)
+  - Purpose: Tenant id or full authority URL for MSAL; set at build-time so SPA is compiled with the correct authority.
+
+- VITE_MSAL_REDIRECT_URI (optional, build-time)
+  - Purpose: Redirect/callback URI baked into SPA during build.
+
+- VITE_MSAL_BACKEND_CLIENT_ID (optional, build-time)
+  - Purpose: Backend API client id used to compute scopes like `api://<client-id>/access_as_user`.
+
+- SPRING_PROFILES_ACTIVE (as a Docker build-arg for backend image)
+  - Purpose: CI may pass this as a build-arg to bake a default Spring profile into the image; App Service runtime app settings can still override it.
+  - Example: `prod`
+
+- BACKEND_HOST (build-arg used by frontend Dockerfile / nginx template)
+  - Purpose: Host baked into frontend/nginx configs to proxy API calls to the backend.
+  - Example: `slowfall-backend.azurewebsites.net`
+
+---
+
+Key Vault entries (create in Key Vault — prefer Key Vault + managed identities rather than committing secrets)
+- slowfall-credentials (example secret name)
+  - Purpose: Optional secret containing production backend credentials when a simple single-login approach is used. Prefer JSON with `{"username":"...","passwordHash":"..."}` or use other secure credential stores for multi-user setups.
+
+- slowfall-sign-key (example Key name)
+  - Purpose: Key used for signing operations if the backend uses Key Vault Keys for JWT signing.
+
+- Other keys/secrets
+  - Purpose: Store any client secrets, certs, or runtime configuration values that must remain secret. Use Key Vault RBAC and assign the backend's / proxy's system-assigned managed identity appropriate roles (Secrets User, Crypto User when needed).
+
+---
+
+Local development overrides (set locally / in your shell or dev environment)
+- SPRING_PROFILES_ACTIVE (local)
+  - Purpose: Run the backend using `dev` profile locally.
+  - Example: `dev`
+
+- VITE_API_BASE_URL (local frontend dev)
+  - Purpose: Point SPA to a local backend during development.
+  - Example: `http://localhost:8080`
+
+- Any other dev-only environment variables may be set in your local environment or `.env` files; avoid committing secrets.
+
+---
+
+Changing names or adding variables
+- If you rename or add secrets/vars, update this file and `README_CLOUD.md` / `infra/DEPLOY.md` and any CI workflow references so operators and CI remain consistent.
+
+Security reminder
+- Do not commit secrets into the repository. Use Key Vault and GitHub repository secrets, and prefer OIDC-based federated credentials where possible.

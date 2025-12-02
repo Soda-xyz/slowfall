@@ -140,5 +140,4 @@ export const mantineTheme: MantineThemeOverride = createTheme({
 	},
 });
 
-// Default export for consumers that import the module's default
 export default mantineTheme;

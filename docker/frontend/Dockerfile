@@ -46,7 +46,10 @@ server {
     # Use HTTPS to contact the backend public host so App Service TLS termination and redirects are preserved.
     proxy_pass https://{{BACKEND_HOST}};
     proxy_http_version 1.1;
-    proxy_set_header Connection "";
+    # Forward all request headers so Authorization and cookies are preserved for backend.
+    proxy_pass_request_headers on;
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header Cookie $http_cookie;
     # Set Host to the upstream host (so backend-generated absolute redirects use the backend FQDN)
     proxy_set_header Host $proxy_host;
     # Ensure TLS SNI uses the upstream host name

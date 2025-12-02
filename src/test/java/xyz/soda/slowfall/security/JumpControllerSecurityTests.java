@@ -23,8 +23,11 @@ public class JumpControllerSecurityTests {
 
     private String getAccessToken() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        String payload = om.writeValueAsString(new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass"));
-        MvcResult r = mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(payload))
+        String payload =
+                om.writeValueAsString(new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass"));
+        MvcResult r = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
                 .andExpect(status().isOk())
                 .andReturn();
         String body = r.getResponse().getContentAsString();

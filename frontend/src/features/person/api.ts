@@ -1,5 +1,4 @@
 import type { CreatePersonRequest, Person } from "./types";
-import { API_BASE_URL } from "../../lib/apiBase";
 import { fetchWithAuth } from "../../lib/fetchClient";
 
 /**
@@ -8,7 +7,7 @@ import { fetchWithAuth } from "../../lib/fetchClient";
  * @returns Promise resolving to Person[]
  */
 export async function fetchPerson(signal?: AbortSignal): Promise<Person[]> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/person`, { signal });
+	const res = await fetchWithAuth(`/person`, { signal });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch person: ${res.status} ${res.statusText}`);
 	}
@@ -21,7 +20,7 @@ export async function fetchPerson(signal?: AbortSignal): Promise<Person[]> {
  * @returns Promise resolving to created Person
  */
 export async function createPerson(payload: CreatePersonRequest): Promise<Person> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/person`, {
+	const res = await fetchWithAuth(`/person`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
@@ -39,7 +38,7 @@ export async function createPerson(payload: CreatePersonRequest): Promise<Person
  * @returns Promise resolving to Person[]
  */
 export async function fetchPilots(signal?: AbortSignal): Promise<Person[]> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/person/search?pilot=true`, { signal });
+	const res = await fetchWithAuth(`/person/search?pilot=true`, { signal });
 	if (!res.ok) {
 		if (res.status === 404) {
 			const all = await fetchPerson(signal);
@@ -59,7 +58,7 @@ export async function fetchPilots(signal?: AbortSignal): Promise<Person[]> {
  * @returns Promise resolving to Person[]
  */
 export async function fetchSkydivers(signal?: AbortSignal): Promise<Person[]> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/person/search?skydiver=true`, { signal });
+	const res = await fetchWithAuth(`/person/search?skydiver=true`, { signal });
 	if (!res.ok) {
 		if (res.status === 404) {
 			const all = await fetchPerson(signal);

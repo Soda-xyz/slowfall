@@ -56,7 +56,9 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					pilotsList.map((pilot) => ({ value: String(pilot.id), label: pilot.name })),
 				);
 			})
-			.catch(() => {});
+			.catch(() => {
+				// no-op
+			});
 		return () => {
 			mountedRef.current = false;
 		};
@@ -77,7 +79,9 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					prev ? prev : craftsList.length > 0 ? String(craftsList[0].registrationNumber) : "",
 				);
 			})
-			.catch(() => {});
+			.catch(() => {
+				// no-op
+			});
 		return () => {
 			mounted = false;
 		};
@@ -99,7 +103,9 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 						return airportsResponse.length > 0 ? String(airportsResponse[0].id) : prev;
 					});
 				})
-				.catch(() => {});
+				.catch(() => {
+					// no-op
+				});
 		} else {
 			setSelectedAirportId(
 				(prev) =>
@@ -196,7 +202,7 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					new CustomEvent("jumpCreated", { detail: created, bubbles: true, composed: true }),
 				);
 			} catch {
-				// ignore in non-browser or test environments
+				// no-op (non-browser/test environments)
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to create jump";

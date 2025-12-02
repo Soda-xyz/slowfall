@@ -29,8 +29,8 @@ class AirportControllerIntegrationTest {
     private String obtainAccessToken() throws Exception {
         ObjectMapper om = new ObjectMapper();
         var req = new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass");
-        ResponseEntity<String> resp = restTemplate.postForEntity(
-                "http://localhost:" + port + "/auth/login", req, String.class);
+        ResponseEntity<String> resp =
+                restTemplate.postForEntity("http://localhost:" + port + "/auth/login", req, String.class);
         if (resp.getStatusCode() != HttpStatus.OK) {
             throw new IllegalStateException("Failed to login: " + resp.getStatusCode());
         }
@@ -49,8 +49,8 @@ class AirportControllerIntegrationTest {
         String token = obtainAccessToken();
         headers.add("Authorization", "Bearer " + token);
 
-        ResponseEntity<AirportDto> postResp = restTemplate.postForEntity(
-                url, new HttpEntity<>(req, headers), AirportDto.class);
+        ResponseEntity<AirportDto> postResp =
+                restTemplate.postForEntity(url, new HttpEntity<>(req, headers), AirportDto.class);
         assertEquals(HttpStatus.CREATED, postResp.getStatusCode());
         AirportDto created = postResp.getBody();
         assertTrue(created != null && "Heathrow".equals(created.name()));
@@ -58,7 +58,8 @@ class AirportControllerIntegrationTest {
         // use same bearer token for GET as well
         HttpHeaders getHeaders = new HttpHeaders();
         getHeaders.add("Authorization", "Bearer " + token);
-        ResponseEntity<AirportDto[]> listResp = restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, new HttpEntity<>(null, getHeaders), AirportDto[].class);
+        ResponseEntity<AirportDto[]> listResp = restTemplate.exchange(
+                url, org.springframework.http.HttpMethod.GET, new HttpEntity<>(null, getHeaders), AirportDto[].class);
         assertEquals(HttpStatus.OK, listResp.getStatusCode());
         AirportDto[] list = listResp.getBody();
         boolean found = false;

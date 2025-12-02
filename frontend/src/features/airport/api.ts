@@ -1,5 +1,4 @@
 import type { Airport, CreateAirportRequest } from "./types";
-import { API_BASE_URL } from "../../lib/apiBase";
 import { fetchWithAuth } from "../../lib/fetchClient";
 
 /** Local frontend-only type for delete calls (keeps the import stable even if types.ts doesn't export it) */
@@ -11,7 +10,7 @@ type DeleteAirportRequest = { id: string };
  * @returns Promise resolving to an array of Airport
  */
 export async function fetchAirports(signal?: AbortSignal): Promise<Airport[]> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/airports`, { signal });
+	const res = await fetchWithAuth(`/airports`, { signal });
 	if (!res.ok) {
 		throw new Error(`Failed to fetch airports: ${res.status} ${res.statusText}`);
 	}
@@ -24,7 +23,7 @@ export async function fetchAirports(signal?: AbortSignal): Promise<Airport[]> {
  * @returns Promise resolving to the created Airport
  */
 export async function createAirport(payload: CreateAirportRequest): Promise<Airport> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/airports`, {
+	const res = await fetchWithAuth(`/airports`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
@@ -41,7 +40,7 @@ export async function createAirport(payload: CreateAirportRequest): Promise<Airp
  * @param payload - object with id property
  */
 export async function deleteAirport(payload: DeleteAirportRequest): Promise<void> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/airports/${payload.id}`, {
+	const res = await fetchWithAuth(`/airports/${payload.id}`, {
 		method: "DELETE",
 	});
 	if (!res.ok) {

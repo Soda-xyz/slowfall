@@ -1,0 +1,67 @@
+user  nginx;
+worker_processes  auto;
+error_log  /dev/stdout warn;
+pid        /var/run/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    large_client_header_buffers 4 32k;
+    client_max_body_size ${CLIENT_MAX_BODY_SIZE:-10m};
+
+    access_log /dev/stdout;
+    error_log /dev/stderr;
+
+    sendfile        on;
+    keepalive_timeout  65;
+    server_tokens off;
+
+    upstream backend_upstream {
+        server ${BACKEND_HOST:-slowfall-backend.azurewebsites.net}:${BACKEND_PORT:-8080};
+    }
+
+    server {
+        listen 80;
+        server_name _;
+
+        location = /healthz {
+            access_log off;
+            return 200 'OK';
+        }
+
+        location / {
+            root /usr/share/nginx/html;
+            try_files $uri $uri/ @proxy;
+            index index.html;
+        }
+
+        location /api/ {
+            proxy_pass http://backend_upstream;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Port $server_port;
+            proxy_redirect off;
+            proxy_read_timeout ${PROXY_READ_TIMEOUT:-90s};
+            proxy_send_timeout ${PROXY_SEND_TIMEOUT:-90s};
+            proxy_set_header Connection "";
+        }
+
+        location @proxy {
+            proxy_pass http://backend_upstream;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
+

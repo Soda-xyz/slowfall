@@ -230,7 +230,8 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .httpBasic(AbstractHttpConfigurer::disable)
+                // httpBasic is applied conditionally below instead of being unconditionally disabled
+                // .httpBasic(AbstractHttpConfigurer::disable)
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(
                         new org.springframework.security.oauth2.server.resource.web
                                 .BearerTokenAuthenticationEntryPoint()))
@@ -242,6 +243,16 @@ public class SecurityConfig {
         // authentication is present (checks for Authorization header, SecurityContext,
         // and certain request attributes), so this placement is safe for test scenarios.
         http.addFilterBefore(devBypassAuthFilter, AnonymousAuthenticationFilter.class);
+
+        // Conditionally enable HTTP Basic only in development-like profiles or when explicitly allowed via property.
+        boolean isPseudo = java.util.Arrays.asList(env.getActiveProfiles()).contains("pseudo");
+        boolean allowHttpBasic =
+                isDev || isPseudo || Boolean.parseBoolean(env.getProperty("app.security.allow-http-basic", "false"));
+        if (allowHttpBasic) {
+            http.httpBasic(Customizer.withDefaults());
+        } else {
+            http.httpBasic(AbstractHttpConfigurer::disable);
+        }
 
         return http.build();
     }
@@ -586,9 +597,9 @@ public class SecurityConfig {
 
         return jwt -> {
             java.util.Collection<org.springframework.security.core.GrantedAuthority> authorities =
-                    java.util.Objects.requireNonNullElse(
-                            grantedAuthoritiesConverter.convert(jwt), java.util.List.of());
-            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt, authorities);
+                    java.util.Objects.requireNonNullElse(grantedAuthoritiesConverter.convert(jwt), java.util.List.of());
+            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
+                    jwt, authorities);
         };
     }
 }

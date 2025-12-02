@@ -1,5 +1,4 @@
 import type { CreateJumpRequest, Jump } from "./types";
-import { API_BASE_URL } from "../../lib/apiBase";
 import { fetchWithAuth } from "../../lib/fetchClient";
 
 /**
@@ -8,7 +7,7 @@ import { fetchWithAuth } from "../../lib/fetchClient";
  * @returns Promise resolving to the created Jump
  */
 export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/jumps`, {
+	const res = await fetchWithAuth(`/jumps`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
@@ -26,7 +25,7 @@ export async function createJump(payload: CreateJumpRequest): Promise<Jump> {
  * @returns Promise resolving to Jump[]
  */
 export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/jumps`, { signal });
+	const res = await fetchWithAuth(`/jumps`, { signal });
 	if (!res.ok) {
 		if (res.status === 404) return [];
 		throw new Error(`Failed to fetch jumps: ${res.status} ${res.statusText}`);
@@ -38,7 +37,7 @@ export async function fetchJumps(signal?: AbortSignal): Promise<Jump[]> {
  * Add a skydiver to a jump.
  */
 export async function addSkydiverToJump(jumpId: string, personId: string): Promise<void> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/jumps/${jumpId}/skydivers`, {
+	const res = await fetchWithAuth(`/jumps/${jumpId}/skydivers`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ personId }),
@@ -50,7 +49,7 @@ export async function addSkydiverToJump(jumpId: string, personId: string): Promi
  * Add a pilot to a jump.
  */
 export async function addPilotToJump(jumpId: string, personId: string): Promise<void> {
-	const res = await fetchWithAuth(`${API_BASE_URL}/api/jumps/${jumpId}/pilots`, {
+	const res = await fetchWithAuth(`/jumps/${jumpId}/pilots`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ personId }),

@@ -1,14 +1,16 @@
-// Token store wrapper: provides get/set/clear and subscribe with BroadcastChannel fallback.
-// Compatible with React 19 and TypeScript ~5.9.
-// Uses localStorage key `auth_access_token` so tokens can sync across tabs; keeps SSR-safety.
+/**
+ * Token store wrapper: provides get/set/clear and subscribe with BroadcastChannel fallback.
+ * Compatible with React 19 and TypeScript ~5.9.
+ * Uses localStorage key `auth_access_token` so tokens can sync across tabs; keeps SSR-safety.
+ */
 
 export const KEY = "auth_access_token";
 export const CHANNEL = "slowfall-auth";
-// New: refresh token key stored in localStorage when using refresh-token flow
 export const REFRESH_KEY = "auth_refresh_token";
+
 type TokenSubscriber = (token: string | null) => void;
 
-// In-memory subscribers for same-tab notifications (important for test envs without BroadcastChannel)
+/** In-memory subscribers for same-tab notifications (important for test envs without BroadcastChannel) */
 const subscribers = new Set<TokenSubscriber>();
 
 function isWindowAvailable(): boolean {
@@ -19,6 +21,7 @@ function isWindowAvailable(): boolean {
 	}
 }
 
+/** Get access token */
 export function getToken(): string | null {
 	if (!isWindowAvailable()) return null;
 	try {
@@ -28,6 +31,7 @@ export function getToken(): string | null {
 	}
 }
 
+/** Set access token */
 export function setToken(token: string): void {
 	if (!isWindowAvailable()) return;
 	try {
@@ -38,11 +42,11 @@ export function setToken(token: string): void {
 				try {
 					subscriber(token);
 				} catch {
-					// ignore subscriber errors
+					// no-op
 				}
 			});
 		} catch {
-			// ignore subscriber iteration errors
+			// no-op
 		}
 		// Broadcast to other tabs
 		try {
@@ -51,23 +55,24 @@ export function setToken(token: string): void {
 				try {
 					bc.postMessage({ type: "token", token });
 				} catch {
-					// ignore postMessage errors
+					// no-op
 				} finally {
 					try {
 						bc.close();
 					} catch {
-						// ignore
+						// no-op
 					}
 				}
 			}
 		} catch {
-			// ignore broadcast errors
+			// no-op
 		}
 	} catch {
-		// ignore
+		// no-op
 	}
 }
 
+/** Clear access token */
 export function clearToken(): void {
 	if (!isWindowAvailable()) return;
 	try {
@@ -78,11 +83,11 @@ export function clearToken(): void {
 				try {
 					subscriber(null);
 				} catch {
-					// ignore subscriber errors
+					// no-op
 				}
 			});
 		} catch {
-			// ignore
+			// no-op
 		}
 		// Broadcast to other tabs
 		try {
@@ -91,24 +96,25 @@ export function clearToken(): void {
 				try {
 					bc.postMessage({ type: "token_cleared" });
 				} catch {
-					// ignore
+					// no-op
 				} finally {
 					try {
 						bc.close();
 					} catch {
-						// ignore
+						// no-op
 					}
 				}
 			}
 		} catch {
-			// ignore
+			// no-op
 		}
 	} catch {
-		// ignore
+		// no-op
 	}
 }
 
-// New: refresh-token helpers
+// Refresh-token helpers
+/** Get refresh token */
 export function getRefreshToken(): string | null {
 	if (!isWindowAvailable()) return null;
 	try {
@@ -118,21 +124,23 @@ export function getRefreshToken(): string | null {
 	}
 }
 
+/** Set refresh token */
 export function setRefreshToken(token: string): void {
 	if (!isWindowAvailable()) return;
 	try {
 		localStorage.setItem(REFRESH_KEY, token);
 	} catch {
-		// ignore
+		// no-op
 	}
 }
 
+/** Clear refresh token */
 export function clearRefreshToken(): void {
 	if (!isWindowAvailable()) return;
 	try {
 		localStorage.removeItem(REFRESH_KEY);
 	} catch {
-		// ignore
+		// no-op
 	}
 }
 
@@ -180,7 +188,7 @@ export function subscribe(cb: TokenSubscriber): () => void {
 	try {
 		cb(getToken());
 	} catch {
-		// ignore
+		// no-op
 	}
 
 	// Return unsubscribe
@@ -192,7 +200,7 @@ export function subscribe(cb: TokenSubscriber): () => void {
 			try {
 				bc.close();
 			} catch {
-				// ignore
+				// no-op
 			}
 		}
 	};
