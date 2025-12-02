@@ -90,6 +90,18 @@ CI/CD notes (GitHub Actions)
   - Build & push images to GHCR (main branch only)
   - Deploy images to App Services using Azure CLI (main branch only)
 
+## CI-driven runtime configuration for AAD group membership
+
+The CI workflow will propagate a GitHub Actions secret named `SLOWFALL_WEB_USERS_GROUP_ID` into the backend App Service as the app setting `APP_SECURITY_ALLOWED_GROUP_ID` during deploy. This allows changing the allowed AAD group via a single secret rotation and a CI redeploy instead of manually editing App Service settings.
+
+How to use:
+- Create a repository secret named `SLOWFALL_WEB_USERS_GROUP_ID` with the AAD group GUID value (e.g. `1dea5e51-d15e-4081-9722-46da3bfdee79`).
+- The CI workflow will set `APP_SECURITY_ALLOWED_GROUP_ID` on the `slowfall-backend` App Service during the `publish-images` job (the workflow uses `az webapp config appsettings set`).
+- The backend Spring Boot app reads the runtime value via the property `app.security.allowed-group-id`.
+
+Operational note:
+- To change the allowed group, update the GitHub secret and run the deploy workflow; CI will update the App Service setting automatically.
+
 Health checks, monitoring, and failure modes
 
 - Ensure an unauthenticated health endpoint (e.g., `/actuator/health`) is available for App Service probes.

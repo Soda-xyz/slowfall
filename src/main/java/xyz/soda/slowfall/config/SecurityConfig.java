@@ -52,6 +52,12 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 
+// Add JWT converters to map 'groups' claim to granted authorities
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Spring Security configuration for the application.
  *
@@ -78,6 +84,8 @@ import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 @EnableConfigurationProperties(CorsProperties.class)
 @SuppressWarnings("unused")
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     /**
      * Create the development bypass filter.
@@ -183,18 +191,35 @@ public class SecurityConfig {
             HttpSecurity http,
             Converter<Jwt, AbstractAuthenticationToken> jwtAuthConverter,
             DevBypassAuthFilter devBypassAuthFilter,
-            Environment env)
+            Environment env,
+            @Value("${app.security.allowed-group-id:}") String allowedGroupId)
             throws Exception {
         // Ensure Spring Security uses the application's CorsConfigurationSource so CORS headers
         // are applied before security decisions. This registers the CorsFilter inside the
         // security filter chain.
         http.cors(Customizer.withDefaults());
 
+        // Determine if we're running in 'dev' profile (allow a safe fallback there)
+        boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+
+        // If allowedGroupId wasn't provided, fail fast in non-dev; otherwise use a dev fallback
+        if (allowedGroupId == null || allowedGroupId.isBlank()) {
+            if (!isDev) {
+                throw new IllegalStateException(
+                        "Missing required configuration: 'app.security.allowed-group-id'"
+                );
+            } else {
+                // development convenience: use the previously provisioned test group id so local dev doesn't break
+                allowedGroupId = "1dea5e51-d15e-4081-9722-46da3bfdee79";
+                log.warn("app.security.allowed-group-id not set; using development fallback group id {}", allowedGroupId);
+            }
+        }
+
         // Conditionally disable CSRF: keep CSRF enabled during 'dev' so tests expecting
         // CSRF protection (MockMvc + csrf()) behave correctly. For non-dev (prod/test) we
         // use stateless APIs and disable CSRF. In dev we enable CSRF but ignore anonymous requests
         // (so unauthenticated requests return 401 instead of being rejected with 403 due to missing CSRF token).
-        boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+        isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
         if (!isDev) {
             http.csrf(AbstractHttpConfigurer::disable);
         } else {
@@ -213,21 +238,20 @@ public class SecurityConfig {
         // Read dev-bypass flag to optionally relax authentication for API endpoints
         boolean devBypass = Boolean.parseBoolean(env.getProperty("app.security.dev-bypass", "false"));
 
+        String finalAllowedGroupId = allowedGroupId;
         http.authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.OPTIONS).permitAll();
                     if (devBypass) {
-                        // In dev with dev-bypass enabled, allow unauthenticated access to auth and health endpoints.
-                        // IMPORTANT: do NOT globally permit /api/** here — the DevBypassAuthFilter is responsible
-                        // for selectively injecting a dev authentication for the dedicated test endpoints under
-                        // /api/protected/**. Granting blanket access to /api/** caused security tests to fail
-                        // because unauthenticated requests to regular API endpoints were being allowed.
                         auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
                     } else {
                         auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
                     }
-                    auth.anyRequest().authenticated();
+                    // Require membership in the configured AAD group. The allowedGroupId is read from
+                    // `app.security.allowed-group-id` (or provided via App Service / CI); map to ROLE_<id>
+                    String requiredAuthority = "ROLE_" + finalAllowedGroupId;
+                    auth.anyRequest().hasAuthority(requiredAuthority);
                 })
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // httpBasic is applied conditionally below instead of being unconditionally disabled
@@ -585,21 +609,20 @@ public class SecurityConfig {
                 .build();
     }
 
+    /**
+     * Convert a Jwt into an Authentication token mapping the `groups` claim to authorities.
+     * This maps each group GUID to an authority named `ROLE_<groupId>` so we can use familiar
+     * ROLE checks in security rules.
+     */
     @Bean
-    public Converter<org.springframework.security.oauth2.jwt.Jwt, AbstractAuthenticationToken> jwtAuthConverter() {
-        org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter
-                grantedAuthoritiesConverter =
-                        new org.springframework.security.oauth2.server.resource.authentication
-                                .JwtGrantedAuthoritiesConverter();
-        // Accept roles from a 'roles' claim and prefix with ROLE_ for compatibility with hasRole checks
-        grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
+    public Converter<Jwt, AbstractAuthenticationToken> jwtAuthConverter() {
+        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("groups");
+        // Prefix group GUIDs with ROLE_ so we can use hasAuthority("ROLE_<groupId>")
         grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
 
-        return jwt -> {
-            java.util.Collection<org.springframework.security.core.GrantedAuthority> authorities =
-                    java.util.Objects.requireNonNullElse(grantedAuthoritiesConverter.convert(jwt), java.util.List.of());
-            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
-                    jwt, authorities);
-        };
+        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return jwt -> jwtAuthenticationConverter.convert(jwt);
     }
 }

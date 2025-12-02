@@ -23,4 +23,3 @@ dist-ssr
 *.sln
 *.sw?
 /test-results/.last-run.json
-/playwright-report/

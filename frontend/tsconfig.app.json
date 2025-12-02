@@ -5,7 +5,8 @@
 		"useDefineForClassFields": true,
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"module": "ESNext",
-		"types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
+		// Only include Vite client types for the app build; test-related types were removed.
+		"types": ["vite/client"],
 		"skipLibCheck": true,
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
@@ -18,8 +19,8 @@
 		"noUnusedParameters": true,
 		"erasableSyntaxOnly": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true,
-		"typeRoots": ["src/types", "node_modules/@types"]
+		"noUncheckedSideEffectImports": true
 	},
-	"include": ["src"]
+	"include": ["src"],
+	"exclude": ["src/test", "e2e"]
 }

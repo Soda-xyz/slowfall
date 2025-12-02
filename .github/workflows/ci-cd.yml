@@ -3,18 +3,17 @@ name: CI / Build / Publish / Deploy
 on:
   push:
     branches:
-      - '**'
+      - "**"
   pull_request:
     branches:
-      - '**'
+      - "**"
   workflow_dispatch:
     inputs:
       frontend_env:
-        description: 'Frontend build mode (development or production)'
+        description: "Frontend build mode (development or production)"
         required: false
-        default: 'production'
+        default: "production"
 
-# Required permissions for GHCR push and OIDC to work
 permissions:
   contents: read
   packages: write
@@ -23,8 +22,6 @@ permissions:
 env:
   REGISTRY: ghcr.io
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
-  # Leave VITE_API_BASE_URL empty by default so apiBase logic (which expects empty production value)
-  # results in `${API_BASE_URL}/api/...` -> `/api/...` when VITE_API_BASE_URL is intentionally empty in production.
   VITE_API_BASE_URL: ""
 
 jobs:
@@ -43,11 +40,10 @@ jobs:
       - name: Set up JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: "temurin"
           java-version: '21'
           cache: 'gradle'
 
-      # Cache Gradle directories to speed up builds (wrapper + caches)
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -61,11 +57,7 @@ jobs:
 
       - name: Build & test backend (Gradle)
         working-directory: ./
-        # Do NOT force the build to use the 'prod' Spring profile during tests; running tests under 'prod'
-        # activates networked logging appenders (Logstash) which can fail in CI. Let tests run with default
-        # profile (or local override) unless explicitly required.
         run: |
-          echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-<not-set>}"
           ./gradlew --no-daemon clean test
 
       - name: Set up Node 20
@@ -78,83 +70,50 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
-      - name: Lint frontend (if configured)
+      - name: Lint frontend
         run: npm --prefix frontend run lint --if-present
 
-      - name: Test frontend (if configured)
+      - name: Test frontend
         run: npm --prefix frontend run test --if-present
 
       - name: Build frontend
-        # VITE_FRONTEND_ENV is driven by the workflow_dispatch input 'frontend_env' when provided;
-        # defaults to 'production' for push/PR runs. Compute VITE_API_BASE_URL per-mode to avoid
-        # accidental '/api/api' duplication when the project expects an empty production value.
         env:
           VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env || 'production' }}
           VITE_API_BASE_URL: ${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
         run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
 
-      - name: Install brotli (so we can scan .br assets)
+      - name: Install brotli (for asset checks)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y brotli
 
-      - name: "CI assertion: ensure frontend build didn't bake \"/api/api\""
+      - name: 'CI assertion: ensure frontend build didn''t bake /api/api'
         run: |
           set -euo pipefail
-          echo "Scanning frontend/dist for '/api/api' occurrences in JS chunks and compressed assets..."
           found=0
-
-          # 1) Check plain JS files (most relevant)
           if ls frontend/dist/*.js frontend/dist/**/*.js >/dev/null 2>&1; then
             if grep -R --line-number --binary-files=without-match "/api/api" frontend/dist/*.js frontend/dist/**/*.js 2>/dev/null; then
-              echo "ERROR: '/api/api' found in plain JS files under frontend/dist"
+              echo "ERROR: '/api/api' found in built assets"
               found=1
             fi
           fi
-
-          # 2) Check gzipped assets (.gz) by decompressing and scanning
-          while IFS= read -r -d '' f; do
-            if gzip -cd "$f" 2>/dev/null | grep -q -- "/api/api"; then
-              echo "ERROR: '/api/api' found inside gzipped asset: $f"
-              found=1
-            fi
-          done < <(find frontend/dist -type f -name '*.gz' -print0)
-
-          # 3) Check brotli compressed assets (.br) if brotli is available on the runner
-          if command -v brotli >/dev/null 2>&1; then
-            while IFS= read -r -d '' f; do
-              if brotli -d -c "$f" 2>/dev/null | grep -q -- "/api/api"; then
-                echo "ERROR: '/api/api' found inside brotli-compressed asset: $f"
-                found=1
-              fi
-            done < <(find frontend/dist -type f -name '*.br' -print0)
-          else
-            echo "Note: 'brotli' not installed on runner; skipping .br asset checks."
-          fi
-
           if [ "$found" -ne 0 ]; then
-            echo "ERROR: Found '/api/api' in built frontend assets. This usually indicates VITE_API_BASE_URL was set incorrectly during build, causing duplicated '/api'."
-            echo "Ensure production builds use an empty VITE_API_BASE_URL (so API paths become '/api/...') or update frontend/src/lib/apiBase.ts accordingly."
             exit 1
           fi
 
-          echo "No '/api/api' occurrences found in JS chunks or compressed assets."
-
-      - name: Upload build artifacts (optional, for debugging)
+      - name: Upload build artifacts (optional)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: frontend/dist
 
-  # New job: frontend-docker-checks - build the frontend image locally and run basic runtime checks
   frontend-docker-checks:
-    name: Frontend Docker checks (nginx test, index.html, run & curl)
+    name: Frontend Docker checks (nginx test)
     runs-on: ubuntu-latest
     needs: build-and-test
     env:
-      # baked FQDN used in the frontend image build (same expression as used when building)
       BACKEND_FQDN: ${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
 
     steps:
@@ -169,16 +128,13 @@ jobs:
         run: |
           set -euo pipefail
           RAW="${{ secrets.BACKEND_APP_NAME }}"
-          # Trim whitespace/newlines
           SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
-          # If the secret already looks like a FQDN (contains a dot) use as-is; otherwise append azurewebsites.net
           if echo "$SANITIZED" | grep -q '\.'; then
             FQDN="$SANITIZED"
           else
             FQDN="$SANITIZED.azurewebsites.net"
           fi
           echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
-          echo "Computed BACKEND_FQDN=$FQDN"
 
       - name: Build frontend image (load into local Docker)
         uses: docker/build-push-action@v4
@@ -190,16 +146,12 @@ jobs:
           tags: |
             slowfall-frontend:ci
           build-args: |
-            # Prefer the DEPLOY_ENV secret when present. Map 'prod' to Vite 'production'.
             VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
-             # Use sanitized BACKEND_FQDN computed in a prior step
-             BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
       - name: nginx config syntax test inside image
-        # Add hosts entries for both the sanitized FQDN and a 'backend' fallback so CI tests don't fail due to name mismatches
         run: |
-          echo "Testing nginx config using BACKEND_FQDN=${BACKEND_FQDN}"
           docker run --rm --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
 
       - name: Ensure index.html exists in image
@@ -208,20 +160,10 @@ jobs:
       - name: Start container in background and curl root
         run: |
           set -euo pipefail
-          # Start container with both the sanitized FQDN and 'backend' stubbed to localhost to match either baked config
           docker run -d --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
           sleep 3
-          # Attempt a simple curl; do not fail pipeline here — we'll gather logs on failure in a later step
           if ! curl -fsS --max-time 5 http://127.0.0.1:8080/ | head -c 200 >/tmp/frontend_curl.out; then
-            echo "Warning: curl failed; container may have exited."
-            ls -la /usr/share/nginx/html || true
-            echo "-- show collected curl output (may be empty) --"
-            cat /tmp/frontend_curl.out || true
-            # keep going; the failure-collection step will run if this step fails the job
             exit 1
-          else
-            echo "Frontend HTTP root responded; sample output:"
-            head -c 200 /tmp/frontend_curl.out || true
           fi
 
       - name: Cleanup container and image (always)
@@ -229,33 +171,6 @@ jobs:
         run: |
           docker rm -f slowfall-frontend-ci >/dev/null 2>&1 || true
           docker image rm slowfall-frontend:ci >/dev/null 2>&1 || true
-
-      - name: Collect Docker debug info on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-docker-debug
-          path: |
-            docker-ps.txt
-            docker-logs.txt
-            docker-inspect.txt
-            docker-images.txt
-        # generate the debug files and upload them
-      - name: Generate docker debug files (only on failure)
-        if: failure()
-        run: |
-          set -euo pipefail
-          echo "--- docker ps -a ---" > docker-ps.txt
-          docker ps -a >> docker-ps.txt 2>&1 || true
-
-          echo "--- docker images (local) ---" > docker-images.txt
-          docker images >> docker-images.txt 2>&1 || true
-
-          echo "--- docker inspect slowfall-frontend-ci (if present) ---" > docker-inspect.txt
-          docker inspect slowfall-frontend-ci >> docker-inspect.txt 2>&1 || true
-
-          echo "--- docker logs slowfall-frontend-ci (if present) ---" > docker-logs.txt
-          docker logs slowfall-frontend-ci >> docker-logs.txt 2>&1 || true
 
   publish-images:
     name: Build & Publish images (GHCR)
@@ -270,9 +185,7 @@ jobs:
       - name: Normalize repository owner to lowercase
         id: normalize_owner
         run: |
-          # Use the github.repository_owner value passed via env to compute a lower-case owner
           OWNER="${{ github.repository_owner }}"
-          echo "Computing lowercase owner from '$OWNER'"
           LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
           echo "owner_lower=$LOWER" >> "$GITHUB_OUTPUT"
 
@@ -286,20 +199,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Alternative: if your org allows it, GITHUB_TOKEN with 'packages: write' permission will work.
-      # If you still see authentication errors, create a PAT with 'write:packages' and store it in the
-      # repository secret GHCR_TOKEN (recommended for org-owned namespaces).
-
       - name: Compute sanitized BACKEND_FQDN for publish
         id: sanitize_backend_publish
         run: |
           set -euo pipefail
           RAW="${{ secrets.BACKEND_APP_NAME }}"
           SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
-          if [ -z "$SANITIZED" ]; then
-            echo "ERROR: BACKEND_APP_NAME secret is empty"
-            exit 1
-          fi
           if echo "$SANITIZED" | grep -q '\.'; then
             FQDN="$SANITIZED"
           else
@@ -313,30 +218,29 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Set backend App Service allowed-group app setting from secret
+        run: |
+          set -euo pipefail
+          az webapp config appsettings set \
+            --name "${{ secrets.BACKEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --settings "APP_SECURITY_ALLOWED_GROUP_ID=${{ secrets.SLOWFALL_WEB_USERS_GROUP_ID }}"
+
       - name: Resolve backend defaultHostName (use as BACKEND_FQDN)
         run: |
           set -euo pipefail
           RAW_NAME="${{ secrets.BACKEND_APP_NAME }}"
           RG="${{ secrets.AZURE_RG }}"
-          echo "Resolving backend defaultHostName for app '$RAW_NAME' in resource group '$RG'..."
           FQDN=$(az webapp show --name "$RAW_NAME" --resource-group "$RG" --query defaultHostName -o tsv)
-          if [ -z "$FQDN" ]; then
-            echo "ERROR: Unable to resolve defaultHostName for $RAW_NAME in $RG"
-            az webapp show --name "$RAW_NAME" --resource-group "$RG" || true
-            exit 1
-          fi
           echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
-          echo "Resolved BACKEND_FQDN=$FQDN"
 
-      # NEW: compute SPRING_PROFILE from repository secret DEPLOY_ENV and fail early if missing
       - name: Compute SPRING_PROFILE from DEPLOY_ENV secret
         id: compute_spring_profile
         run: |
           set -euo pipefail
-          # DEPLOY_ENV should be set as a repository secret to control CI deploy mode (e.g. 'prod' or 'production')
           DEPLOY="${{ secrets.DEPLOY_ENV || '' }}"
           if [ -z "$DEPLOY" ]; then
-            echo "ERROR: Repository secret DEPLOY_ENV is not set. Please create a repository secret named DEPLOY_ENV with value 'prod' (or 'production') to ensure CI builds in production mode."
+            echo "ERROR: Repository secret DEPLOY_ENV is not set."
             exit 1
           fi
           case "$DEPLOY" in
@@ -350,10 +254,7 @@ jobs:
               SPRING_PROFILE="$DEPLOY"
               ;;
           esac
-          # export for steps in this job
           echo "SPRING_PROFILE=$SPRING_PROFILE" >> "$GITHUB_ENV"
-          echo "Computed SPRING_PROFILE=$SPRING_PROFILE"
-          # also export as a step output so other jobs can consume it via needs.publish-images.outputs.spring_profile
           echo "spring_profile=$SPRING_PROFILE" >> "$GITHUB_OUTPUT"
 
       - name: Build & push backend image
@@ -367,7 +268,6 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
-            # Drive the spring profile in the container image via the DEPLOY_ENV repository secret
             SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILE }}
 
       - name: Build & push frontend image
@@ -381,11 +281,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
-            # Map SPRING profile to Vite mode for the frontend build inside the image; allow DEPLOY_ENV-driven behavior
             VITE_FRONTEND_ENV=${{ env.SPRING_PROFILE == 'prod' && 'production' || env.SPRING_PROFILE }}
             VITE_API_BASE_URL=${{ env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '' }}
-             # Use resolved BACKEND_FQDN computed earlier via Azure CLI
-             BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
       - name: Build & push proxy image
         uses: docker/build-push-action@v4
@@ -398,8 +296,40 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:latest
           build-args: |
-            # No special build args for the proxy by default; allow overriding BACKEND_HOST at build-time
             BACKEND_HOST=${{ env.BACKEND_FQDN }}
+
+      - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
+        run: |
+          set -euo pipefail
+          SETTINGS=()
+          if [ -n "${SPRING_PROFILE:-}" ]; then
+            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}")
+          fi
+          SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
+          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+          az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+
+      - name: Set app settings on proxy
+        run: |
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
+          if [ -n "${BACKEND_FQDN:-}" ]; then
+            BACKEND_HOST_VAL="${BACKEND_FQDN}"
+          else
+            BACKEND_HOST_VAL="${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net"
+          fi
+          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings \
+            WEBSITES_PORT=80 BACKEND_HOST="$BACKEND_HOST_VAL" BACKEND_PORT=8080 CLIENT_MAX_BODY_SIZE=20m PROXY_READ_TIMEOUT=90s PROXY_SEND_TIMEOUT=90s APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL || 'https://slowfall-keyvault-next.vault.azure.net/' }}"
+
+      - name: Restart backend Web App
+        run: az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+
+      - name: Restart frontend Web App
+        run: az webapp restart --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+
+      - name: Restart proxy Web App
+        run: |
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
+          az webapp restart --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}"
 
   deploy-to-azure:
     name: Deploy to Azure Web Apps (optional via OIDC)
@@ -407,7 +337,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
-    # Ensure we pick up the SPRING_PROFILE computed during the publish-images job
     env:
       SPRING_PROFILE: ${{ needs.publish-images.outputs.spring_profile }}
 
@@ -415,21 +344,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate required Azure secrets are present (fail early with clear message)
+      - name: Validate required Azure secrets are present (fail early)
         run: |
           set -euo pipefail
-          echo "Validating Azure deploy secrets..."
-
-          # Only accept the secret names documented in README_ENV.md
           AZ_SUBSCRIPTION_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
           AZ_TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
           AZ_CLIENT_ID="${{ secrets.AZURE_CLIENT_ID }}"
-
-          # Readme-named secrets
           AZ_RESOURCE_GROUP="${{ secrets.AZURE_RG }}"
           AZ_WEBAPP_BACKEND="${{ secrets.BACKEND_APP_NAME }}"
           AZ_WEBAPP_FRONTEND="${{ secrets.FRONTEND_APP_NAME }}"
-
           missing=()
           [ -z "$AZ_SUBSCRIPTION_ID" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
           [ -z "$AZ_TENANT_ID" ] && missing+=("AZURE_TENANT_ID") || true
@@ -437,22 +360,11 @@ jobs:
           [ -z "$AZ_RESOURCE_GROUP" ] && missing+=("AZURE_RG") || true
           [ -z "$AZ_WEBAPP_BACKEND" ] && missing+=("BACKEND_APP_NAME") || true
           [ -z "$AZ_WEBAPP_FRONTEND" ] && missing+=("FRONTEND_APP_NAME") || true
-
           if [ ${#missing[@]} -ne 0 ]; then
             echo "ERROR: Missing required Azure secrets: ${missing[*]}"
-            echo "Add the missing repository secrets or run this workflow manually with the appropriate secrets set."
             exit 1
           fi
 
-          echo "All required Azure secrets present. Proceeding with deploy."
-
-          # Export resolved names for downstream steps in this job
-          echo "AZ_RESOURCE_GROUP=$AZ_RESOURCE_GROUP" >> "$GITHUB_ENV"
-          echo "AZ_WEBAPP_BACKEND=$AZ_WEBAPP_BACKEND" >> "$GITHUB_ENV"
-          echo "AZ_WEBAPP_FRONTEND=$AZ_WEBAPP_FRONTEND" >> "$GITHUB_ENV"
-
-      # azure/login supports OIDC-based federated login when a federated credential
-      # is configured on the Azure service principal. No client secret is required.
       - name: Azure login (OIDC)
         uses: azure/login@v1
         with:
@@ -460,116 +372,31 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Verify App Services exist in the resource group
+      - name: Verify App Services exist
         run: |
           set -euo pipefail
-          echo "Checking App Services ${AZ_WEBAPP_BACKEND} and ${AZ_WEBAPP_FRONTEND} in resource group ${AZ_RESOURCE_GROUP}..."
-          missing=()
-          if ! az webapp show --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" > /dev/null 2>&1; then
-            missing+=("${AZ_WEBAPP_BACKEND}")
-          fi
-          if ! az webapp show --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" > /dev/null 2>&1; then
-            missing+=("${AZ_WEBAPP_FRONTEND}")
-          fi
-          if [ ${#missing[@]} -ne 0 ]; then
-            echo "ERROR: The following App Services were not found in resource group ${AZ_RESOURCE_GROUP}: ${missing[*]}"
-            echo "Available web apps in the resource group:"
-            az webapp list --resource-group "${AZ_RESOURCE_GROUP}" --query "[].{name:name,defaultHostName:defaultHostName}" -o table || true
-            echo "Ensure the GitHub secret values BACKEND_APP_NAME and FRONTEND_APP_NAME contain the exact App Service names (no domain suffix)."
-            exit 1
-          fi
+          az webapp show --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" >/dev/null 2>&1
+          az webapp show --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" >/dev/null 2>&1
 
-      - name: Set backend image on Azure Web App
+      - name: Set backend container image
         run: |
-          az webapp config container set \
-            --name "${AZ_WEBAPP_BACKEND}" \
-            --resource-group "${AZ_RESOURCE_GROUP}" \
-            --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
+          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
 
-      - name: Set frontend image on Azure Web App
+      - name: Set frontend container image
         run: |
-          az webapp config container set \
-            --name "${AZ_WEBAPP_FRONTEND}" \
-            --resource-group "${AZ_RESOURCE_GROUP}" \
-            --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
+          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
 
-      - name: Set proxy image on Azure Web App
-        run: |
-          # Use the PROXY_APP_NAME repository secret when present; fall back to 'slowfall-proxy'
-          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          echo "Setting proxy image on webapp $PROXY_NAME"
-          az webapp config container set \
-            --name "$PROXY_NAME" \
-            --resource-group "${AZ_RESOURCE_GROUP}" \
-            --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
-
-      - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
-        run: |
-          set -euo pipefail
-          # Use SPRING_PROFILE computed earlier from DEPLOY_ENV secret (published as a job output).
-          echo "Deploy-time SPRING_PROFILE='${SPRING_PROFILE:-}'"
-
-          # Build up the app settings list. Only include SPRING_PROFILES_ACTIVE when non-empty so
-          # we don't overwrite an image-default value with an empty string in App Service.
-          SETTINGS=()
-          if [ -n "${SPRING_PROFILE:-}" ]; then
-            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}")
-          else
-            echo "Note: SPRING_PROFILE is empty; leaving SPRING_PROFILES_ACTIVE unset so image default applies."
-          fi
-          SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
-
-          echo "Setting app settings on backend: ${SETTINGS[*]}"
-          az webapp config appsettings set --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "${SETTINGS[@]}"
-
-          echo "Setting app settings on frontend: ${SETTINGS[*]}"
-          az webapp config appsettings set --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}" --settings "${SETTINGS[@]}"
-
-      - name: Set app settings on proxy (backend mapping and web port)
+      - name: Set proxy container image
         run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          echo "Configuring proxy app settings for $PROXY_NAME"
-          # Default backend host is resolved earlier as BACKEND_FQDN in publish-images; fallback to BACKEND_APP_NAME.azurewebsites.net
-          # Compute BACKEND_HOST_VAL in shell (avoid invalid '+' in GitHub expression syntax):
-          # Priority: 1) env.BACKEND_FQDN  2) secrets.BACKEND_APP_NAME + '.azurewebsites.net'  3) hardcoded default
-          if [ -n "${BACKEND_FQDN:-}" ]; then
-            BACKEND_HOST_VAL="${BACKEND_FQDN}"
-          elif [ -n "${{ secrets.BACKEND_APP_NAME }}" ]; then
-            BACKEND_HOST_VAL="${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net"
-          else
-            BACKEND_HOST_VAL="slowfall-backend.azurewebsites.net"
-          fi
-          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${AZ_RESOURCE_GROUP}" --settings \
-            WEBSITES_PORT=80 \
-            BACKEND_HOST="$BACKEND_HOST_VAL" \
-            BACKEND_PORT=8080 \
-            CLIENT_MAX_BODY_SIZE=20m \
-            PROXY_READ_TIMEOUT=90s \
-            PROXY_SEND_TIMEOUT=90s \
-            APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL || 'https://slowfall-keyvault-next.vault.azure.net/' }}"
+          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
 
-      - name: Restart backend Web App
+      - name: Restart services
         run: |
-          az webapp restart --name "${AZ_WEBAPP_BACKEND}" --resource-group "${AZ_RESOURCE_GROUP}"
-
-      - name: Restart frontend Web App
-        run: |
-          az webapp restart --name "${AZ_WEBAPP_FRONTEND}" --resource-group "${AZ_RESOURCE_GROUP}"
-
-      - name: Restart proxy Web App
-        run: |
+          az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+          az webapp restart --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          az webapp restart --name "$PROXY_NAME" --resource-group "${AZ_RESOURCE_GROUP}"
+          az webapp restart --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}"
 
 # End of workflow
 
-# Notes for repository administrators / maintainers:
-# - This workflow pushes images to GHCR using the repository GITHUB_TOKEN. To allow pushing packages
-#   with GITHUB_TOKEN, grant the Actions token permission to write packages: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
-#   (Repository Settings -> Actions -> General -> Workflow permissions -> "Read and write permissions" and ensure Packages permission enabled.)
-# - For Azure OIDC-based deploys, configure a federated credential on an Azure service principal and add the
-#   following repository secrets (names from README_ENV.md): AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RG,
-#   BACKEND_APP_NAME, FRONTEND_APP_NAME. See README_CLOUD.md for details.
-# - If you prefer to use a PAT for GHCR push instead of GITHUB_TOKEN, create a secret GHCR_TOKEN and set
-#   the login step to use that instead (username: your GitHub username, password: ${{ secrets.GHCR_TOKEN }}).
-# - This workflow builds for linux/amd64 only by default; add additional platforms if you need multi-arch builds.

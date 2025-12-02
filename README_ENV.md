@@ -15,8 +15,39 @@ Recorded provision values (non-secret)
 - Key Vault secret (credentials) name: `slowfall-backend-client-secret`
 - Key Vault URI (example): `https://slowfall-keyvault-next.vault.azure.net/`
 - Public proxy domain (frontend): `https://www.oskarnilsson.net` (set as `ALLOWED_ORIGINS` for CORS)
+- AAD group for web users (GUID): `SLOWFALL_WEB_USERS_GROUP_ID=1dea5e51-d15e-4081-9722-46da3bfdee79`
+- Test user (member account, non-secret record): `kisse@Sodezangmail.onmicrosoft.com` (created for testing only)
 
-Note: Do NOT store raw secret values in the repository. Store secret names, appIds, and Key Vault URIs here as a reference; actual secret values should be kept in Key Vault or GitHub Actions secrets.
+Note: Do NOT store raw secret values in the repository. Store secret names, appIds, Key Vault URIs and group ids here as a reference; actual secret values should remain in Key Vault or GitHub Actions secrets.
+
+---
+
+Runtime App Service app settings to add (set in Azure Portal -> App Service -> Configuration -> Application settings)
+- SLOWFALL_WEB_USERS_GROUP_ID (recommended)
+  - Purpose: The GUID of the AAD security group whose members are allowed to access the application (used by backend to enforce group-based access).
+  - Example: `1dea5e51-d15e-4081-9722-46da3bfdee79`
+  - How it's consumed: the backend can read this from the environment (for example map to `app.security.allowed-group-id`) and use it in security checks instead of hard-coding GUIDs.
+
+- Alternative property name (Spring property): `app.security.allowed-group-id`
+  - Purpose: If you prefer to bind config via Spring properties, set `app.security.allowed-group-id` in your App Service app settings (or in `application-prod.properties`). The application code can then read this property and use it in authorization checks.
+
+Recommendation
+- Add `SLOWFALL_WEB_USERS_GROUP_ID` as a GitHub Actions repository secret with the AAD group GUID value (non-secret value). CI will use that secret and write it into the backend App Service as the app setting `APP_SECURITY_ALLOWED_GROUP_ID` during deploy.
+
+How CI maps the secret to runtime
+- Repository secret: `SLOWFALL_WEB_USERS_GROUP_ID` (set in GitHub → Settings → Secrets → Actions)
+- CI will write this value as an App Service app setting named `APP_SECURITY_ALLOWED_GROUP_ID` for the backend app so Spring Boot picks it up via `app.security.allowed-group-id`.
+
+Example (what to set):
+- GitHub secret: `SLOWFALL_WEB_USERS_GROUP_ID=1dea5e51-d15e-4081-9722-46da3bfdee79`
+- After CI runs, App Service backend app setting: `APP_SECURITY_ALLOWED_GROUP_ID=1dea5e51-d15e-4081-9722-46da3bfdee79`
+
+Operational note
+- To rotate or change the allowed group, update the GitHub secret and run the deploy workflow; CI will update the App Service setting automatically.
+
+Security & operational notes
+- The group GUID is not a secret, but keep it under controlled documentation so operators don't accidentally change it. The canonical source of truth should be this README and your infra IaC (Bicep/ARM/Terraform) where applicable.
+- If you change the group, update `SLOWFALL_WEB_USERS_GROUP_ID` in App Service app settings and any CI references, and record the change in this file and `README_CLOUD.md`.
 
 ---
 

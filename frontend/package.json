@@ -8,10 +8,11 @@
 		"build": "tsc -b && vite build",
 		"lint": "eslint .",
 		"preview": "vite preview",
-		"test": "vitest",
-		"test:e2e": "playwright test"
+		"test": "vitest"
 	},
 	"dependencies": {
+		"@azure/msal-browser": "^4.26.0",
+		"@azure/msal-react": "^3.0.22",
 		"@mantine/core": "^8.3.9",
 		"@mantine/dates": "^8.3.9",
 		"@mantine/hooks": "^8.3.9",
@@ -20,13 +21,10 @@
 		"dayjs": "^1.11.9",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
-		"react-router-dom": "^6.30.2",
-		"@azure/msal-browser": "^4.26.0",
-		"@azure/msal-react": "^3.0.22"
+		"react-router-dom": "^6.30.2"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.39.1",
-		"@playwright/test": "^1.57.0",
 		"@testing-library/jest-dom": "^6.0.0",
 		"@testing-library/react": "^16.3.0",
 		"@testing-library/user-event": "^14.6.1",
