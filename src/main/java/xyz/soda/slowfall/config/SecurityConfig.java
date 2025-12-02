@@ -76,6 +76,7 @@ import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
  */
 @Configuration
 @EnableConfigurationProperties(CorsProperties.class)
+@SuppressWarnings("unused")
 public class SecurityConfig {
 
     /**
@@ -229,7 +230,10 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .httpBasic(Customizer.withDefaults())
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                        new org.springframework.security.oauth2.server.resource.web
+                                .BearerTokenAuthenticationEntryPoint()))
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter)));
 
         // Add dev-bypass filter before the AnonymousAuthenticationFilter so it can inject
@@ -367,11 +371,11 @@ public class SecurityConfig {
 
         if ((username == null || (password == null && passwordHash == null)) && secretValue != null) {
             java.util.regex.Pattern userPattern = java.util.regex.Pattern.compile(
-                    "username\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
+                    "username\\s*[:=]\\s*\"?([^,}\"]+)\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
             java.util.regex.Pattern passPattern = java.util.regex.Pattern.compile(
-                    "password\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
+                    "password\\s*[:=]\\s*\"?([^,}\"]+)\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
             java.util.regex.Pattern passHashPattern = java.util.regex.Pattern.compile(
-                    "passwordHash\\s*[:=]\\s*\\\"?([^,}\\\"]+)\\\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
+                    "passwordHash\\s*[:=]\\s*\"?([^,}\"]+)\"?", java.util.regex.Pattern.CASE_INSENSITIVE);
             java.util.regex.Matcher mu = userPattern.matcher(secretValue);
             if (mu.find()) {
                 username = mu.group(1).trim();
@@ -582,12 +586,9 @@ public class SecurityConfig {
 
         return jwt -> {
             java.util.Collection<org.springframework.security.core.GrantedAuthority> authorities =
-                    grantedAuthoritiesConverter.convert(jwt);
-            if (authorities == null) {
-                authorities = java.util.List.of();
-            }
-            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
-                    jwt, authorities);
+                    java.util.Objects.requireNonNullElse(
+                            grantedAuthoritiesConverter.convert(jwt), java.util.List.of());
+            return new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt, authorities);
         };
     }
 }

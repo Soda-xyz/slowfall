@@ -3,6 +3,8 @@ package xyz.soda.slowfall.craft.api;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,15 +26,27 @@ class CraftControllerIntegrationTest {
     @Autowired
     TestRestTemplate restTemplate;
 
+    private String obtainAccessToken() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        var req = new xyz.soda.slowfall.auth.AuthController.LoginRequest("dev", "devpass");
+        ResponseEntity<String> resp = restTemplate.postForEntity(
+                "http://localhost:" + port + "/auth/login", req, String.class);
+        if (resp.getStatusCode() != HttpStatus.OK) {
+            throw new IllegalStateException("Failed to login: " + resp.getStatusCode());
+        }
+        JsonNode node = om.readTree(resp.getBody());
+        return node.get("accessToken").asText();
+    }
+
     @Test
-    void createAndListCraftEndToEnd() {
+    void createAndListCraftEndToEnd() throws Exception {
         String url = "http://localhost:" + port + "/api/crafts";
 
         CreateCraftRequest req = new CreateCraftRequest("C1", "REG-1", 1000, 4);
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
-        // Use dev basic auth (dev:devpass) so requests reach the controller when security requires auth
-        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
+        String token = obtainAccessToken();
+        headers.add("Authorization", "Bearer " + token);
 
         ResponseEntity<CraftDto> postResp =
                 restTemplate.postForEntity(url, new HttpEntity<>(req, headers), CraftDto.class);
@@ -42,11 +56,12 @@ class CraftControllerIntegrationTest {
     }
 
     @Test
-    void duplicateCreateReturnsBadRequest() {
+    void duplicateCreateReturnsBadRequest() throws Exception {
         String url = "http://localhost:" + port + "/api/crafts";
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
-        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
+        String token = obtainAccessToken();
+        headers.add("Authorization", "Bearer " + token);
 
         CreateCraftRequest req1 = new CreateCraftRequest("C-DUP", "REG-DUP", 1000, 4);
         ResponseEntity<CraftDto> r1 = restTemplate.postForEntity(url, new HttpEntity<>(req1, headers), CraftDto.class);
@@ -59,11 +74,12 @@ class CraftControllerIntegrationTest {
     }
 
     @Test
-    void invalidPayloadReturnsBadRequest() {
+    void invalidPayloadReturnsBadRequest() throws Exception {
         String url = "http://localhost:" + port + "/api/crafts";
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
-        headers.add("Authorization", "Basic ZGV2OmRldnBhc3M=");
+        String token = obtainAccessToken();
+        headers.add("Authorization", "Bearer " + token);
 
         // blank name
         CreateCraftRequest req = new CreateCraftRequest("   ", "REG-1", 1000, 4);

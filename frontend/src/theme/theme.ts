@@ -45,7 +45,7 @@ const BRAND_PALETTE = [
  * https://mantine.dev/theming/mantine-provider/ and
  * https://mantine.dev/theming/theme-object/
  */
-export const theme: MantineThemeOverride = createTheme({
+export const mantineTheme: MantineThemeOverride = createTheme({
 	fontSizes: {
 		xs: rem("12px"),
 		sm: rem("14px"),
@@ -75,15 +75,18 @@ export const theme: MantineThemeOverride = createTheme({
 	primaryShade: 6,
 	components: {
 		Container: Container.extend({
-			vars: (_, { size, fluid }) => ({
-				root: {
-					"--container-size": fluid
-						? "100%"
-						: size !== undefined && size in CONTAINER_SIZES
-							? CONTAINER_SIZES[size]
-							: rem(size),
-				},
-			}),
+			vars: (_theme, { size, fluid }) => {
+				void _theme;
+				return {
+					root: {
+						"--container-size": fluid
+							? "100%"
+							: size !== undefined && size in CONTAINER_SIZES
+								? CONTAINER_SIZES[size]
+								: rem(size),
+					},
+				};
+			},
 		}),
 		Paper: Paper.extend({
 			defaultProps: {
@@ -136,3 +139,6 @@ export const theme: MantineThemeOverride = createTheme({
 		},
 	},
 });
+
+// Default export for consumers that import the module's default
+export default mantineTheme;

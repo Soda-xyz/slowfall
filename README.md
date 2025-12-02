@@ -23,8 +23,29 @@ and secrets, and `README_CLOUD.md` for cloud deployment and Key Vault setup.
 - [Opt-in annotation `@Loggable`](#opt-in-annotation-loggable)
 - [MDC (traceId / userId)](#mdc-traceid--userid)
 - [Where to look in the repository](#where-to-look-in-the-repository)
-- [Environment & Deployment](#)
+- [Environment & Deployment](#environment--deployment-brief)
 - [Azure Front Door & Key Vault TLS](#azure-front-door--key-vault-tls)
+
+# Formatters & Linters — Backend (Gradle / Java)
+
+Copyable commands (run from repo root):
+
+```bash
+# apply Spotless formatting to Java sources
+./gradlew spotlessApply
+```
+
+```bash
+# run Spotless check (verify formatting)
+./gradlew spotlessCheck
+```
+
+```bash
+# run Checkstyle for main and test sources
+./gradlew checkstyleMain checkstyleTest
+```
+
+> Full project README follows below.
 
 ## Automatic method-level logging (LoggingAspect)
 

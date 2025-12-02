@@ -4,10 +4,11 @@ import { describe, test, expect } from "vitest";
 import React from "react";
 import { screen, renderWithMantine } from "./test-utils";
 import { useMantineTheme } from "@mantine/core";
-import { theme as appTheme } from "../theme/theme";
+import { mantineTheme as appTheme } from "../theme/theme";
 import { showNotification } from "@mantine/notifications";
 import mantineCssVariableResolver from "../theme/cssVariableResolver";
 import type { MantineTheme } from "@mantine/core";
+import { act } from "react";
 
 describe("MantineProvider + theme integration", () => {
 	test("renders children inside MantineProvider", () => {
@@ -48,7 +49,9 @@ describe("MantineProvider + theme integration", () => {
 	test("showNotification renders notification content", async () => {
 		renderWithMantine(<div />);
 
-		showNotification({ title: "Test", message: "Notification message" });
+		act(() => {
+			showNotification({ title: "Test", message: "Notification message" });
+		});
 
 		expect(await screen.findByText("Notification message")).toBeInTheDocument();
 	});

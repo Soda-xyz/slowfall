@@ -3,7 +3,7 @@ import { render } from "@testing-library/react";
 import type { RenderResult } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
-import { theme as mantineTheme } from "../theme/theme";
+import { mantineTheme } from "../theme/theme";
 import mantineCssVariableResolver from "../theme/cssVariableResolver";
 
 /**
