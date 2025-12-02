@@ -83,7 +83,15 @@ public class DevBypassAuthFilter implements Filter {
             }
             req.setAttribute(AUTHENTICATED_USER_ATTR, user);
 
-            var authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
+            // Choose the authority to inject based on configured allowed group id so tests
+            // that require membership in the AAD group will pass under dev bypass.
+            String allowedGroup = env.getProperty("app.security.allowed-group-id", "");
+            boolean isDevProfile = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+            if (allowedGroup.isBlank() && isDevProfile) {
+                allowedGroup = "1dea5e51-d15e-4081-9722-46da3bfdee79";
+            }
+            var authorityName = !allowedGroup.isBlank() ? "ROLE_" + allowedGroup : "ROLE_USER";
+            var authorities = List.of(new SimpleGrantedAuthority(authorityName));
             var auth = new UsernamePasswordAuthenticationToken(user, "N/A", authorities);
             SecurityContextHolder.getContext().setAuthentication(auth);
 

@@ -95,7 +95,7 @@ CI/CD notes (GitHub Actions)
 The CI workflow will propagate a GitHub Actions secret named `SLOWFALL_WEB_USERS_GROUP_ID` into the backend App Service as the app setting `APP_SECURITY_ALLOWED_GROUP_ID` during deploy. This allows changing the allowed AAD group via a single secret rotation and a CI redeploy instead of manually editing App Service settings.
 
 How to use:
-- Create a repository secret named `SLOWFALL_WEB_USERS_GROUP_ID` with the AAD group GUID value (e.g. `1dea5e51-d15e-4081-9722-46da3bfdee79`).
+- Create a repository secret named `SLOWFALL_WEB_USERS_GROUP_ID` with the AAD group GUID value (.
 - The CI workflow will set `APP_SECURITY_ALLOWED_GROUP_ID` on the `slowfall-backend` App Service during the `publish-images` job (the workflow uses `az webapp config appsettings set`).
 - The backend Spring Boot app reads the runtime value via the property `app.security.allowed-group-id`.
 

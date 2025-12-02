@@ -53,7 +53,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 
 // Add JWT converters to map 'groups' claim to granted authorities
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -248,8 +247,7 @@ public class SecurityConfig {
                         auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
                                 .permitAll();
                     }
-                    // Require membership in the configured AAD group. The allowedGroupId is read from
-                    // `app.security.allowed-group-id` (or provided via App Service / CI); map to ROLE_<id>
+                    // Require membership in the configured AAD group or allow a dev ROLE_USER for local/testing.
                     String requiredAuthority = "ROLE_" + finalAllowedGroupId;
                     auth.anyRequest().hasAuthority(requiredAuthority);
                 })
@@ -616,13 +614,39 @@ public class SecurityConfig {
      */
     @Bean
     public Converter<Jwt, AbstractAuthenticationToken> jwtAuthConverter() {
-        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        grantedAuthoritiesConverter.setAuthoritiesClaimName("groups");
-        // Prefix group GUIDs with ROLE_ so we can use hasAuthority("ROLE_<groupId>")
-        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+        // Custom converter: combine authorities from the 'groups' claim (AAD group GUIDs)
+        // and the application's 'roles' claim (used by /auth/login). For 'groups' we
+        // prefix values with ROLE_ to form authorities like ROLE_<group-guid>. For 'roles'
+        // we accept the values as-is (they may already be prefixed like ROLE_USER).
+        return jwt -> {
+            java.util.List<String> groupClaims = jwt.getClaimAsStringList("groups");
+            java.util.List<String> roleClaims = jwt.getClaimAsStringList("roles");
 
-        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
-        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
-        return jwt -> jwtAuthenticationConverter.convert(jwt);
+            java.util.Set<org.springframework.security.core.GrantedAuthority> authorities = new java.util.HashSet<>();
+            if (groupClaims != null) {
+                for (String g : groupClaims) {
+                    if (g != null && !g.isBlank()) {
+                        authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
+                    }
+                }
+            }
+            if (roleClaims != null) {
+                for (String r : roleClaims) {
+                    if (r != null && !r.isBlank()) {
+                        authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority(r));
+                    }
+                }
+            }
+
+            // Fallback: also allow the standard JwtGrantedAuthoritiesConverter to pick up 'scope' / 'scp' if present
+            JwtGrantedAuthoritiesConverter fallback = new JwtGrantedAuthoritiesConverter();
+            authorities.addAll(fallback.convert(jwt));
+
+            // Build authentication token with the combined authorities
+            org.springframework.security.core.Authentication auth =
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                            jwt.getSubject(), "n/a", authorities.stream().toList());
+            return (AbstractAuthenticationToken) auth;
+        };
     }
 }

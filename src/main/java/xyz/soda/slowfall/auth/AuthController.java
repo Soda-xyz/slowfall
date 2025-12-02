@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.core.env.Environment;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * REST controller that implements a minimal cookie-less authentication API suitable for
@@ -41,6 +43,8 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
+    private final Environment env;
+    private final String allowedGroupId;
 
     /**
      * Create a new AuthController.
@@ -49,10 +53,17 @@ public class AuthController {
      * @param jwtEncoder            used to sign JWTs
      * @param jwtDecoder            used to validate incoming JWTs (refresh tokens)
      */
-    public AuthController(AuthenticationManager authenticationManager, JwtEncoder jwtEncoder, JwtDecoder jwtDecoder) {
+    public AuthController(
+            AuthenticationManager authenticationManager,
+            JwtEncoder jwtEncoder,
+            JwtDecoder jwtDecoder,
+            Environment env,
+            @Value("${app.security.allowed-group-id:}") String allowedGroupId) {
         this.authenticationManager = authenticationManager;
         this.jwtEncoder = jwtEncoder;
         this.jwtDecoder = jwtDecoder;
+        this.env = env;
+        this.allowedGroupId = allowedGroupId;
     }
 
     /**
@@ -77,28 +88,40 @@ public class AuthController {
             Instant accessExp = now.plus(15, ChronoUnit.MINUTES);
             Instant refreshExp = now.plus(7, ChronoUnit.DAYS);
 
-            JwtClaimsSet accessClaims = JwtClaimsSet.builder()
+            JwtClaimsSet.Builder accessBuilder = JwtClaimsSet.builder()
                     .issuer("slowfall")
                     .issuedAt(now)
                     .expiresAt(accessExp)
                     .subject(username)
                     .claim("roles", roles)
-                    .claim("type", "access")
-                    .build();
+                    .claim("type", "access");
 
-            String accessToken =
-                    jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
+            // When running in dev and allowedGroupId isn't configured, use a development fallback
+            String groupToInclude = this.allowedGroupId;
+            boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+            if ((groupToInclude == null || groupToInclude.isBlank()) && isDev) {
+                groupToInclude = "1dea5e51-d15e-4081-9722-46da3bfdee79";
+            }
+            if (groupToInclude != null && !groupToInclude.isBlank()) {
+                accessBuilder.claim("groups", List.of(groupToInclude));
+            }
 
-            JwtClaimsSet refreshClaims = JwtClaimsSet.builder()
+            JwtClaimsSet accessClaims = accessBuilder.build();
+
+            String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
+
+            JwtClaimsSet.Builder refreshBuilder = JwtClaimsSet.builder()
                     .issuer("slowfall")
                     .issuedAt(now)
                     .expiresAt(refreshExp)
                     .subject(username)
-                    .claim("type", "refresh")
-                    .build();
+                    .claim("type", "refresh");
+            if (groupToInclude != null && !groupToInclude.isBlank()) {
+                refreshBuilder.claim("groups", List.of(groupToInclude));
+            }
+            JwtClaimsSet refreshClaims = refreshBuilder.build();
 
-            String refreshToken =
-                    jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
+            String refreshToken = jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
 
             TokenResponse resp = new TokenResponse(
                     accessToken, accessExp.getEpochSecond(), refreshToken, refreshExp.getEpochSecond());
@@ -131,17 +154,25 @@ public class AuthController {
             Instant now = Instant.now();
             Instant accessExp = now.plus(15, ChronoUnit.MINUTES);
 
-            JwtClaimsSet accessClaims = JwtClaimsSet.builder()
+            JwtClaimsSet.Builder accessBuilder = JwtClaimsSet.builder()
                     .issuer("slowfall")
                     .issuedAt(now)
                     .expiresAt(accessExp)
                     .subject(username)
                     .claim("roles", roles)
-                    .claim("type", "access")
-                    .build();
+                    .claim("type", "access");
+            // same group inclusion for refresh-based access tokens
+            String groupToInclude = this.allowedGroupId;
+            boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+            if ((groupToInclude == null || groupToInclude.isBlank()) && isDev) {
+                groupToInclude = "1dea5e51-d15e-4081-9722-46da3bfdee79";
+            }
+            if (groupToInclude != null && !groupToInclude.isBlank()) {
+                accessBuilder.claim("groups", List.of(groupToInclude));
+            }
+            JwtClaimsSet accessClaims = accessBuilder.build();
 
-            String accessToken =
-                    jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
+            String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
             return ResponseEntity.ok(
                     Map.of("accessToken", accessToken, "accessTokenExpiresAt", accessExp.getEpochSecond()));
         } catch (org.springframework.security.oauth2.jwt.JwtException ex) {

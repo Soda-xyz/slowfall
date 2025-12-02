@@ -51,7 +51,7 @@ public class CorsMockMvcTest {
     }
 
     @Test
-    @org.springframework.security.test.context.support.WithMockUser
+    @org.springframework.security.test.context.support.WithMockUser(authorities = "ROLE_1dea5e51-d15e-4081-9722-46da3bfdee79")
     void request_allowsConfiguredOrigin() throws Exception {
         mvc.perform(get("/api/airports").header("Origin", "http://localhost:5174"))
                 .andExpect(status().isOk())

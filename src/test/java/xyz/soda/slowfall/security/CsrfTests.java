@@ -22,7 +22,7 @@ public class CsrfTests {
     private MockMvc mockMvc;
 
     @Test
-    @WithMockUser
+    @WithMockUser(authorities = "ROLE_1dea5e51-d15e-4081-9722-46da3bfdee79")
     void postWithoutCsrfToken_isForbidden() throws Exception {
         mockMvc.perform(post("/api/protected/resource")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -31,7 +31,7 @@ public class CsrfTests {
     }
 
     @Test
-    @WithMockUser
+    @WithMockUser(authorities = "ROLE_1dea5e51-d15e-4081-9722-46da3bfdee79")
     void postWithCsrfToken_isOk() throws Exception {
         mockMvc.perform(post("/api/protected/resource")
                         .with(csrf())
