@@ -30,3 +30,29 @@ Further reading
 - Fetch API (credentials): https://developer.mozilla.org/docs/Web/API/Fetch_API
 
 If you want me to add back a short commands section (install, dev, build, test) I can — but per your request I left the commands list out to keep this document concise.
+
+# Formatters & Linters — Frontend
+
+Copyable commands (run from `frontend/`):
+
+```bash
+# install deps (if needed)
+npm install
+```
+
+```bash
+# lint (ESLint)
+npm run lint
+```
+
+```bash
+# run ESLint autofix across the project
+npx eslint --fix .
+```
+
+```bash
+# format with Prettier (auto-write)
+npx prettier --write .
+```
+
+> See the rest of this README below for project context and notes.

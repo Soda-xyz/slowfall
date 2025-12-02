@@ -8,7 +8,7 @@ import "@mantine/dates/styles.css";
 import "./index.css";
 import "./global.css";
 import App from "./App";
-import { theme as mantineTheme } from "./theme/theme";
+import { mantineTheme } from "./theme/theme";
 import styles from "./theme/app-global.module.css";
 import mantineCssVariableResolver from "./theme/cssVariableResolver";
 // NOTE: react-router-dom must be installed in frontend for this import to resolve.

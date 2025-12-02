@@ -1,9 +1,10 @@
-import { renderWithMantine, screen, fireEvent, waitFor } from "../../test/test-utils";
+import { renderWithMantine, screen, waitFor } from "../../test/test-utils";
 import LoginPage from "./LoginPage";
 import * as fetchClient from "../../lib/fetchClient";
 import { vi, describe, it, beforeEach, afterEach, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import React from "react";
+import userEvent from "@testing-library/user-event";
 
 function renderWithRouter(ui: React.ReactElement) {
 	return renderWithMantine(<MemoryRouter>{ui}</MemoryRouter>);
@@ -34,9 +35,10 @@ describe("LoginPage", () => {
 		const password = screen.getByLabelText(/Password/i);
 		const submit = screen.getByRole("button", { name: /Sign in/i });
 
-		fireEvent.change(username, { target: { value: "u1" } });
-		fireEvent.change(password, { target: { value: "p1" } });
-		fireEvent.click(submit);
+		const user = userEvent.setup();
+		await user.type(username, "u1");
+		await user.type(password, "p1");
+		await user.click(submit);
 
 		await waitFor(() => expect(setSpy).toHaveBeenCalledWith("tok-login"));
 		expect(screen.queryByText(/Login failed/i)).toBeNull();
@@ -50,7 +52,8 @@ describe("LoginPage", () => {
 		renderWithRouter(<LoginPage />);
 
 		const submit = screen.getByRole("button", { name: /Sign in/i });
-		fireEvent.click(submit);
+		const user = userEvent.setup();
+		await user.click(submit);
 
 		await waitFor(() => expect(screen.getByText(/Login failed/i)).toBeTruthy());
 	});

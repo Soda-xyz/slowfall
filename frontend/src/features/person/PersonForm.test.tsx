@@ -1,5 +1,6 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { vi, test, expect } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { MantineProvider } from "@mantine/core";
 
 import PersonForm from "./PersonForm";
@@ -28,13 +29,11 @@ test("renders PersonForm and submits with valid data", async () => {
 	const emailInput = screen.getByLabelText(/Email/i);
 	const submit = screen.getByRole("button", { name: /Add person/i });
 
-	fireEvent.change(nameInput, { target: { value: "Jane Doe" } });
-	fireEvent.change(weightInput, { target: { value: "72" } });
-	fireEvent.change(emailInput, { target: { value: "jane@example.com" } });
+	const user = userEvent.setup();
+	await user.type(nameInput, "Jane Doe");
+	await user.type(weightInput, "72");
+	await user.type(emailInput, "jane@example.com");
+	await user.click(submit);
 
-	fireEvent.click(submit);
-
-	await new Promise((resolve) => setTimeout(resolve, 50));
-
-	expect(onCreated).toHaveBeenCalled();
+	await waitFor(() => expect(onCreated).toHaveBeenCalled());
 });

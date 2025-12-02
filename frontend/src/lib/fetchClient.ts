@@ -86,8 +86,6 @@ async function doRefresh(): Promise<boolean> {
 			}
 
 			if (Object.keys(headers).length > 0) {
-				// assign headers only when needed
-				// @ts-ignore - RequestInit.headers accepts Record<string,string> in practice
 				init.headers = headers;
 			}
 
