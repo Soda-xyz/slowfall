@@ -4,8 +4,10 @@ FROM nginx:stable-alpine
 RUN apk add --no-cache gettext
 
 # Copy template and entrypoint
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+# When the build context is the repository root (context: .) the files live under docker/nginx/
+# Use explicit paths so CI (which sets context: . and file: docker/nginx/Dockerfile) can find them
+COPY docker/nginx/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY docker/nginx/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Optional: copy static frontend build into the image if CI outputs it into 'frontend/dist'
@@ -15,4 +17,3 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 80
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
