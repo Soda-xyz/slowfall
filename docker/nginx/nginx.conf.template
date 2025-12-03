@@ -12,7 +12,7 @@ http {
     default_type  application/octet-stream;
 
     large_client_header_buffers 4 32k;
-    client_max_body_size ${CLIENT_MAX_BODY_SIZE:-10m};
+    client_max_body_size $CLIENT_MAX_BODY_SIZE;
 
     access_log /dev/stdout;
     error_log /dev/stderr;
@@ -22,7 +22,7 @@ http {
     server_tokens off;
 
     upstream backend_upstream {
-        server ${BACKEND_HOST:-slowfall-backend.azurewebsites.net}:${BACKEND_PORT:-8080};
+        server $BACKEND_HOST:$BACKEND_PORT;
     }
 
     server {
@@ -50,8 +50,8 @@ http {
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
             proxy_redirect off;
-            proxy_read_timeout ${PROXY_READ_TIMEOUT:-90s};
-            proxy_send_timeout ${PROXY_SEND_TIMEOUT:-90s};
+            proxy_read_timeout $PROXY_READ_TIMEOUT;
+            proxy_send_timeout $PROXY_SEND_TIMEOUT;
             proxy_set_header Connection "";
         }
 
@@ -64,4 +64,3 @@ http {
         }
     }
 }
-
