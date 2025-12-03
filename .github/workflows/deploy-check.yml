@@ -21,6 +21,11 @@ on:
       TIMEOUT:
         description: 'Total wait time in seconds for app-level check (default 900)'
         required: false
+  # Also listen for the parent CI workflow completing; this avoids needing repository_dispatch in many cases.
+  workflow_run:
+    workflows:
+      - "CI / Build / Publish / Deploy"
+    types: [completed]
 
 permissions:
   id-token: write
@@ -28,6 +33,8 @@ permissions:
 
 jobs:
   verify-deploy:
+    # Only run this job for supported trigger events (manual/dispatch), or when the parent workflow completed successfully.
+    if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -36,8 +43,13 @@ jobs:
       RETRY_INTERVAL: 5
       CONFIG_CHECK_WINDOW: 180
       CONFIG_CHECK_INTERVAL: 5
+      # Registry used by the CI workflow (useable when computing IMAGE_TAG from workflow_run.head_sha)
+      REGISTRY: ghcr.io
+      # Pass the parent workflow head_sha into the job when applicable (empty otherwise)
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+
     steps:
-      - name: Determine variables (from dispatch / inputs / secrets)
+      - name: Determine variables (from dispatch / inputs / secrets / parent workflow)
         id: vars
         shell: bash
         run: |
@@ -49,6 +61,14 @@ jobs:
           APP_URL="${{ github.event.client_payload.APP_URL || github.event.inputs.APP_URL || '' }}"
           TIMEOUT_INPUT="${{ github.event.client_payload.TIMEOUT || github.event.inputs.TIMEOUT || '' }}"
           if [ -n "$TIMEOUT_INPUT" ]; then TIMEOUT="$TIMEOUT_INPUT"; fi
+
+          # If IMAGE_TAG is missing but this run was triggered by workflow_run, try to reconstruct it
+          # using the parent workflow's head SHA and the repository owner.
+          if [ -z "$IMAGE_TAG" ] && [ -n "${HEAD_SHA:-}" ]; then
+            REPO_OWNER="${GITHUB_REPOSITORY%%/*}"
+            OWNER_LOWER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+            IMAGE_TAG="$REGISTRY/$OWNER_LOWER/slowfall-frontend:${HEAD_SHA}"
+          fi
 
           echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
           echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
