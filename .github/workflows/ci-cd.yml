@@ -326,12 +326,6 @@ jobs:
           SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}")
           SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}")
 
-          # Enable verbose logging for troubleshooting in production temporarily
-          if [ "${SPRING_PROFILE:-}" = "prod" ]; then
-            SETTINGS+=("DEBUG=true")
-            SETTINGS+=("LOGGING_LEVEL_ROOT=DEBUG")
-          fi
-
           az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
           az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 

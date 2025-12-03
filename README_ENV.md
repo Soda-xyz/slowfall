@@ -68,8 +68,19 @@ Required secrets (must exist for CI to deploy)
 - APP_SECURITY_AZURE_KEYVAULT_VAULT_URL — Full vault URI (e.g. `https://slowfall-keyvault-next.vault.azure.net/`). THIS IS REQUIRED: the CI/workflow and runtime will use this secret to configure Key Vault access; the workflow no longer falls back to a hardcoded URI.
 - ALLOWED_ORIGINS — optional comma-separated allowed origins used for CORS (CI will write it into app settings if present).
 
+Note on AZURE_CLIENT_ID and service principals vs Managed Identity (clarification)
+- CI (GitHub Actions): the workflow uses OIDC and requires a repository secret `AZURE_CLIENT_ID` which is the App Registration (client) id that has been configured with a federated credential for this repo/branch. This is required by the `azure/login` step in the workflow and is *not* the same as a runtime client secret. Keep `AZURE_CLIENT_ID` in your repository secrets for CI.
+
+- Runtime (App Service / backend): the backend code prefers Azure managed identity / `DefaultAzureCredential` when running in Azure. The code also supports an optional service-principal fallback for local testing or for environments where a managed identity isn't available.
+  - If you want to run the app locally and authenticate Key Vault using a service principal, set the following environment variables locally (or in your `.env`):
+    - `AZURE_CLIENT_ID` (or Spring property `azure.client.id`) — client id of the service principal
+    - `AZURE_TENANT_ID` (or Spring property `azure.tenant.id`) — tenant id
+    - `AZURE_CLIENT_SECRET` (or Spring property `azure.client.secret`) — client secret
+  - If these three runtime variables are present, `KeyVaultConfig` will create a `ClientSecretCredential` (service principal) and use it to authenticate to Key Vault. If they are not present, the application will fall back to `DefaultAzureCredential`, which will try MSIs/managed identity, Azure CLI login, Visual Studio/Azure developer credentials, etc.
+  - Recommendation: prefer `DefaultAzureCredential` / managed identity for production (no secrets). Use the service principal variables only for local debugging when necessary. If you do set them for local dev, *do not* commit secrets into the repository — use a local `.env` excluded by `.gitignore` or other secure local secret storage.
+
 Secrets you may remove (NOT used by current OIDC workflow)
-- AZURE_CLIENT_SECRET — not used by the OIDC-based workflow. Remove this secret to reduce risk.
+- AZURE_CLIENT_SECRET — not required by CI's OIDC-based workflow. However, the application still supports a runtime service-principal fallback when `azure.client.id`, `azure.client.secret`, and `azure.tenant.id` properties are present; only remove this secret if you are sure no team member relies on service-principal local auth or any external automation needs it.
 - AZURE_CREDENTIALS — not used by the workflow (legacy JSON credential). Remove if you exclusively use OIDC.
 - BACKEND_APP_ID — not used by the CI workflow (kept in README for reference). If you stored it as a GitHub secret and it’s not used by other processes, remove it.
 
@@ -229,4 +240,3 @@ Azure Key Vault: required properties and permissions
   - Update `README_ENV.md` (this file), and `infra/DEPLOY.md` / `README_CLOUD.md` so CI and deploy scripts reflect the new variable names and values.
 
 ---
-
