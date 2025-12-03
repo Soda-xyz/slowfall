@@ -200,3 +200,33 @@ az webapp config appsettings set \
 ```
 
 Security reminder: Do not commit secret values into the repository. Use GitHub repository secrets and Azure Key Vault. If you want me to set the repository secrets now, I can run the `gh secret set` commands for you — I need either a configured git remote that points to the GitHub repo or the `owner/repo` string, and your confirmation to proceed.
+
+---
+
+Azure Key Vault: required properties and permissions
+
+- Required runtime env / Spring properties (set as App Service app settings or CI secrets):
+  - APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (Spring property: app.security.azure.keyvault.vault-url)
+    - Example: `https://slowfall-keyvault-next.vault.azure.net/`
+  - APP_SECURITY_AZURE_KEYVAULT_KEY_NAME (Spring property: app.security.azure.keyvault.key-name)
+    - Example: `slowfall-sign-key`
+  - (Optional) APP_SECURITY_AZURE_KEYVAULT_SECRET_NAME (Spring property: app.security.azure.keyvault.secret-name)
+    - Used when storing a PEM private key as a Key Vault secret instead of a Key Vault Key.
+
+- Required Key Vault permissions for the application identity (Managed Identity or Service Principal):
+  - Keys: `get`, `sign` (needed when using Key Vault Keys for JWT signing or crypto operations)
+  - Secrets: `get` (needed when using Key Vault Secrets to store PEM keys or credentials)
+
+- Troubleshooting tips if the application fails on startup with a Key Vault-related NPE or IllegalStateException:
+  1. Verify the vault URL is correct and accessible from the App Service (check `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`).
+  2. Confirm the configured key name (`APP_SECURITY_AZURE_KEYVAULT_KEY_NAME`) matches the name in the Key Vault `Keys` blade (watch for typos and case-sensitivity).
+  3. In the Key Vault portal, verify the key is enabled and has a valid key identifier (a `kid`) and that the key has a JWK payload (RSA key). Soft-deleted or placeholder keys may not include JWK material.
+  4. Ensure the app's managed identity or service principal has the `keys/get` and `keys/sign` permissions (or assign the built-in role `Key Vault Crypto User` / `Key Vault Crypto Service Encryption User` as appropriate). For secrets access, grant `secrets/get`.
+  5. If using RBAC rather than legacy access policies, grant the matching Key Vault roles at the correct scope.
+  6. Temporarily set `APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST=false` (if present) to allow the app to start while you fix RBAC; prefer to fix permissions and revert this change.
+
+- Where to update docs if you add or rename these env vars:
+  - Update `README_ENV.md` (this file), and `infra/DEPLOY.md` / `README_CLOUD.md` so CI and deploy scripts reflect the new variable names and values.
+
+---
+

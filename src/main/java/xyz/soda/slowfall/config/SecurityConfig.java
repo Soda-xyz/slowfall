@@ -541,7 +541,30 @@ public class SecurityConfig {
             @Value("${app.security.azure.keyvault.key-name}") String keyName,
             KeyClient keyClient)
             throws Exception {
-        KeyVaultKey key = keyClient.getKey(keyName);
+        KeyVaultKey key;
+        try {
+            key = keyClient.getKey(keyName);
+        } catch (Exception e) {
+            String msg = String.format(
+                    "Failed to read key '%s' from Key Vault '%s': %s. Ensure the key exists and the application identity has 'keys/get' permission.",
+                    keyName, vaultUrl, e.getMessage());
+            log.error(msg);
+            throw new IllegalStateException(msg, e);
+        }
+        if (key == null) {
+            String msg = String.format(
+                    "Key Vault returned no key for name '%s' in vault '%s'. Confirm the key exists and property 'app.security.azure.keyvault.key-name' is correct.",
+                    keyName, vaultUrl);
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
+        if (key.getKey() == null) {
+            String msg = String.format(
+                    "Key Vault key '%s' in vault '%s' exists but contains no JsonWebKey (null). Ensure the key is an RSA key and not an unsupported type.",
+                    keyName, vaultUrl);
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
         JsonWebKey jwk = key.getKey();
         // Parse JsonWebKey into Nimbus RSAKey
         return RSAKey.parse(jwk.toJsonString());
@@ -567,17 +590,51 @@ public class SecurityConfig {
             KeyClient keyClient,
             com.azure.core.credential.TokenCredential credential) {
         // Build CryptographyClient from injected KeyClient (use key id)
-        KeyVaultKey key = keyClient.getKey(keyName);
+        KeyVaultKey key;
+        try {
+            key = keyClient.getKey(keyName);
+        } catch (Exception e) {
+            String msg = String.format(
+                    "Failed to read key '%s' from Key Vault '%s': %s. Ensure the key exists and the application identity has 'keys/get' permission.",
+                    keyName, vaultUrl, e.getMessage());
+            log.error(msg);
+            throw new IllegalStateException(msg, e);
+        }
+        if (key == null) {
+            String msg = String.format(
+                    "Key Vault returned no key for name '%s' in vault '%s'. Confirm the key exists and property 'app.security.azure.keyvault.key-name' is correct.",
+                    keyName, vaultUrl);
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
+        if (key.getId() == null || key.getId().isBlank()) {
+            String msg = String.format(
+                    "Key Vault key '%s' in vault '%s' does not have a valid key identifier (kid). Confirm the key is enabled and accessible.",
+                    keyName, vaultUrl);
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
         com.azure.security.keyvault.keys.cryptography.CryptographyClient cryptoClient =
                 new com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder()
                         .keyIdentifier(key.getId())
                         .credential(credential)
                         .buildClient();
         try {
+            if (key.getKey() == null) {
+                String msg = String.format(
+                        "Key Vault key '%s' in vault '%s' exists but contains no JsonWebKey (null). Ensure the key is an RSA key and not an unsupported type.",
+                        keyName, vaultUrl);
+                log.error(msg);
+                throw new IllegalStateException(msg);
+            }
             RSAKey rsa = RSAKey.parse(key.getKey().toJsonString());
             return new xyz.soda.slowfall.auth.KeyVaultJwtSigner(cryptoClient, rsa);
+        } catch (IllegalStateException e) {
+            throw e; // rethrow our own clearer IllegalStateExceptions
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse JWK from Key Vault key: " + e.getMessage(), e);
+            String msg = "Failed to parse JWK from Key Vault key: " + e.getMessage();
+            log.error(msg, e);
+            throw new IllegalStateException(msg, e);
         }
     }
 
@@ -593,7 +650,7 @@ public class SecurityConfig {
 
     @Bean
     @ConditionalOnMissingBean(org.springframework.security.oauth2.jwt.JwtDecoder.class)
-    public org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
+    public JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
         // Use the RSA public key from the provided JWK for decoding
         RSAPublicKey pub = rsaJwk.toRSAPublicKey();
         return org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey(pub)
@@ -636,10 +693,8 @@ public class SecurityConfig {
             authorities.addAll(fallback.convert(jwt));
 
             // Build authentication token with the combined authorities
-            org.springframework.security.core.Authentication auth =
-                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                            jwt.getSubject(), "n/a", authorities.stream().toList());
-            return (AbstractAuthenticationToken) auth;
+            return new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    jwt.getSubject(), "n/a", authorities.stream().toList());
         };
     }
 }
