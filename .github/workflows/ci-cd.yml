@@ -179,6 +179,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     outputs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
+      owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
       spring_profile: ${{ steps.compute_spring_profile.outputs.spring_profile }}
 
     steps:
@@ -382,16 +383,16 @@ jobs:
 
       - name: Set backend container image
         run: |
-          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
+          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
 
       - name: Set frontend container image
         run: |
-          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
+          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
 
       - name: Set proxy container image
         run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
+          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
 
       - name: Restart services
         run: |
