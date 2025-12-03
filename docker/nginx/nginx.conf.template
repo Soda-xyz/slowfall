@@ -47,14 +47,23 @@ http {
             return 200 'OK';
         }
 
-        location / {
+        # --- STATIC ASSET LOCATION (leave unchanged) ---
+        # This serves hashed assets and images directly from the proxy image if present.
+        # It remains above the root location so static requests match first.
+        location ~* \.(?:css|js|json|xml|svg|png|jpg|jpeg|gif|ico)$ {
             root /usr/share/nginx/html;
-            try_files $uri $uri/ @proxy;
-            index index.html;
+            try_files $uri =404;
+            add_header Cache-Control "public, max-age=31536000, immutable";
         }
 
-        location /api/ {
-            proxy_pass http://backend_upstream;
+        # --- STRONG-FALLBACK: FORCE PROXY FOR ALL NON-ASSET ROOT REQUESTS ---
+        # Replace previous 'root /usr/share/nginx/html; try_files $uri $uri/ @proxy;' behavior
+        # with an explicit proxy to FRONTEND_HOST. This prevents accidental serving of
+        # any local index.html from the proxy image and ensures consistent routing to
+        # the upstream frontend host configured via FRONTEND_HOST.
+        location / {
+            # FRONTEND_HOST is substituted at container start by the entrypoint.
+            proxy_pass http://$FRONTEND_HOST;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -66,13 +75,13 @@ http {
             proxy_read_timeout $PROXY_READ_TIMEOUT;
             proxy_send_timeout $PROXY_SEND_TIMEOUT;
             proxy_set_header Connection "";
+            # If FRONTEND_HOST uses https, CI or the environment should provide the scheme
+            # and you may need to enable TLS SNI (proxy_ssl_server_name on) in the generated config.
         }
 
-        # Fallback for non-/api requests (SPA client routes and other root paths).
-        # Proxy these to the frontend App Service configured via FRONTEND_HOST.
-        # Uses variable-based proxy_pass so FRONTEND_HOST can be set from App Settings.
-        location @proxy {
-            proxy_pass http://$FRONTEND_HOST;
+        # API proxying unchanged
+        location /api/ {
+            proxy_pass http://backend_upstream;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
