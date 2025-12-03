@@ -34,7 +34,6 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({
 					tokenStore.setToken(resp.accessToken);
 				}
 			} catch {
-				// intentionally ignore token acquisition errors here
 			}
 		}
 		sync();
@@ -59,7 +58,6 @@ export const LoginButton: React.FC<{ usePopup?: boolean; scopes?: string[] }> = 
 			try {
 				await instance.loginPopup({ scopes });
 			} catch {
-				// ignore popup errors
 			}
 		} else {
 			instance.loginRedirect({ scopes }).catch(() => {});
@@ -90,7 +88,6 @@ export const SignOutButton: React.FC<{ usePopup?: boolean }> = ({ usePopup = fal
 				await inst.logoutRedirect();
 			}
 		} catch {
-			// ignore logout errors
 		}
 	};
 

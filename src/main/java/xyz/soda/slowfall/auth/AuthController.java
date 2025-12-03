@@ -171,7 +171,6 @@ public class AuthController {
                     .subject(username)
                     .claim("roles", roles)
                     .claim("type", "access");
-            // same group inclusion for refresh-based access tokens
             String groupToInclude = this.allowedGroupId;
             boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
             if ((groupToInclude == null || groupToInclude.isBlank()) && isDev) {

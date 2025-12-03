@@ -24,7 +24,6 @@ public class KeyVaultCredentialService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final Duration ttl;
-    // simple cache
     private volatile String cachedJson = null;
     private volatile Instant cachedAt = Instant.EPOCH;
 
@@ -75,7 +74,6 @@ public class KeyVaultCredentialService {
             if (!expectedUser.equals(username)) return false;
             return encoder.matches(plainPassword, hash);
         } catch (Exception e) {
-            // on error be conservative and fail validation
             return false;
         }
     }
