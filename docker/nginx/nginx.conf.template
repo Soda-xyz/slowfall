@@ -34,6 +34,14 @@ http {
             return 200 'OK';
         }
 
+        # Azure App Service uses randomized probe paths like /robots12345.txt.
+        # Respond directly here with 200 so probes don't get proxied to the backend
+        # (which can cause timeouts and 499 logs during startup).
+        location ~ ^/robots[0-9]+\.txt$ {
+            access_log off;
+            return 200 'OK';
+        }
+
         location / {
             root /usr/share/nginx/html;
             try_files $uri $uri/ @proxy;

@@ -301,6 +301,15 @@ jobs:
           build-args: |
             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
+      - name: Verify proxy image pushed
+        run: |
+          set -euo pipefail
+          IMAGE="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
+          echo "Verifying pushed image: $IMAGE"
+          docker pull "$IMAGE"
+          docker image inspect "$IMAGE" >/dev/null
+          echo "Proxy image verified: $IMAGE"
+
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
           set -euo pipefail
