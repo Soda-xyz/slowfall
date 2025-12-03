@@ -309,6 +309,14 @@ jobs:
             SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}")
           fi
           SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
+
+          # Ensure Key Vault settings are propagated to the backend (and frontend when relevant).
+          # These are provided as repository secrets and must be set in the environment.
+          # The backend expects APP_SECURITY_AZURE_KEYVAULT_VAULT_URL and APP_SECURITY_AZURE_KEYVAULT_KEY_NAME
+          # so that SecurityConfig can create/load the RSAKey bean at startup.
+          SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}")
+          SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}")
+
           az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
           az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
