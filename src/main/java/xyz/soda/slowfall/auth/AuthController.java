@@ -8,6 +8,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,8 +25,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.core.env.Environment;
-import org.springframework.beans.factory.annotation.Value;
 
 /**
  * REST controller that implements a minimal cookie-less authentication API suitable for
@@ -40,7 +41,7 @@ import org.springframework.beans.factory.annotation.Value;
 @RequestMapping("/auth")
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
+    private final ObjectProvider<AuthenticationManager> authenticationManagerProvider;
     private final JwtEncoder jwtEncoder;
     private final JwtDecoder jwtDecoder;
     private final Environment env;
@@ -49,17 +50,17 @@ public class AuthController {
     /**
      * Create a new AuthController.
      *
-     * @param authenticationManager used to authenticate username/password
+     * @param authenticationManagerProvider used to authenticate username/password
      * @param jwtEncoder            used to sign JWTs
      * @param jwtDecoder            used to validate incoming JWTs (refresh tokens)
      */
     public AuthController(
-            AuthenticationManager authenticationManager,
+            ObjectProvider<AuthenticationManager> authenticationManagerProvider,
             JwtEncoder jwtEncoder,
             JwtDecoder jwtDecoder,
             Environment env,
             @Value("${app.security.allowed-group-id:}") String allowedGroupId) {
-        this.authenticationManager = authenticationManager;
+        this.authenticationManagerProvider = authenticationManagerProvider;
         this.jwtEncoder = jwtEncoder;
         this.jwtDecoder = jwtDecoder;
         this.env = env;
@@ -74,6 +75,12 @@ public class AuthController {
      */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest req) {
+        AuthenticationManager authenticationManager = authenticationManagerProvider.getIfAvailable();
+        if (authenticationManager == null) {
+            // Auth manager not configured (e.g., no UserDetailsService). Return 503 to indicate auth unavailable.
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(java.util.Map.of("error", "username_password_auth_not_configured"));
+        }
         try {
             UsernamePasswordAuthenticationToken authReq =
                     new UsernamePasswordAuthenticationToken(req.username, req.password);
@@ -108,7 +115,8 @@ public class AuthController {
 
             JwtClaimsSet accessClaims = accessBuilder.build();
 
-            String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
+            String accessToken =
+                    jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
 
             JwtClaimsSet.Builder refreshBuilder = JwtClaimsSet.builder()
                     .issuer("slowfall")
@@ -121,13 +129,15 @@ public class AuthController {
             }
             JwtClaimsSet refreshClaims = refreshBuilder.build();
 
-            String refreshToken = jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
+            String refreshToken =
+                    jwtEncoder.encode(JwtEncoderParameters.from(refreshClaims)).getTokenValue();
 
             TokenResponse resp = new TokenResponse(
                     accessToken, accessExp.getEpochSecond(), refreshToken, refreshExp.getEpochSecond());
             return ResponseEntity.ok(resp);
         } catch (org.springframework.security.core.AuthenticationException ex) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid_credentials"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(java.util.Map.of("error", "invalid_credentials"));
         }
     }
 
@@ -172,7 +182,8 @@ public class AuthController {
             }
             JwtClaimsSet accessClaims = accessBuilder.build();
 
-            String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
+            String accessToken =
+                    jwtEncoder.encode(JwtEncoderParameters.from(accessClaims)).getTokenValue();
             return ResponseEntity.ok(
                     Map.of("accessToken", accessToken, "accessTokenExpiresAt", accessExp.getEpochSecond()));
         } catch (org.springframework.security.oauth2.jwt.JwtException ex) {

@@ -86,7 +86,8 @@ public class DevBypassAuthFilter implements Filter {
             // Choose the authority to inject based on configured allowed group id so tests
             // that require membership in the AAD group will pass under dev bypass.
             String allowedGroup = env.getProperty("app.security.allowed-group-id", "");
-            boolean isDevProfile = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
+            boolean isDevProfile =
+                    java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
             if (allowedGroup.isBlank() && isDevProfile) {
                 allowedGroup = "1dea5e51-d15e-4081-9722-46da3bfdee79";
             }

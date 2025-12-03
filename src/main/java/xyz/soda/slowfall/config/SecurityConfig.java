@@ -17,6 +17,9 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,6 +34,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
@@ -44,6 +48,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
@@ -51,11 +56,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
-
-// Add JWT converters to map 'groups' claim to granted authorities
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Spring Security configuration for the application.
@@ -204,13 +204,13 @@ public class SecurityConfig {
         // If allowedGroupId wasn't provided, fail fast in non-dev; otherwise use a dev fallback
         if (allowedGroupId == null || allowedGroupId.isBlank()) {
             if (!isDev) {
-                throw new IllegalStateException(
-                        "Missing required configuration: 'app.security.allowed-group-id'"
-                );
+                throw new IllegalStateException("Missing required configuration: 'app.security.allowed-group-id'");
             } else {
                 // development convenience: use the previously provisioned test group id so local dev doesn't break
                 allowedGroupId = "1dea5e51-d15e-4081-9722-46da3bfdee79";
-                log.warn("app.security.allowed-group-id not set; using development fallback group id {}", allowedGroupId);
+                log.warn(
+                        "app.security.allowed-group-id not set; using development fallback group id {}",
+                        allowedGroupId);
             }
         }
 
@@ -320,12 +320,26 @@ public class SecurityConfig {
      * Build an {@link AuthenticationManager} backed by a {@link DaoAuthenticationProvider} and the
      * provided {@link UserDetailsService}.
      *
-     * @param uds the {@link UserDetailsService} to load users
+     * This change accepts an ObjectProvider<UserDetailsService> so the application can start
+     * even when no UserDetailsService is configured (for example in 'prod' when Key Vault
+     * credentials are not provided). In that case we return an AuthenticationManager that
+     * always fails authentication with a clear message instead of failing bean creation.
+     *
+     * @param udsProvider provider for {@link UserDetailsService}
      * @param encoder the {@link PasswordEncoder} used to verify credentials
      * @return an {@link AuthenticationManager}
      */
     @Bean
-    public AuthenticationManager authenticationManager(UserDetailsService uds, PasswordEncoder encoder) {
+    public AuthenticationManager authenticationManager(
+            ObjectProvider<UserDetailsService> udsProvider, PasswordEncoder encoder) {
+        UserDetailsService uds = udsProvider.getIfAvailable();
+        if (uds == null) {
+            // No user details service configured; return an AuthenticationManager that always fails
+            return authentication -> {
+                throw new BadCredentialsException(
+                        "Username/password authentication is not configured on this instance");
+            };
+        }
         // Use the constructor that accepts a UserDetailsService to avoid deprecated API usage
         DaoAuthenticationProvider p = new DaoAuthenticationProvider(uds);
         p.setPasswordEncoder(encoder);
@@ -626,7 +640,8 @@ public class SecurityConfig {
             if (groupClaims != null) {
                 for (String g : groupClaims) {
                     if (g != null && !g.isBlank()) {
-                        authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
+                        authorities.add(
+                                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
                     }
                 }
             }

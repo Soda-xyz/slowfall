@@ -52,55 +52,37 @@ Security & operational notes
 ---
 
 GitHub Actions / Repository secrets (set in GitHub → Settings → Secrets → Actions)
-- DEPLOY_ENV (required)
-  - Purpose: Controls publish/deploy mode used by CI (e.g., `prod`/`production` → production behavior; `dev`/`development` → dev behavior).
-  - Example: `prod`
-  - Notes: The `publish-images` job fails early if this secret is not set.
 
-- AZURE_SUBSCRIPTION_ID (required for Azure deploy steps)
-  - Purpose: Subscription used by `az` commands in deploy jobs.
-  - Example: `1e13e8d8-c624-405f-89c7-5f0e5f965399`
+IMPORTANT: OIDC-ONLY policy
+- This repository and CI are configured to use Azure AD OIDC (federated credential) for GitHub Actions. Do not rely on long-lived client secrets for automated CI deploys. The workflow uses `azure/login` with a federated credential; that is the required auth mechanism for deployments.
 
-- AZURE_TENANT_ID (required for Azure deploy steps)
-  - Purpose: Azure tenant id for OIDC or az login.
-  - Example: `f3715782-d0db-4347-bd92-2800c9d5e645`
+Required secrets (must exist for CI to deploy)
+- AZURE_CLIENT_ID — Azure AD application (app registration) id that has a federated credential for this repository/branch (used by `azure/login`).
+- AZURE_TENANT_ID — Azure tenant id used for Azure login.
+- AZURE_SUBSCRIPTION_ID — Azure subscription id used by `az` operations.
+- AZURE_RG — Azure resource group where App Services and Key Vault exist (e.g., `slowfall-appservice-prod`).
+- BACKEND_APP_NAME — Backend App Service name (e.g., `slowfall-backend`).
+- FRONTEND_APP_NAME — Frontend App Service name (e.g., `slowfall-frontend`).
+- DEPLOY_ENV — Deployment environment name used by CI (e.g., `prod`).
+- SLOWFALL_WEB_USERS_GROUP_ID — AAD group GUID used by the app (CI writes it to App Service as `APP_SECURITY_ALLOWED_GROUP_ID`).
+- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL — Full vault URI (e.g. `https://slowfall-keyvault-next.vault.azure.net/`). THIS IS REQUIRED: the CI/workflow and runtime will use this secret to configure Key Vault access; the workflow no longer falls back to a hardcoded URI.
+- ALLOWED_ORIGINS — optional comma-separated allowed origins used for CORS (CI will write it into app settings if present).
 
-- AZURE_CLIENT_ID (required for Azure OIDC / federated login)
-  - Purpose: Client id of the service principal used by `azure/login` (expect a federated credential configured for this id).
-  - Example: `f17c9149-9c99-4294-ada3-9a97f0cf7b0b`
+Secrets you may remove (NOT used by current OIDC workflow)
+- AZURE_CLIENT_SECRET — not used by the OIDC-based workflow. Remove this secret to reduce risk.
+- AZURE_CREDENTIALS — not used by the workflow (legacy JSON credential). Remove if you exclusively use OIDC.
+- BACKEND_APP_ID — not used by the CI workflow (kept in README for reference). If you stored it as a GitHub secret and it’s not used by other processes, remove it.
 
-- AZURE_RG (required)
-  - Purpose: Resource group used by deploy scripts (e.g., where App Services live).
-  - Example: `slowfall-appservice-prod`
+How to remove (example gh CLI commands)
+- gh secret remove AZURE_CLIENT_SECRET --repo Soda-xyz/slowfall
+- gh secret remove AZURE_CREDENTIALS --repo Soda-xyz/slowfall
+- gh secret remove BACKEND_APP_ID --repo Soda-xyz/slowfall
 
-- BACKEND_APP_NAME (required)
-  - Purpose: Backend App Service name (used by CI to resolve FQDN and to set images/app settings).
-  - Example: `slowfall-backend`
-
-- FRONTEND_APP_NAME (required)
-  - Purpose: Frontend App Service name (used by CI to set images/app settings).
-  - Example: `slowfall-frontend`
-
-- PROXY_APP_NAME (optional)
-  - Purpose: Proxy App Service name (defaults to `slowfall-proxy` when not set in CI/deploy).
-  - Example: `slowfall-proxy`
-
-- ALLOWED_ORIGINS (optional)
-  - Purpose: Comma-separated allowed CORS origins that CI will configure on App Services if provided.
-  - Example: `https://slowfall-frontend.azurewebsites.net`
-
-- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (optional)
-  - Purpose: Key Vault URI used by CI or the proxy as a fallback; prefer storing Key Vault URI in repository secrets if CI must know it.
-  - Example: `https://slowfall-keyvault-next.vault.azure.net/`
-
-- GHCR_TOKEN (optional)
-  - Purpose: Personal access token for pushing to GHCR if your org disallows using the default `GITHUB_TOKEN` for package pushes.
+Note: before removing any secret, verify no other workflow or external system depends on it.
 
 ---
 
 App Service — Runtime App Settings (set in Azure Portal / App Service -> Configuration -> Application settings)
-
-Backend App Service (runtime)
 - SPRING_PROFILES_ACTIVE
   - Purpose: Spring profile for backend runtime (e.g., `prod`, `dev`). CI sets this during deploy when `DEPLOY_ENV` is present.
   - Example: `prod`
@@ -109,37 +91,14 @@ Backend App Service (runtime)
   - Purpose: Comma-separated list used by the backend for CORS (maps to `app.cors.allowed-origins`).
   - Example: `https://slowfall-frontend.azurewebsites.net`
 
-- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (optional)
-  - Purpose: Key Vault URI used by backend at runtime if reading secrets directly from Key Vault is required.
+- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL
+  - Purpose: Full Key Vault URI used by the apps. The workflow now *requires* this secret to be set in GitHub and will fail early if it is missing. Do not rely on defaults in CI.
   - Example: `https://slowfall-keyvault-next.vault.azure.net/`
 
-Frontend App Service (runtime)
-- ALLOWED_ORIGINS
-  - Purpose: Same as backend; set here only if you want the frontend App Service to be aware of allowed origins via app settings.
+- APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST
+  - Purpose: When true the application will fail startup if required Key Vault secrets/keys are not accessible. Useful in production. If the app is failing on startup due to Key Vault, temporarily set this to `false` while you fix RBAC.
 
-Proxy App Service (`slowfall-proxy`) — runtime settings
-- WEBSITES_PORT
-  - Purpose: Port Nginx listens on in the container.
-  - Example: `80`
-
-- BACKEND_HOST
-  - Purpose: Backend FQDN used by the proxy for routing (e.g., `slowfall-backend.azurewebsites.net`). CI resolves this from `BACKEND_APP_NAME`.
-  - Example: `slowfall-backend.azurewebsites.net`
-
-- BACKEND_PORT
-  - Purpose: Backend container port.
-  - Example: `8080`
-
-- CLIENT_MAX_BODY_SIZE (optional)
-  - Purpose: Nginx proxy client_max_body_size setting.
-  - Example: `20m`
-
-- PROXY_READ_TIMEOUT / PROXY_SEND_TIMEOUT (optional)
-  - Purpose: Proxy timeout tuning.
-  - Example: `90s`
-
-- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (optional)
-  - Purpose: If the proxy reads certs/secrets from Key Vault via a managed identity.
+- Any other runtime setting described earlier in this README should be set here as needed.
 
 ---
 
