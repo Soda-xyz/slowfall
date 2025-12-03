@@ -5,7 +5,6 @@ import com.azure.security.keyvault.keys.models.JsonWebKey;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.azure.security.keyvault.secrets.SecretClient;
 import com.nimbusds.jose.jwk.RSAKey;
-import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.interfaces.RSAPrivateCrtKey;
@@ -60,24 +59,10 @@ import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 /**
  * Spring Security configuration for the application.
  *
- * <p>This configuration class declares beans used by Spring Security, including:
- * <ul>
- *   <li>a development bypass filter (DevBypassAuthFilter),</li>
- *   <li>the main {@link SecurityFilterChain},</li>
- *   <li>an in-memory {@link UserDetailsService} for basic username/password auth,</li>
- *   <li>a {@link PasswordEncoder} and {@link AuthenticationManager} for authentication,
- *   <li>JWT-related beans (RSA key, JWKSource, {@link JwtEncoder}, {@link JwtDecoder}),</li>
- *   <li>and a {@link Converter} that maps a {@link org.springframework.security.oauth2.jwt.Jwt}
- *       to an {@link AbstractAuthenticationToken} with granted authorities.</li>
- * </ul>
- *
- * <p>Notes:
- * <ul>
- *   <li>RSA key generation here is ephemeral and intended for development only. In production,
- *       provide a persistent key via a secure store (Vault, KMS, etc.) and publish a JWKS endpoint.</li>
- *   <li>The dev bypass filter is registered before {@link AnonymousAuthenticationFilter} so it can
- *       populate the SecurityContext during local development when enabled.</li>
- * </ul>
+ * Key security decision: do NOT create any ephemeral RSA signing key in non-dev profiles.
+ * - Dev-only ephemeral RSA JWK is provided under the 'dev' profile (helps local testing).
+ * - In production, a Key Vault key or secret MUST be configured (via app.security.azure.keyvault.*)
+ *   so that a stable RSAKey bean is available. If it's missing, the application will fail-fast.
  */
 @Configuration
 @EnableConfigurationProperties(CorsProperties.class)
@@ -240,13 +225,7 @@ public class SecurityConfig {
         String finalAllowedGroupId = allowedGroupId;
         http.authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.OPTIONS).permitAll();
-                    if (devBypass) {
-                        auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
-                                .permitAll();
-                    } else {
-                        auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
-                                .permitAll();
-                    }
+                    auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**").permitAll();
                     // Require membership in the configured AAD group or allow a dev ROLE_USER for local/testing.
                     String requiredAuthority = "ROLE_" + finalAllowedGroupId;
                     auth.anyRequest().hasAuthority(requiredAuthority);
@@ -483,12 +462,12 @@ public class SecurityConfig {
     public RSAKey rsaJwk() throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
         kpg.initialize(2048);
-        KeyPair kp = kpg.generateKeyPair();
+        var kp = kpg.generateKeyPair();
         RSAPublicKey pub = (RSAPublicKey) kp.getPublic();
         RSAPrivateKey priv = (RSAPrivateKey) kp.getPrivate();
         return new RSAKey.Builder(pub)
                 .privateKey(priv)
-                .keyID(java.util.UUID.randomUUID().toString())
+                .keyID(UUID.randomUUID().toString())
                 .build();
     }
 
@@ -605,7 +584,7 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnMissingBean(org.springframework.security.oauth2.jwt.JwtEncoder.class)
     public org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder(RSAKey rsaJwk) {
-        // Build a JWKSource from the ephemeral RSA JWK and return a NimbusJwtEncoder.
+        // Build a JWKSource from the RSA JWK and return a NimbusJwtEncoder.
         com.nimbusds.jose.jwk.JWKSet jwkSet = new com.nimbusds.jose.jwk.JWKSet(rsaJwk);
         com.nimbusds.jose.jwk.source.ImmutableJWKSet<com.nimbusds.jose.proc.SecurityContext> jwkSource =
                 new com.nimbusds.jose.jwk.source.ImmutableJWKSet<>(jwkSet);
@@ -615,7 +594,7 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnMissingBean(org.springframework.security.oauth2.jwt.JwtDecoder.class)
     public org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder(RSAKey rsaJwk) throws Exception {
-        // Use the RSA public key from the ephemeral JWK for decoding in dev/test
+        // Use the RSA public key from the provided JWK for decoding
         RSAPublicKey pub = rsaJwk.toRSAPublicKey();
         return org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey(pub)
                 .build();
@@ -640,8 +619,7 @@ public class SecurityConfig {
             if (groupClaims != null) {
                 for (String g : groupClaims) {
                     if (g != null && !g.isBlank()) {
-                        authorities.add(
-                                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
+                        authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
                     }
                 }
             }

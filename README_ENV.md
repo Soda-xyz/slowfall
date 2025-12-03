@@ -164,3 +164,39 @@ Changing names or adding variables
 
 Security reminder
 - Do not commit secrets into the repository. Use Key Vault and GitHub repository secrets, and prefer OIDC-based federated credentials where possible.
+
+---
+
+Quick steps: set Key Vault URL secret for GitHub Actions
+
+- Key Vault name: `slowfall-keyvault-next`
+- Key Vault URL: `https://slowfall-keyvault-next.vault.azure.net/`
+
+Set repository secrets (recommended):
+
+- Required secret name (used by workflows): `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`
+- Convenience alias for scripts: `AZ_KEYVAULT_VAULT_URL` (optional duplicate)
+
+If you have the GitHub CLI (`gh`) and are authenticated, run these commands from the repository root (or add `--repo owner/repo` to target a specific repo):
+
+```bash
+gh secret set APP_SECURITY_AZURE_KEYVAULT_VAULT_URL --body "https://slowfall-keyvault-next.vault.azure.net/" --visibility=private
+gh secret set AZ_KEYVAULT_VAULT_URL --body "https://slowfall-keyvault-next.vault.azure.net/" --visibility=private
+```
+
+Or use the GitHub web UI:
+- Repo → Settings → Secrets and variables → Actions → New repository secret
+  - Name: `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`
+  - Value: `https://slowfall-keyvault-next.vault.azure.net/`
+- Repeat for `AZ_KEYVAULT_VAULT_URL` if desired.
+
+Remember to also set the corresponding App Service runtime app setting for the backend (so the running app can access Key Vault):
+
+```
+az webapp config appsettings set \
+  --resource-group "<AZ_RESOURCE_GROUP>" \
+  --name "<AZ_WEBAPP_BACKEND>" \
+  --settings APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="https://slowfall-keyvault-next.vault.azure.net/"
+```
+
+Security reminder: Do not commit secret values into the repository. Use GitHub repository secrets and Azure Key Vault. If you want me to set the repository secrets now, I can run the `gh secret set` commands for you — I need either a configured git remote that points to the GitHub repo or the `owner/repo` string, and your confirmation to proceed.

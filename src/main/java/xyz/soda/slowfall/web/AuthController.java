@@ -11,6 +11,9 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.web.bind.annotation.*;
@@ -47,7 +50,7 @@ public class AuthController {
      * @param authManager authentication manager used to authenticate username/password logins
      * @param jwtEncoder encoder used to sign access and refresh JWTs
      * @param jwtDecoder decoder used to validate refresh tokens
-     * @param uds user details service used to load user authorities for token claims
+     * @param udsProvider ObjectProvider for UserDetailsService used to load user authorities for token claims
      * @param cookieSecure whether the refresh cookie should be marked Secure
      * @param cookieName the name of the refresh cookie
      * @param cookieSameSite the SameSite attribute to apply to the refresh cookie
@@ -56,7 +59,7 @@ public class AuthController {
             AuthenticationManager authManager,
             JwtEncoder jwtEncoder,
             JwtDecoder jwtDecoder,
-            UserDetailsService uds,
+            ObjectProvider<UserDetailsService> udsProvider,
             @org.springframework.beans.factory.annotation.Value("${app.security.cookie-secure:false}")
                     boolean cookieSecure,
             @org.springframework.beans.factory.annotation.Value("${app.security.cookie-name:refresh_token}")
@@ -66,7 +69,7 @@ public class AuthController {
         this.authManager = authManager;
         this.jwtEncoder = jwtEncoder;
         this.jwtDecoder = jwtDecoder;
-        this.userDetailsService = uds;
+        this.userDetailsService = udsProvider.getIfAvailable();
         this.cookieSecure = cookieSecure;
         this.cookieName = cookieName;
         this.cookieSameSite = cookieSameSite;
@@ -95,7 +98,13 @@ public class AuthController {
 
         if (validated) {
             // build a minimal Authentication-like subject using username only; authorities will be resolved via UDS
-            var user = userDetailsService.loadUserByUsername(req.username());
+            UserDetails user;
+            if (this.userDetailsService != null) {
+                user = this.userDetailsService.loadUserByUsername(req.username());
+            } else {
+                // no UserDetailsService available — create a minimal user with ROLE_USER so flow can continue
+                user = User.withUsername(req.username()).password("").roles("USER").build();
+            }
             auth = new UsernamePasswordAuthenticationToken(user.getUsername(), null, user.getAuthorities());
         } else {
             // fall back to AuthenticationManager (dev / other flows)
@@ -164,7 +173,12 @@ public class AuthController {
         try {
             Jwt parsed = jwtDecoder.decode(refreshToken);
             String username = parsed.getSubject();
-            var user = userDetailsService.loadUserByUsername(username);
+            UserDetails user;
+            if (this.userDetailsService != null) {
+                user = this.userDetailsService.loadUserByUsername(username);
+            } else {
+                user = User.withUsername(username).password("").roles("USER").build();
+            }
 
             Instant now = Instant.now();
             JwtClaimsSet claims = JwtClaimsSet.builder()
