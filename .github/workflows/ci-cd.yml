@@ -177,6 +177,8 @@ jobs:
     needs: frontend-docker-checks
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
     outputs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
@@ -329,6 +331,23 @@ jobs:
           az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
           az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
+      - name: Ensure WEBSITES_PORT, Always On and container logging for Backend & Frontend
+        run: |
+          set -euo pipefail
+
+          # Backend: ensure App Service uses the correct container port and has helpful dev/CI settings.
+          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings WEBSITES_PORT=8080 APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST=true
+
+          # Enable Always On for backend so App Service won't suspend the container between requests.
+          az webapp config set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --always-on true || true
+
+          # Enable container filesystem logging so we can tail container logs during troubleshooting.
+          az webapp log config --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --docker-container-logging filesystem || true
+
+          # Frontend: enable Always On and container logging (frontend typically listens on port 80 inside its container).
+          az webapp config set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --always-on true || true
+          az webapp log config --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --docker-container-logging filesystem || true
+
       - name: Set app settings on proxy
         run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
@@ -357,6 +376,12 @@ jobs:
     needs: publish-images
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+
+    # Grant write permission to contents for this job so the GITHUB_TOKEN can call the
+    # repository_dispatch API (required to trigger the `deploy-check` workflow).
+    permissions:
+      contents: write
+      id-token: write
 
     env:
       SPRING_PROFILE: ${{ needs.publish-images.outputs.spring_profile }}
@@ -420,5 +445,59 @@ jobs:
           az webapp restart --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
           az webapp restart --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}"
+
+      - name: Trigger downstream deploy-check workflow
+        if: ${{ success() }}
+        # Prefer an explicit PAT stored in repository secret REPO_DISPATCH_TOKEN; fallback to GITHUB_TOKEN
+        env:
+          GH_API_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FRONTEND_IMAGE: "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
+          FRONTEND_APP: "${{ secrets.FRONTEND_APP_NAME }}"
+          AZ_RG: "${{ secrets.AZURE_RG }}"
+        run: |
+          set -euo pipefail
+          # Use REPO_DISPATCH_TOKEN if set; otherwise fall back to the automatically provided GITHUB_TOKEN
+          GH_API_TOKEN="${GH_API_TOKEN:-$GITHUB_TOKEN}"
+
+          # Diagnostic: indicate which token source is being used (do NOT print tokens themselves)
+          if [ -n "${REPO_DISPATCH_TOKEN:-}" ]; then
+            echo "Dispatch token source: REPO_DISPATCH_TOKEN (repo PAT)"
+          else
+            echo "Dispatch token source: GITHUB_TOKEN (workflow token)"
+          fi
+
+          echo "Triggering deploy-check with image: $FRONTEND_IMAGE"
+          # Build JSON payload safely (printf with placeholders)
+          PAYLOAD=$(printf '%s' '{"event_type":"deploy-check","client_payload":{"IMAGE_TAG":"%s","APP_NAME":"%s","RG":"%s","APP_URL":"https://%s.azurewebsites.net"}}' "$FRONTEND_IMAGE" "$FRONTEND_APP" "$AZ_RG" "$FRONTEND_APP")
+          echo "Payload: $PAYLOAD"
+          REPO="${{ github.repository }}"
+
+          # Call the repository dispatch API and capture headers/body/status for debugging.
+          RESPONSE_FILE=/tmp/dispatch_response.txt
+          HEADERS_FILE=/tmp/dispatch_headers.txt
+          HTTP_STATUS=$(curl -sS -w "%{http_code}" -o "$RESPONSE_FILE" -D "$HEADERS_FILE" -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${GH_API_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/dispatches" -d "$PAYLOAD" || true)
+
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response headers:" && cat "$HEADERS_FILE" || true
+          echo "Response body:" && cat "$RESPONSE_FILE" || true
+
+          if [ "$HTTP_STATUS" -eq 403 ]; then
+            echo "ERROR: repository_dispatch returned 403 'Resource not accessible by integration'." >&2
+            echo "Possible causes and remediation (pick one):" >&2
+            echo "  1) Repository Actions permissions restrict GITHUB_TOKEN to read-only. Go to Settings -> Actions -> General -> Workflow permissions and set 'Read and write permissions' for workflows." >&2
+            echo "     Docs: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions" >&2
+            echo "  2) Organization policy blocks usage of GITHUB_TOKEN for dispatch events; create a Personal Access Token (repo scope) and store it as repository secret REPO_DISPATCH_TOKEN, then re-run this workflow." >&2
+            echo "     Docs: https://docs.github.com/rest/repos/repos#create-a-repository-dispatch-event" >&2
+          fi
+
+          # Repository dispatch returns 204 No Content on success. Fail loudly otherwise.
+          if [ "$HTTP_STATUS" -ne 204 ]; then
+            echo "Failed to trigger repository_dispatch (status $HTTP_STATUS)" >&2
+            exit 1
+          fi
 
 # End of workflow

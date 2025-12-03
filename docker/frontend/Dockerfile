@@ -33,6 +33,8 @@ RUN apk add --no-cache curl
 COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
 # Bake nginx config at build-time. BACKEND_HOST is a build-arg (defaults to 'backend')
 ARG BACKEND_HOST=backend
+# Provide a matching FRONTEND_HOST build-arg so CI can bake in a frontend host if required
+ARG FRONTEND_HOST=frontend
 # Write config template with a placeholder, then replace the placeholder at build time with the ARG value.
 RUN cat > /etc/nginx/conf.d/default.conf.template <<'TEMPLATE'
 server {
@@ -82,8 +84,8 @@ server {
 }
 TEMPLATE
 
-# Replace the placeholder with the build-arg value (Dockerfile expands ${BACKEND_HOST} here) and write final config.
-RUN sed -e "s/{{BACKEND_HOST}}/${BACKEND_HOST}/g" /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf \
+# Replace the placeholder(s) with the build-arg values and write final config.
+RUN sed -e "s/{{BACKEND_HOST}}/${BACKEND_HOST}/g; s/{{FRONTEND_HOST}}/${FRONTEND_HOST}/g" /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf \
   && rm /etc/nginx/conf.d/default.conf.template
 
 CMD ["/bin/sh","-c","exec nginx -g 'daemon off;' "]
