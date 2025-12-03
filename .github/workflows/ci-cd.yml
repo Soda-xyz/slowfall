@@ -177,6 +177,8 @@ jobs:
     needs: frontend-docker-checks
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
     outputs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
@@ -379,6 +381,7 @@ jobs:
     # repository_dispatch API (required to trigger the `deploy-check` workflow).
     permissions:
       contents: write
+      id-token: write
 
     env:
       SPRING_PROFILE: ${{ needs.publish-images.outputs.spring_profile }}
