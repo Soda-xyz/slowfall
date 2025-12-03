@@ -1,0 +1,163 @@
+name: deploy-check
+
+# Runs after a deploy or can be triggered manually / via repository_dispatch.
+on:
+  repository_dispatch:
+    types: [deploy-check]
+  workflow_dispatch:
+    inputs:
+      IMAGE_TAG:
+        description: 'Image tag or digest to verify (required)'
+        required: false
+      APP_NAME:
+        description: 'Azure Web App name'
+        required: false
+      RG:
+        description: 'Azure resource group'
+        required: false
+      APP_URL:
+        description: 'Public URL to poll (https://...)'
+        required: false
+      TIMEOUT:
+        description: 'Total wait time in seconds for app-level check (default 900)'
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  verify-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Defaults (can be overridden via inputs, client_payload, or secrets)
+      TIMEOUT: 900
+      RETRY_INTERVAL: 5
+      CONFIG_CHECK_WINDOW: 180
+      CONFIG_CHECK_INTERVAL: 5
+    steps:
+      - name: Determine variables (from dispatch / inputs / secrets)
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prefer client_payload (repository_dispatch), then workflow_dispatch inputs, then secrets.
+          IMAGE_TAG="${{ github.event.client_payload.IMAGE_TAG || github.event.inputs.IMAGE_TAG || secrets.IMAGE_TAG || '' }}"
+          APP_NAME="${{ github.event.client_payload.APP_NAME || github.event.inputs.APP_NAME || secrets.AZURE_APP_NAME || '' }}"
+          RG="${{ github.event.client_payload.RG || github.event.inputs.RG || secrets.AZURE_RG || '' }}"
+          APP_URL="${{ github.event.client_payload.APP_URL || github.event.inputs.APP_URL || '' }}"
+          TIMEOUT_INPUT="${{ github.event.client_payload.TIMEOUT || github.event.inputs.TIMEOUT || '' }}"
+          if [ -n "$TIMEOUT_INPUT" ]; then TIMEOUT="$TIMEOUT_INPUT"; fi
+
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
+          echo "RG=$RG" >> "$GITHUB_ENV"
+          echo "APP_URL=$APP_URL" >> "$GITHUB_ENV"
+          echo "TIMEOUT=$TIMEOUT" >> "$GITHUB_ENV"
+
+          echo "Selected: IMAGE_TAG=${IMAGE_TAG}, APP_NAME=${APP_NAME}, RG=${RG}, APP_URL=${APP_URL}, TIMEOUT=${TIMEOUT}"
+
+      - name: Fail early if IMAGE_TAG is missing
+        if: env.IMAGE_TAG == ''
+        run: |
+          echo "Missing IMAGE_TAG. Provide it via repository_dispatch client_payload.IMAGE_TAG, workflow_dispatch input, or secrets.IMAGE_TAG" >&2
+          exit 1
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Quick App Service config check (retry window)
+        id: config-check
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking App Service siteConfig.linuxFxVersion for $IMAGE_TAG"
+          attempts=$(( CONFIG_CHECK_WINDOW / CONFIG_CHECK_INTERVAL ))
+          n=0
+          success=0
+          while [ $n -lt $attempts ]; do
+            n=$((n+1))
+            actual=$(az webapp show --name "$APP_NAME" --resource-group "$RG" --query "siteConfig.linuxFxVersion" -o tsv || true)
+            echo "Attempt $n/$attempts: linuxFxVersion='$actual'"
+            if [ -n "$actual" ] && echo "$actual" | grep -F "$IMAGE_TAG" >/dev/null 2>&1; then
+              echo "Config shows expected image: $actual"
+              success=1
+              break
+            fi
+            sleep $CONFIG_CHECK_INTERVAL
+          done
+          if [ $success -ne 1 ]; then
+            echo "App Service configuration did not reflect expected image tag within ${CONFIG_CHECK_WINDOW}s"
+            echo "Current linuxFxVersion: $actual"
+            exit 1
+          fi
+          echo "config_ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: App-level smoke test (poll /version or /health)
+        id: app-check
+        shell: bash
+        run: |
+          set -euo pipefail
+          START=$(date +%s)
+          TIMEOUT=${TIMEOUT:-900}
+          INTERVAL=${{ env.RETRY_INTERVAL }}
+          MAX_INTERVAL=60
+          TARGET_URL="${APP_URL%/}"
+          if [ -z "$TARGET_URL" ]; then
+            TARGET_URL="https://${APP_NAME}.azurewebsites.net"
+          fi
+          echo "Polling $TARGET_URL/version (fallback to /health then /) for up to ${TIMEOUT}s"
+          elapsed=0
+          while [ $elapsed -lt $TIMEOUT ]; do
+            for path in /version /health /; do
+              url="$TARGET_URL$path"
+              echo "Checking $url"
+              resp=$(curl -fsS --max-time 10 "$url" || true)
+              code=$?
+              if [ $code -eq 0 ] && [ -n "$resp" ]; then
+                echo "Response from $url: $(echo $resp | head -c 200)"
+                if echo "$resp" | grep -F "$IMAGE_TAG" >/dev/null 2>&1; then
+                  echo "App is serving expected IMAGE_TAG"
+                  echo "status=success" >> "$GITHUB_OUTPUT"
+                  DURATION=$(( $(date +%s) - START ))
+                  echo "elapsed_seconds=$DURATION" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                # If response is 2xx but doesn't include tag, still treat as not-yet-up
+              fi
+            done
+            echo "Not yet available; sleeping ${INTERVAL}s"
+            sleep $INTERVAL
+            elapsed=$(( $(date +%s) - START ))
+            INTERVAL=$(( INTERVAL * 2 ))
+            if [ $INTERVAL -gt $MAX_INTERVAL ]; then INTERVAL=$MAX_INTERVAL; fi
+          done
+
+          echo "Timed out waiting for app to report image tag"
+          echo "status=failure" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "Collecting diagnostics for $APP_NAME in $RG"
+          az webapp show --name "$APP_NAME" --resource-group "$RG" -o json || true
+          echo "--- linuxFxVersion ---"
+          az webapp show --name "$APP_NAME" --resource-group "$RG" --query "siteConfig.linuxFxVersion" -o tsv || true
+          echo "--- attempt log download ---"
+          az webapp log download --name "$APP_NAME" --resource-group "$RG" --log-file /tmp/webapp_logs.zip || true
+          if [ -f /tmp/webapp_logs.zip ]; then
+            unzip -l /tmp/webapp_logs.zip || true
+            unzip -p /tmp/webapp_logs.zip || true
+          fi
+          echo "--- end diagnostics ---"
+
+      - name: Final status
+        run: |
+          echo "Done. See above logs for success/failure details."

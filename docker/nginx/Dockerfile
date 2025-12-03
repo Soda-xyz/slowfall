@@ -10,9 +10,9 @@ COPY docker/nginx/nginx.conf.template /etc/nginx/nginx.conf.template
 COPY docker/nginx/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Optional: copy static frontend build into the image if CI outputs it into 'frontend/dist'
-# Uncomment in CI build if you want static assets baked into the proxy image.
-# COPY frontend/dist/ /usr/share/nginx/html/
+# NOTE: Do NOT bake frontend/dist into the proxy image here.
+# The frontend is served from its own App Service (or static host) and the proxy should only reverse-proxy /api/.
+# If CI needs to package static assets into a distribution for other uses, publish the artifact separately.
 
 EXPOSE 80
 

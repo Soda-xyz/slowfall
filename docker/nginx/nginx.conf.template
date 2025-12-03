@@ -25,6 +25,11 @@ http {
         server $BACKEND_HOST:$BACKEND_PORT;
     }
 
+    # FRONTEND_HOST is provided via environment/application settings and substituted into
+    # this template at container start (entrypoint.sh uses envsubst). It should be a
+    # resolvable host (for example: frontend-app.azurewebsites.net). If a port is
+    # required, include it in FRONTEND_HOST (for example: host:port).
+
     server {
         listen 80;
         server_name _;
@@ -63,12 +68,22 @@ http {
             proxy_set_header Connection "";
         }
 
+        # Fallback for non-/api requests (SPA client routes and other root paths).
+        # Proxy these to the frontend App Service configured via FRONTEND_HOST.
+        # Uses variable-based proxy_pass so FRONTEND_HOST can be set from App Settings.
         location @proxy {
-            proxy_pass http://backend_upstream;
+            proxy_pass http://$FRONTEND_HOST;
+            proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Port $server_port;
+            proxy_redirect off;
+            proxy_read_timeout $PROXY_READ_TIMEOUT;
+            proxy_send_timeout $PROXY_SEND_TIMEOUT;
+            proxy_set_header Connection "";
         }
     }
 }
