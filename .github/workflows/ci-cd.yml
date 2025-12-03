@@ -267,8 +267,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-backend:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-backend:latest
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
             SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILE }}
 
@@ -280,8 +280,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-frontend:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-frontend:latest
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
             VITE_FRONTEND_ENV=${{ env.SPRING_PROFILE == 'prod' && 'production' || env.SPRING_PROFILE }}
             VITE_API_BASE_URL=${{ env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '' }}
@@ -295,8 +295,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-proxy:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-proxy:latest
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:latest
           build-args: |
             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
@@ -382,16 +382,16 @@ jobs:
 
       - name: Set backend container image
         run: |
-          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-backend:${{ github.sha }}"
+          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
 
       - name: Set frontend container image
         run: |
-          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-frontend:${{ github.sha }}"
+          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
 
       - name: Set proxy container image
         run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner }}/slowfall-proxy:${{ github.sha }}"
+          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
 
       - name: Restart services
         run: |
