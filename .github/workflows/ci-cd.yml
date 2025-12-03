@@ -431,7 +431,27 @@ jobs:
         run: |
           set -euo pipefail
           echo "Triggering deploy-check with image: $FRONTEND_IMAGE"
-          PAYLOAD=$(printf '%s' "{\"event_type\":\"deploy-check\",\"client_payload\":{\"IMAGE_TAG\":\"%s\",\"APP_NAME\":\"%s\",\"RG\":\"%s\",\"APP_URL\":\"https://%s.azurewebsites.net\"}}" "$FRONTEND_IMAGE" "$FRONTEND_APP" "$AZ_RG" "$FRONTEND_APP")
-          curl -sS -X POST -H "Accept: application/vnd.github+json" -H "Authorization: token ${GH_API_TOKEN}" "https://api.github.com/repos/${{ github.repository }}/dispatches" -d "$PAYLOAD"
+          # Build JSON payload safely (printf with placeholders)
+          PAYLOAD=$(printf '%s' '{"event_type":"deploy-check","client_payload":{"IMAGE_TAG":"%s","APP_NAME":"%s","RG":"%s","APP_URL":"https://%s.azurewebsites.net"}}' "$FRONTEND_IMAGE" "$FRONTEND_APP" "$AZ_RG" "$FRONTEND_APP")
+          echo "Payload: $PAYLOAD"
+          REPO="${{ github.repository }}"
+
+          # Call the repository dispatch API and capture headers/body/status for debugging.
+          RESPONSE_FILE=/tmp/dispatch_response.txt
+          HEADERS_FILE=/tmp/dispatch_headers.txt
+          HTTP_STATUS=$(curl -sS -w "%{http_code}" -o "$RESPONSE_FILE" -D "$HEADERS_FILE" -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${GH_API_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/dispatches" -d "$PAYLOAD" || true)
+
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response headers:" && cat "$HEADERS_FILE" || true
+          echo "Response body:" && cat "$RESPONSE_FILE" || true
+
+          # Repository dispatch returns 204 No Content on success. Fail loudly otherwise.
+          if [ "$HTTP_STATUS" -ne 204 ]; then
+            echo "Failed to trigger repository_dispatch (status $HTTP_STATUS)" >&2
+            exit 1
+          fi
 
 # End of workflow
