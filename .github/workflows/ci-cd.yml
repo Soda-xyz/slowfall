@@ -375,6 +375,7 @@ jobs:
           AZ_WEBAPP_BACKEND="${{ secrets.BACKEND_APP_NAME }}"
           AZ_WEBAPP_FRONTEND="${{ secrets.FRONTEND_APP_NAME }}"
           AZ_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}"
+          AZ_KEYVAULT_KEY_NAME="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}"
           missing=()
           [ -z "$AZ_SUBSCRIPTION_ID" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
           [ -z "$AZ_TENANT_ID" ] && missing+=("AZURE_TENANT_ID") || true
@@ -383,6 +384,7 @@ jobs:
           [ -z "$AZ_WEBAPP_BACKEND" ] && missing+=("BACKEND_APP_NAME") || true
           [ -z "$AZ_WEBAPP_FRONTEND" ] && missing+=("FRONTEND_APP_NAME") || true
           [ -z "$AZ_KEYVAULT_VAULT_URL" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL") || true
+          [ -z "$AZ_KEYVAULT_KEY_NAME" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME") || true
           if [ ${#missing[@]} -ne 0 ]; then
             echo "ERROR: Missing required Azure secrets: ${missing[*]}"
             exit 1
