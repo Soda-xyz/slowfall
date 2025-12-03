@@ -5,15 +5,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.web.bind.annotation.*;
@@ -103,7 +103,10 @@ public class AuthController {
                 user = this.userDetailsService.loadUserByUsername(req.username());
             } else {
                 // no UserDetailsService available — create a minimal user with ROLE_USER so flow can continue
-                user = User.withUsername(req.username()).password("").roles("USER").build();
+                user = User.withUsername(req.username())
+                        .password("")
+                        .roles("USER")
+                        .build();
             }
             auth = new UsernamePasswordAuthenticationToken(user.getUsername(), null, user.getAuthorities());
         } else {

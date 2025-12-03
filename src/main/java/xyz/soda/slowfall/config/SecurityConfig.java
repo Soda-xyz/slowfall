@@ -225,7 +225,8 @@ public class SecurityConfig {
         String finalAllowedGroupId = allowedGroupId;
         http.authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.OPTIONS).permitAll();
-                    auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**").permitAll();
+                    auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
+                            .permitAll();
                     // Require membership in the configured AAD group or allow a dev ROLE_USER for local/testing.
                     String requiredAuthority = "ROLE_" + finalAllowedGroupId;
                     auth.anyRequest().hasAuthority(requiredAuthority);
@@ -676,7 +677,8 @@ public class SecurityConfig {
             if (groupClaims != null) {
                 for (String g : groupClaims) {
                     if (g != null && !g.isBlank()) {
-                        authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
+                        authorities.add(
+                                new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + g));
                     }
                 }
             }

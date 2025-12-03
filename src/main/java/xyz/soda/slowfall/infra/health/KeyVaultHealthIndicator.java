@@ -55,18 +55,30 @@ public class KeyVaultHealthIndicator implements HealthIndicator {
                 if (key == null) {
                     String msg = String.format("Key Vault at %s returned no key for name '%s'", vaultUrl, keyName);
                     log.warn(msg);
-                    return Health.down().withDetail("reason", "no-key").withDetail("keyName", keyName).build();
+                    return Health.down()
+                            .withDetail("reason", "no-key")
+                            .withDetail("keyName", keyName)
+                            .build();
                 }
                 if (key.getKey() == null) {
-                    String msg = String.format("Key Vault at %s returned key '%s' but key material is missing (no JWK)", vaultUrl, keyName);
+                    String msg = String.format(
+                            "Key Vault at %s returned key '%s' but key material is missing (no JWK)",
+                            vaultUrl, keyName);
                     log.warn(msg);
-                    return Health.down().withDetail("reason", "no-jwk").withDetail("keyName", keyName).build();
+                    return Health.down()
+                            .withDetail("reason", "no-jwk")
+                            .withDetail("keyName", keyName)
+                            .build();
                 }
                 return Health.up().withDetail("keyName", keyName).build();
             } catch (Exception e) {
-                String msg = String.format("Failed to reach Key Vault keys API at %s for key '%s': %s", vaultUrl, keyName, e.getMessage());
+                String msg = String.format(
+                        "Failed to reach Key Vault keys API at %s for key '%s': %s", vaultUrl, keyName, e.getMessage());
                 log.error(msg, e);
-                return Health.down(e).withDetail("reason", "exception").withDetail("message", e.getMessage()).build();
+                return Health.down(e)
+                        .withDetail("reason", "exception")
+                        .withDetail("message", e.getMessage())
+                        .build();
             }
         }
 
@@ -75,16 +87,27 @@ public class KeyVaultHealthIndicator implements HealthIndicator {
         if (sc != null && secretName != null && !secretName.isBlank()) {
             try {
                 var secret = sc.getSecret(secretName);
-                if (secret == null || secret.getValue() == null || secret.getValue().isBlank()) {
-                    String msg = String.format("Key Vault at %s returned secret '%s' but value is empty", vaultUrl, secretName);
+                if (secret == null
+                        || secret.getValue() == null
+                        || secret.getValue().isBlank()) {
+                    String msg = String.format(
+                            "Key Vault at %s returned secret '%s' but value is empty", vaultUrl, secretName);
                     log.warn(msg);
-                    return Health.down().withDetail("reason", "empty-secret").withDetail("secretName", secretName).build();
+                    return Health.down()
+                            .withDetail("reason", "empty-secret")
+                            .withDetail("secretName", secretName)
+                            .build();
                 }
                 return Health.up().withDetail("secretName", secretName).build();
             } catch (Exception e) {
-                String msg = String.format("Failed to reach Key Vault secrets API at %s for secret '%s': %s", vaultUrl, secretName, e.getMessage());
+                String msg = String.format(
+                        "Failed to reach Key Vault secrets API at %s for secret '%s': %s",
+                        vaultUrl, secretName, e.getMessage());
                 log.error(msg, e);
-                return Health.down(e).withDetail("reason", "exception").withDetail("message", e.getMessage()).build();
+                return Health.down(e)
+                        .withDetail("reason", "exception")
+                        .withDetail("message", e.getMessage())
+                        .build();
             }
         }
 
@@ -94,4 +117,3 @@ public class KeyVaultHealthIndicator implements HealthIndicator {
         return Health.unknown().withDetail("reason", "not-configured").build();
     }
 }
-

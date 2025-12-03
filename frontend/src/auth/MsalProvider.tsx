@@ -33,7 +33,8 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({
 				if (mounted && resp && resp.accessToken) {
 					tokenStore.setToken(resp.accessToken);
 				}
-			} catch {
+			} catch (error) {
+				console.debug("acquireTokenSilent failed:", error);
 			}
 		}
 		sync();
@@ -57,10 +58,13 @@ export const LoginButton: React.FC<{ usePopup?: boolean; scopes?: string[] }> = 
 		if (usePopup) {
 			try {
 				await instance.loginPopup({ scopes });
-			} catch {
+			} catch (error) {
+				console.debug("loginPopup failed:", error);
 			}
 		} else {
-			instance.loginRedirect({ scopes }).catch(() => {});
+			instance.loginRedirect({ scopes }).catch((error) => {
+				console.debug("loginRedirect failed:", error);
+			});
 		}
 	};
 	return <button onClick={handleLogin}>Sign in</button>;
@@ -87,7 +91,8 @@ export const SignOutButton: React.FC<{ usePopup?: boolean }> = ({ usePopup = fal
 			} else if (typeof inst.logoutRedirect === "function") {
 				await inst.logoutRedirect();
 			}
-		} catch {
+		} catch (error) {
+			console.debug("logout failed:", error);
 		}
 	};
 
