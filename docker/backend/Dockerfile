@@ -49,7 +49,22 @@ RUN cat > /usr/local/bin/entrypoint.sh <<'SH'
 #!/bin/sh
 set -e
 
+CONTAINER_HOSTNAME="$(hostname)"
+CONTAINER_INSTANCE_ID="${WEBSITE_INSTANCE_ID:-unknown}"
 
+echo "Container startup: hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_INSTANCE_ID}"
+
+# Validate the jar exists and is readable
+if [ ! -f /app/app.jar ]; then
+  echo "ERROR: expected /app/app.jar not found in container hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_INSTANCE_ID}"
+  ls -la /app || true
+  exit 1
+fi
+
+# Optionally run `java -jar --help` to ensure Java can execute the jar (fast check)
+if ! java -jar /app/app.jar --help >/dev/null 2>&1; then
+  echo "WARNING: quick java -jar check failed; proceeding to exec java to show full error logs"
+fi
 
 # Finally exec the java process
 exec java $JAVA_OPTS -jar /app/app.jar

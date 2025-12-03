@@ -31,6 +31,9 @@ RUN rm -rf /usr/share/nginx/html/*
 RUN apk add --no-cache curl
 # Copy built files from the build stage and set ownership to nginx user
 COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
+# Copy entrypoint that provides startup diagnostics and config validation
+COPY docker/frontend/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 # Bake nginx config at build-time. BACKEND_HOST is a build-arg (defaults to 'backend')
 ARG BACKEND_HOST=backend
 # Provide a matching FRONTEND_HOST build-arg so CI can bake in a frontend host if required
@@ -88,4 +91,6 @@ TEMPLATE
 RUN sed -e "s/{{BACKEND_HOST}}/${BACKEND_HOST}/g; s/{{FRONTEND_HOST}}/${FRONTEND_HOST}/g" /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf \
   && rm /etc/nginx/conf.d/default.conf.template
 
+# Use entrypoint that validates config and prints identifiers
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/bin/sh","-c","exec nginx -g 'daemon off;' "]

@@ -1,5 +1,12 @@
 FROM nginx:stable-alpine
 
+# Remove the default nginx static files so the proxy does not accidentally
+# serve the built-in "Welcome to nginx" page. The proxy's intention is
+# to reverse-proxy to the frontend App Service (or other host) for root
+# requests; leaving the default index.html in place will make nginx
+# serve that file instead of proxying.
+RUN rm -rf /usr/share/nginx/html/*
+
 # Install envsubst (gettext) for templating
 RUN apk add --no-cache gettext
 
