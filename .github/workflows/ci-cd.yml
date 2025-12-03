@@ -261,7 +261,6 @@ jobs:
           echo "spring_profile=$SPRING_PROFILE" >> "$GITHUB_OUTPUT"
 
       - name: Build & push backend image
-        id: build_backend
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -274,33 +273,7 @@ jobs:
           build-args: |
             SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILE }}
 
-      - name: Verify backend image pushed
-        run: |
-          set -euo pipefail
-          IMAGE="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
-          echo "Verifying pushed backend image: $IMAGE"
-          # Prefer digest returned by docker build-push action
-          DIGEST="${{ steps.build_backend.outputs.digest || '' }}"
-          if [ -n "$DIGEST" ]; then
-            echo "Detected backend digest from build action: $DIGEST"
-            echo "BACKEND_IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-          else
-            # Fallback: try pulling the image and inspect RepoDigest
-            docker pull "$IMAGE"
-            docker image inspect "$IMAGE" >/dev/null
-            DIGEST=$(docker image inspect --format='{{index .RepoDigests 0}}' "$IMAGE" || true)
-            if [ -n "$DIGEST" ]; then
-              echo "Detected backend digest by inspect: $DIGEST"
-              echo "BACKEND_IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-            else
-              echo "No RepoDigest found for $IMAGE, will fall back to tag."
-              echo "BACKEND_IMAGE_TAG=$IMAGE" >> "$GITHUB_ENV"
-            fi
-          fi
-          echo "Backend image verified: $IMAGE"
-
       - name: Build & push frontend image
-        id: build_frontend
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -315,31 +288,7 @@ jobs:
             VITE_API_BASE_URL=${{ env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '' }}
             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
-      - name: Verify frontend image pushed
-        run: |
-          set -euo pipefail
-          IMAGE="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
-          echo "Verifying pushed frontend image: $IMAGE"
-          DIGEST="${{ steps.build_frontend.outputs.digest || '' }}"
-          if [ -n "$DIGEST" ]; then
-            echo "Detected frontend digest from build action: $DIGEST"
-            echo "FRONTEND_IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-          else
-            docker pull "$IMAGE"
-            docker image inspect "$IMAGE" >/dev/null
-            DIGEST=$(docker image inspect --format='{{index .RepoDigests 0}}' "$IMAGE" || true)
-            if [ -n "$DIGEST" ]; then
-              echo "Detected frontend digest by inspect: $DIGEST"
-              echo "FRONTEND_IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-            else
-              echo "No RepoDigest found for $IMAGE, will fall back to tag."
-              echo "FRONTEND_IMAGE_TAG=$IMAGE" >> "$GITHUB_ENV"
-            fi
-          fi
-          echo "Frontend image verified: $IMAGE"
-
       - name: Build & push proxy image
-        id: build_proxy
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -356,23 +305,9 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
-          echo "Verifying pushed proxy image: $IMAGE"
-          DIGEST="${{ steps.build_proxy.outputs.digest || '' }}"
-          if [ -n "$DIGEST" ]; then
-            echo "Detected proxy digest from build action: $DIGEST"
-            echo "PROXY_IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-          else
-            docker pull "$IMAGE"
-            docker image inspect "$IMAGE" >/dev/null
-            DIGEST=$(docker image inspect --format='{{index .RepoDigests 0}}' "$IMAGE" || true)
-            if [ -n "$DIGEST" ]; then
-              echo "Detected proxy digest by inspect: $DIGEST"
-              echo "PROXY_IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-            else
-              echo "No RepoDigest found for $IMAGE, will fall back to tag."
-              echo "PROXY_IMAGE_TAG=$IMAGE" >> "$GITHUB_ENV"
-            fi
-          fi
+          echo "Verifying pushed image: $IMAGE"
+          docker pull "$IMAGE"
+          docker image inspect "$IMAGE" >/dev/null
           echo "Proxy image verified: $IMAGE"
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
@@ -412,105 +347,6 @@ jobs:
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings \
             WEBSITES_PORT=80 BACKEND_HOST="$BACKEND_HOST_VAL" BACKEND_PORT=8080 CLIENT_MAX_BODY_SIZE=20m PROXY_READ_TIMEOUT=90s PROXY_SEND_TIMEOUT=90s APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}"
 
-      - name: Set backend container image
-        run: |
-          set -euo pipefail
-          APP="${{ secrets.BACKEND_APP_NAME }}"
-          RG="${{ secrets.AZURE_RG }}"
-          OWNER_LOWER="${{ needs.publish-images.outputs.owner_lower }}"
-
-          # Prefer an immutable digest if available, otherwise use the tag
-          if [ -n "${BACKEND_IMAGE_DIGEST:-}" ]; then
-            DIG="${BACKEND_IMAGE_DIGEST}"
-            # DIG may be either 'ghcr.io/owner/repo@sha256:...' or just 'sha256:...'
-            if echo "$DIG" | grep -q '@'; then
-              IMAGE_VALUE="$DIG"
-            else
-              # assume bare sha like 'sha256:...'
-              IMAGE_VALUE="${{ env.REGISTRY }}/${OWNER_LOWER}/slowfall-backend@${DIG}"
-            fi
-          else
-            IMAGE_VALUE="${BACKEND_IMAGE_TAG:-${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}}"
-          fi
-
-          echo "Setting container image for $APP -> $IMAGE_VALUE"
-          az webapp config container set --name "$APP" --resource-group "$RG" --container-image-name "$IMAGE_VALUE"
-
-          # Poll until siteConfig.linuxFxVersion reflects the expected image
-          echo "Waiting up to 120s for $APP to reflect container image..."
-          current=""
-          for i in $(seq 1 24); do
-            current=$(az webapp show --name "$APP" --resource-group "$RG" --query 'siteConfig.linuxFxVersion' -o tsv || echo "")
-            if [ "$current" = "DOCKER|$IMAGE_VALUE" ] || [ "$current" = "$IMAGE_VALUE" ]; then
-              echo "Container config updated for $APP"
-              break
-            fi
-            echo "Waiting ($i/24): current='$current' expected='DOCKER|$IMAGE_VALUE'"
-            sleep 5
-          done
-          if [ "$current" != "DOCKER|$IMAGE_VALUE" ] && [ "$current" != "$IMAGE_VALUE" ]; then
-            echo "ERROR: container config for $APP did not update to expected image within timeout. Current='$current' Expected='DOCKER|$IMAGE_VALUE' or '$IMAGE_VALUE'"
-            exit 1
-          fi
-
-      - name: Set frontend container image
-        run: |
-          set -euo pipefail
-          APP="${{ secrets.FRONTEND_APP_NAME }}"
-          RG="${{ secrets.AZURE_RG }}"
-          OWNER_LOWER="${{ needs.publish-images.outputs.owner_lower }}"
-
-          if [ -n "${FRONTEND_IMAGE_DIGEST:-}" ]; then
-            DIG="${FRONTEND_IMAGE_DIGEST}"
-            if echo "$DIG" | grep -q '@'; then
-              IMAGE_VALUE="$DIG"
-            else
-              IMAGE_VALUE="${{ env.REGISTRY }}/${OWNER_LOWER}/slowfall-frontend@${DIG}"
-            fi
-          else
-            IMAGE_VALUE="${FRONTEND_IMAGE_TAG:-${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}}"
-          fi
-
-          echo "Setting container image for $APP -> $IMAGE_VALUE"
-          az webapp config container set --name "$APP" --resource-group "$RG" --container-image-name "$IMAGE_VALUE"
-
-          # Poll until siteConfig.linuxFxVersion reflects the expected image
-          echo "Waiting up to 120s for $APP to reflect container image..."
-          current=""
-          for i in $(seq 1 24); do
-            current=$(az webapp show --name "$APP" --resource-group "$RG" --query 'siteConfig.linuxFxVersion' -o tsv || echo "")
-            if [ "$current" = "DOCKER|$IMAGE_VALUE" ] || [ "$current" = "$IMAGE_VALUE" ]; then
-              echo "Container config updated for $APP"
-              break
-            fi
-            echo "Waiting ($i/24): current='$current' expected='DOCKER|$IMAGE_VALUE'"
-            sleep 5
-          done
-          if [ "$current" != "DOCKER|$IMAGE_VALUE" ] && [ "$current" != "$IMAGE_VALUE" ]; then
-            echo "ERROR: container config for $APP did not update to expected image within timeout. Current='$current' Expected='DOCKER|$IMAGE_VALUE' or '$IMAGE_VALUE'"
-            exit 1
-          fi
-
-      - name: Set proxy container image
-        run: |
-          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          RG="${{ secrets.AZURE_RG }}"
-          OWNER_LOWER="${{ needs.publish-images.outputs.owner_lower }}"
-
-          if [ -n "${PROXY_IMAGE_DIGEST:-}" ]; then
-            DIG="${PROXY_IMAGE_DIGEST}"
-            if echo "$DIG" | grep -q '@'; then
-              IMAGE_VALUE="$DIG"
-            else
-              IMAGE_VALUE="${{ env.REGISTRY }}/${OWNER_LOWER}/slowfall-proxy@${DIG}"
-            fi
-          else
-            IMAGE_VALUE="${PROXY_IMAGE_TAG:-${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}}"
-          fi
-
-          echo "Setting container image for $PROXY_NAME -> $IMAGE_VALUE"
-          az webapp config container set --name "$PROXY_NAME" --resource-group "$RG" --container-image-name "$IMAGE_VALUE"
-
       - name: Restart backend Web App
         run: az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
 
@@ -522,31 +358,75 @@ jobs:
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
           az webapp restart --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}"
 
-      - name: Wait for backend & frontend readiness (actuator or /)
+  deploy-to-azure:
+    name: Deploy to Azure Web Apps (optional via OIDC)
+    needs: publish-images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    env:
+      SPRING_PROFILE: ${{ needs.publish-images.outputs.spring_profile }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required Azure secrets are present (fail early)
         run: |
           set -euo pipefail
-          BACKEND_HOST="${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net"
-          FRONTEND_HOST="${{ secrets.FRONTEND_APP_NAME }}.azurewebsites.net"
+          AZ_SUBSCRIPTION_ID="${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          AZ_TENANT_ID="${{ secrets.AZURE_TENANT_ID }}"
+          AZ_CLIENT_ID="${{ secrets.AZURE_CLIENT_ID }}"
+          AZ_RESOURCE_GROUP="${{ secrets.AZURE_RG }}"
+          AZ_WEBAPP_BACKEND="${{ secrets.BACKEND_APP_NAME }}"
+          AZ_WEBAPP_FRONTEND="${{ secrets.FRONTEND_APP_NAME }}"
+          AZ_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}"
+          AZ_KEYVAULT_KEY_NAME="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}"
+          missing=()
+          [ -z "$AZ_SUBSCRIPTION_ID" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
+          [ -z "$AZ_TENANT_ID" ] && missing+=("AZURE_TENANT_ID") || true
+          [ -z "$AZ_CLIENT_ID" ] && missing+=("AZURE_CLIENT_ID") || true
+          [ -z "$AZ_RESOURCE_GROUP" ] && missing+=("AZURE_RG") || true
+          [ -z "$AZ_WEBAPP_BACKEND" ] && missing+=("BACKEND_APP_NAME") || true
+          [ -z "$AZ_WEBAPP_FRONTEND" ] && missing+=("FRONTEND_APP_NAME") || true
+          [ -z "$AZ_KEYVAULT_VAULT_URL" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL") || true
+          [ -z "$AZ_KEYVAULT_KEY_NAME" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME") || true
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "ERROR: Missing required Azure secrets: ${missing[*]}"
+            exit 1
+          fi
 
-          check_url() {
-            host="$1"
-            for i in $(seq 1 60); do
-              if curl -fsS --max-time 5 "https://$host/actuator/health" >/dev/null 2>&1; then
-                echo "$host is healthy (actuator)"
-                return 0
-              fi
-              if curl -fsS --max-time 5 "https://$host/" >/dev/null 2>&1; then
-                echo "$host is responding on root /"
-                return 0
-              fi
-              echo "Waiting for $host to be ready ($i/60)..."
-              sleep 5
-            done
-            echo "ERROR: $host did not become healthy within timeout"
-            return 1
-          }
+      - name: Azure login (OIDC)
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-          check_url "$BACKEND_HOST"
-          check_url "$FRONTEND_HOST"
+      - name: Verify App Services exist
+        run: |
+          set -euo pipefail
+          az webapp show --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" >/dev/null 2>&1
+          az webapp show --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" >/dev/null 2>&1
+
+      - name: Set backend container image
+        run: |
+          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
+
+      - name: Set frontend container image
+        run: |
+          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
+
+      - name: Set proxy container image
+        run: |
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
+          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
+
+      - name: Restart services
+        run: |
+          az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+          az webapp restart --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
+          az webapp restart --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}"
 
 # End of workflow
