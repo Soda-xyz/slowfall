@@ -5,11 +5,16 @@ import {
 } from "@azure/msal-browser";
 
 /**
- * `import.meta.env` is provided by Vite at build-time. Cast `import.meta` to a shape that
- * includes `env` so TypeScript understands the property in our strict config.
+ * Runtime config: first prefer window.__env (written by the container entrypoint) so
+ * we can change values without rebuilding. Fall back to import.meta.env when the
+ * project was built with Vite-provided environment variables.
  */
+const runtimeEnv = (typeof window !== "undefined" && (window as any).__env) || undefined;
+
 const importMeta = import.meta as unknown as { env: Record<string, string | undefined> };
-const env = importMeta.env;
+const buildEnv = importMeta.env;
+
+const env = Object.assign({}, buildEnv, runtimeEnv || {});
 
 const msalConfig: Configuration = {
 	auth: {

@@ -12,7 +12,9 @@ import * as tokenStore from "./tokenStore";
 import { getApiBaseUrl } from "./apiBase";
 import { acquireTokenSilentIfPossible } from "../auth/msalClient";
 
-const env = import.meta.env as unknown as Record<string, string | undefined>;
+const runtimeEnv = (typeof window !== "undefined" && (window as any).__env) || undefined;
+const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
+const env = Object.assign({}, buildEnv, runtimeEnv || {});
 
 let tryAcquireMsalToken: ((scopes?: string[]) => Promise<string | null>) | null = async (
 	scopes?: string[],

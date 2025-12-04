@@ -7,6 +7,28 @@
 	</head>
 	<body>
 		<div id="root"></div>
+		<!-- Runtime config loader: load /config.json and set window.__env before the app bundle executes -->
+		<script>
+		// Synchronous XHR to read a small JSON config at startup. This keeps the
+		// loader simple and ensures config is present before the module bundle runs.
+		(function(){
+		  try {
+		    var req = new XMLHttpRequest();
+		    req.open('GET', '/config.json', false); // false -> synchronous
+		    req.send(null);
+		    if (req.status === 200) {
+		      try {
+		        window.__env = JSON.parse(req.responseText || '{}');
+		      } catch(e) { window.__env = {}; }
+		    } else {
+		      window.__env = {};
+		    }
+		  } catch (e) {
+		    // If XHR is not available or blocked, expose empty env to avoid crashes
+		    window.__env = {};
+		  }
+		})();
+		</script>
 		<script src="/src/main.tsx" type="module"></script>
 	</body>
 </html>
