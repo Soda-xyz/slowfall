@@ -7,7 +7,32 @@ import { Button, Modal, Text, Group } from "@mantine/core";
 export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	// Ensure we have an MSAL instance before passing into MsalProvider. If not configured,
 	// render children as-is (app can show login button that points to a non-MSAL fallback).
+	const [ready, setReady] = React.useState(false);
 	const instance = createMsalInstanceIfPossible();
+
+	React.useEffect(() => {
+		let mounted = true;
+		async function init() {
+			if (!instance) {
+				if (mounted) setReady(true);
+				return;
+			}
+			try {
+				// Process redirect response if any (required for redirect-based flows)
+				await instance.handleRedirectPromise();
+			} catch (e) {
+				console.debug("handleRedirectPromise failed", e);
+			} finally {
+				if (mounted) setReady(true);
+			}
+		}
+		init();
+		return () => {
+			mounted = false;
+		};
+	}, [instance]);
+
+	if (!ready) return null;
 	if (instance) return <MsalProvider instance={instance}>{children}</MsalProvider>;
 	return <>{children}</>;
 };
@@ -23,7 +48,8 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 
 	// Compute runtime env and default scopes if not provided
 	type RuntimeEnv = Record<string, string | undefined>;
-	const runtimeEnv = (typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined);
+	const runtimeEnv =
+		typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined;
 	const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
 	const env = Object.assign({}, buildEnv, runtimeEnv || {});
 	const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
@@ -32,8 +58,8 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 	const computedApiScope = apiScopeFromEnv
 		? apiScopeFromEnv
 		: backendClientId
-		? `api://${backendClientId}/access_as_user`
-		: "";
+			? `api://${backendClientId}/access_as_user`
+			: "";
 	const defaultScopes = computedApiScope ? [computedApiScope] : ["openid", "profile"];
 
 	const effectiveScopes = scopes && scopes.length > 0 ? scopes : defaultScopes;

@@ -13,8 +13,26 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
 	const handleLogin = () => {
 		const instance = createMsalInstanceIfPossible();
+		// Compute runtime env to include API scope in interactive login
+		type RuntimeEnv = Record<string, string | undefined>;
+		const runtimeEnv =
+			typeof window !== "undefined"
+				? (window as unknown as { __env?: RuntimeEnv }).__env
+				: undefined;
+		const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
+		const env = Object.assign({}, buildEnv, runtimeEnv || {});
+		const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
+		const apiScopeFromEnv = env.VITE_MSAL_API_SCOPE && env.VITE_MSAL_API_SCOPE.trim();
+		const computedApiScope = apiScopeFromEnv
+			? apiScopeFromEnv
+			: backendClientId
+				? `api://${backendClientId}/access_as_user`
+				: "";
+		const scopes = computedApiScope
+			? [`openid`, `profile`, computedApiScope]
+			: [`openid`, `profile`];
 		if (instance && typeof instance.loginRedirect === "function") {
-			instance.loginRedirect({ scopes: [`openid`, `profile`] }).catch(() => {});
+			instance.loginRedirect({ scopes }).catch(() => {});
 		} else {
 			// MSAL not configured; open a help dialog or redirect to a static login URL if desired.
 			console.debug("MSAL not configured: cannot start redirect login");
