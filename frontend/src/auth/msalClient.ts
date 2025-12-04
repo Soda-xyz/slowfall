@@ -45,6 +45,28 @@ export function createMsalInstanceIfPossible(): PublicClientApplication | null {
 	};
 	try {
 		msalInstance = new PublicClientApplication(msalConfig);
+		// Expose for quick runtime debugging in the browser console
+		try {
+			if (typeof window !== 'undefined') {
+				(window as any).__msal_instance = msalInstance;
+				(window as any).msalDebug = async (scope?: string) => {
+					console.debug('msalDebug: accounts =', msalInstance?.getAllAccounts());
+					console.debug('msalDebug: activeAccount =', msalInstance?.getActiveAccount && msalInstance.getActiveAccount());
+					if (scope && msalInstance) {
+						try {
+							const acct = msalInstance.getAllAccounts()[0];
+							if (!acct) return console.debug('msalDebug: no account available');
+							const resp = await msalInstance.acquireTokenSilent({ account: acct, scopes: [scope] });
+							console.debug('msalDebug: acquireTokenSilent result', { hasToken: !!resp?.accessToken, resp });
+						} catch (e) {
+							console.debug('msalDebug: acquireTokenSilent failed', e);
+						}
+					}
+				};
+			}
+		} catch (e) {
+			// swallow
+		}
 		return msalInstance;
 	} catch (e) {
 		console.debug("Failed to initialize MSAL", e);

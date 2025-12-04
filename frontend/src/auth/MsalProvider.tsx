@@ -18,10 +18,38 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 				return;
 			}
 			try {
+				// Ensure the PublicClientApplication is initialized (some MSAL versions require calling initialize())
+				if (typeof (instance as any).initialize === "function") {
+					try {
+						console.debug('msal: calling initialize() before redirect handling');
+						await (instance as any).initialize();
+					} catch (initErr) {
+						console.debug('msal initialize() failed', initErr);
+					}
+				}
 				// Process redirect response if any (required for redirect-based flows)
-				await instance.handleRedirectPromise();
+				try {
+					console.debug('msal: calling handleRedirectPromise()');
+					await instance.handleRedirectPromise();
+				} catch (hrErr) {
+					// If MSAL reports an uninitialized public client application, try initialize() then retry once
+					const msg = (hrErr && hrErr.errorCode) || (hrErr && hrErr.message) || String(hrErr);
+					console.debug('msal handleRedirectPromise initial attempt failed', msg, hrErr);
+					if (String(msg).indexOf('uninitialized_public_client_application') !== -1) {
+						if (typeof (instance as any).initialize === 'function') {
+							try {
+								console.debug('msal: retry initialize() after uninitialized error');
+								await (instance as any).initialize();
+								console.debug('msal: retrying handleRedirectPromise()');
+								await instance.handleRedirectPromise();
+							} catch (retryErr) {
+								console.debug('msal handleRedirectPromise retry failed', retryErr);
+							}
+						}
+					}
+				}
 			} catch (e) {
-				console.debug("handleRedirectPromise failed", e);
+				console.debug('handleRedirectPromise failed', e);
 			} finally {
 				if (mounted) setReady(true);
 			}
@@ -74,9 +102,11 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 			const account = accounts[0];
 			if (!account) return;
 			try {
+				console.debug('SyncMsalToken trying acquireTokenSilent with scopes:', effectiveScopes);
 				const resp = await instance.acquireTokenSilent({ account, scopes: effectiveScopes });
 				if (mounted && resp && resp.accessToken) {
 					tokenStore.setToken(resp.accessToken);
+					console.debug('SyncMsalToken acquired token (len):', resp.accessToken.length);
 				}
 			} catch (error) {
 				console.debug("acquireTokenSilent failed:", error);
