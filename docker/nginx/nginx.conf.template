@@ -47,13 +47,26 @@ http {
             return 200 'OK';
         }
 
-        # --- STATIC ASSET LOCATION (leave unchanged) ---
-        # This serves hashed assets and images directly from the proxy image if present.
-        # It remains above the root location so static requests match first.
+        # --- STATIC ASSET LOCATION (proxy to frontend) ---
+        # Previously we attempted to serve hashed assets from the local image. That
+        # caused 404s (nginx returning HTML) when the container didn't contain the
+        # build artifacts. Instead, forward asset requests to the frontend upstream
+        # so the frontend App Service delivers the correct files.
         location ~* \.(?:css|js|json|xml|svg|png|jpg|jpeg|gif|ico)$ {
-            root /usr/share/nginx/html;
-            try_files $uri =404;
-            add_header Cache-Control "public, max-age=31536000, immutable";
+            proxy_pass https://$FRONTEND_HOST;
+            proxy_http_version 1.1;
+            proxy_set_header Host $FRONTEND_HOST;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Port $server_port;
+            proxy_ssl_server_name on;
+            proxy_redirect off;
+            # Allow the frontend to set caching headers; don't override cache-control
+            proxy_read_timeout $PROXY_READ_TIMEOUT;
+            proxy_send_timeout $PROXY_SEND_TIMEOUT;
+            proxy_set_header Connection "";
         }
 
         # --- STRONG-FALLBACK: FORCE PROXY FOR ALL NON-ASSET ROOT REQUESTS ---
