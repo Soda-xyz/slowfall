@@ -9,7 +9,10 @@ import {
  * we can change values without rebuilding. Fall back to import.meta.env when the
  * project was built with Vite-provided environment variables.
  */
-const runtimeEnv = (typeof window !== "undefined" && window.__env) || undefined;
+const runtimeEnv =
+	(typeof window !== "undefined" &&
+		(window as unknown as { __env?: Record<string, string | undefined> }).__env) ||
+	undefined;
 
 const importMeta = import.meta as unknown as { env: Record<string, string | undefined> };
 const buildEnv = importMeta.env;
@@ -17,6 +20,13 @@ const buildEnv = importMeta.env;
 const env = Object.assign({}, buildEnv, runtimeEnv || {});
 
 export let msalInstance: PublicClientApplication | null = null;
+
+// Extended window shape used to expose debug helpers without using `any`
+type ExtendedWindow = Window & {
+	__env?: Record<string, string | undefined>;
+	__msal_instance?: PublicClientApplication | null;
+	msalDebug?: (scope?: string) => Promise<void> | void;
+};
 
 export function createMsalInstanceIfPossible(): PublicClientApplication | null {
 	if (msalInstance) return msalInstance;
@@ -26,7 +36,7 @@ export function createMsalInstanceIfPossible(): PublicClientApplication | null {
 	const authority =
 		authorityFromEnv || (tenantId ? `https://login.microsoftonline.com/${tenantId}` : "");
 	// Require both a clientId and an authority string. MSAL internals assume authority is a string
-	// and may call .endsWith() on it — creating an instance without a valid authority can throw.
+	// and may call .endsWith() on it; creating an instance without a valid authority can throw.
 	if (!clientId || !authority) {
 		// Not configured yet
 		return null;
@@ -47,25 +57,35 @@ export function createMsalInstanceIfPossible(): PublicClientApplication | null {
 		msalInstance = new PublicClientApplication(msalConfig);
 		// Expose for quick runtime debugging in the browser console
 		try {
-			if (typeof window !== 'undefined') {
-				(window as any).__msal_instance = msalInstance;
-				(window as any).msalDebug = async (scope?: string) => {
-					console.debug('msalDebug: accounts =', msalInstance?.getAllAccounts());
-					console.debug('msalDebug: activeAccount =', msalInstance?.getActiveAccount && msalInstance.getActiveAccount());
+			if (typeof window !== "undefined") {
+				const win = window as unknown as ExtendedWindow;
+				win.__msal_instance = msalInstance;
+				win.msalDebug = async (scope?: string) => {
+					console.debug("msalDebug: accounts =", msalInstance?.getAllAccounts());
+					console.debug(
+						"msalDebug: activeAccount =",
+						msalInstance?.getActiveAccount && msalInstance.getActiveAccount(),
+					);
 					if (scope && msalInstance) {
 						try {
 							const acct = msalInstance.getAllAccounts()[0];
-							if (!acct) return console.debug('msalDebug: no account available');
-							const resp = await msalInstance.acquireTokenSilent({ account: acct, scopes: [scope] });
-							console.debug('msalDebug: acquireTokenSilent result', { hasToken: !!resp?.accessToken, resp });
+							if (!acct) return console.debug("msalDebug: no account available");
+							const resp = await msalInstance.acquireTokenSilent({
+								account: acct,
+								scopes: [scope],
+							});
+							console.debug("msalDebug: acquireTokenSilent result", {
+								hasToken: !!resp?.accessToken,
+								resp,
+							});
 						} catch (e) {
-							console.debug('msalDebug: acquireTokenSilent failed', e);
+							console.debug("msalDebug: acquireTokenSilent failed", e);
 						}
 					}
 				};
 			}
-		} catch (e) {
-			// swallow
+		} catch {
+			// intentionally swallow debug helper errors
 		}
 		return msalInstance;
 	} catch (e) {

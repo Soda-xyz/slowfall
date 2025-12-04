@@ -1,5 +1,6 @@
 import React from "react";
 import { MsalProvider, useIsAuthenticated, useMsal } from "@azure/msal-react";
+import type { PublicClientApplication } from "@azure/msal-browser";
 import { createMsalInstanceIfPossible, msalInstance } from "./msalClient";
 import * as tokenStore from "../lib/tokenStore";
 import { Button, Modal, Text, Group } from "@mantine/core";
@@ -19,37 +20,43 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 			}
 			try {
 				// Ensure the PublicClientApplication is initialized (some MSAL versions require calling initialize())
-				if (typeof (instance as any).initialize === "function") {
+				const maybeInitialize = (instance as unknown as Partial<PublicClientApplication>)
+					.initialize;
+				if (typeof maybeInitialize === "function") {
 					try {
-						console.debug('msal: calling initialize() before redirect handling');
-						await (instance as any).initialize();
+						console.debug("msal: calling initialize() before redirect handling");
+						await maybeInitialize.call(instance);
 					} catch (initErr) {
-						console.debug('msal initialize() failed', initErr);
+						console.debug("msal initialize() failed", initErr);
 					}
 				}
 				// Process redirect response if any (required for redirect-based flows)
 				try {
-					console.debug('msal: calling handleRedirectPromise()');
-					await instance.handleRedirectPromise();
-				} catch (hrErr) {
+					console.debug("msal: calling handleRedirectPromise()");
+					await (instance as PublicClientApplication).handleRedirectPromise();
+				} catch (hrErr: unknown) {
 					// If MSAL reports an uninitialized public client application, try initialize() then retry once
-					const msg = (hrErr && hrErr.errorCode) || (hrErr && hrErr.message) || String(hrErr);
-					console.debug('msal handleRedirectPromise initial attempt failed', msg, hrErr);
-					if (String(msg).indexOf('uninitialized_public_client_application') !== -1) {
-						if (typeof (instance as any).initialize === 'function') {
+					const maybeObj =
+						hrErr && typeof hrErr === "object" ? (hrErr as Record<string, unknown>) : undefined;
+					const msg = maybeObj
+						? String(maybeObj["errorCode"] ?? maybeObj["message"] ?? String(hrErr))
+						: String(hrErr);
+					console.debug("msal handleRedirectPromise initial attempt failed", msg, hrErr);
+					if (String(msg).indexOf("uninitialized_public_client_application") !== -1) {
+						if (typeof maybeInitialize === "function") {
 							try {
-								console.debug('msal: retry initialize() after uninitialized error');
-								await (instance as any).initialize();
-								console.debug('msal: retrying handleRedirectPromise()');
-								await instance.handleRedirectPromise();
+								console.debug("msal: retry initialize() after uninitialized error");
+								await maybeInitialize.call(instance);
+								console.debug("msal: retrying handleRedirectPromise()");
+								await (instance as PublicClientApplication).handleRedirectPromise();
 							} catch (retryErr) {
-								console.debug('msal handleRedirectPromise retry failed', retryErr);
+								console.debug("msal handleRedirectPromise retry failed", retryErr);
 							}
 						}
 					}
 				}
-			} catch (e) {
-				console.debug('handleRedirectPromise failed', e);
+			} catch (err) {
+				console.debug("handleRedirectPromise failed", err);
 			} finally {
 				if (mounted) setReady(true);
 			}
@@ -91,6 +98,10 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 	const defaultScopes = computedApiScope ? [computedApiScope] : ["openid", "profile"];
 
 	const effectiveScopes = scopes && scopes.length > 0 ? scopes : defaultScopes;
+	const effectiveScopesKey = React.useMemo(
+		() => JSON.stringify(effectiveScopes),
+		[effectiveScopes],
+	);
 
 	React.useEffect(() => {
 		let mounted = true;
@@ -102,11 +113,11 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 			const account = accounts[0];
 			if (!account) return;
 			try {
-				console.debug('SyncMsalToken trying acquireTokenSilent with scopes:', effectiveScopes);
+				console.debug("SyncMsalToken trying acquireTokenSilent with scopes:", effectiveScopes);
 				const resp = await instance.acquireTokenSilent({ account, scopes: effectiveScopes });
 				if (mounted && resp && resp.accessToken) {
 					tokenStore.setToken(resp.accessToken);
-					console.debug('SyncMsalToken acquired token (len):', resp.accessToken.length);
+					console.debug("SyncMsalToken acquired token (len):", resp.accessToken.length);
 				}
 			} catch (error) {
 				console.debug("acquireTokenSilent failed:", error);
@@ -116,7 +127,7 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 		return () => {
 			mounted = false;
 		};
-	}, [instance, accounts, isAuthenticated, JSON.stringify(effectiveScopes)]);
+	}, [instance, accounts, isAuthenticated, effectiveScopesKey]);
 
 	return null;
 };
