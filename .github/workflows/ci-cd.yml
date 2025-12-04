@@ -327,7 +327,9 @@ jobs:
           fi
           # Require APP_SECURITY_AZURE_KEYVAULT_VAULT_URL to be set as a secret (do not fall back to a hardcoded vault URI)
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings \
-            WEBSITES_PORT=80 BACKEND_HOST="$BACKEND_HOST_VAL" BACKEND_PORT=8080 CLIENT_MAX_BODY_SIZE=20m PROXY_READ_TIMEOUT=90s PROXY_SEND_TIMEOUT=90s APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}"
+            # Note: do NOT set BACKEND_PORT here so the runtime defaults (443) or container defaults are used.
+            # Setting BACKEND_PORT=8080 caused the proxy to attempt TLS on port 8080 and resulted in upstream timeouts.
+            WEBSITES_PORT=80 BACKEND_HOST="$BACKEND_HOST_VAL" CLIENT_MAX_BODY_SIZE=20m PROXY_READ_TIMEOUT=90s PROXY_SEND_TIMEOUT=90s APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}"
 
       - name: Restart backend Web App
         run: az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"

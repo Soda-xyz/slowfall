@@ -10,7 +10,6 @@ services:
       - "8080:80"
     environment:
       - BACKEND_HOST=backend
-      - BACKEND_PORT=8080
       - CLIENT_MAX_BODY_SIZE=20m
       - PROXY_READ_TIMEOUT=90s
       - PROXY_SEND_TIMEOUT=90s

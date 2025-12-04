@@ -19,24 +19,17 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 				return;
 			}
 			try {
-				// Ensure the PublicClientApplication is initialized (some MSAL versions require calling initialize())
+				// Prepare optional initialize() function reference (may not exist on all MSAL builds)
 				const maybeInitialize = (instance as unknown as Partial<PublicClientApplication>)
 					.initialize;
-				if (typeof maybeInitialize === "function") {
-					try {
-						console.debug("msal: calling initialize() before redirect handling");
-						await maybeInitialize.call(instance);
-					} catch (initErr) {
-						console.debug("msal initialize() failed", initErr);
-					}
-				}
-				// Process redirect response if any (required for redirect-based flows)
+
+				// Attempt to process redirect responses first. This reduces races where
+				// initialize() triggers behavior before redirect handling completes.
 				try {
-					console.debug("msal: calling handleRedirectPromise()");
+					console.debug("msal: calling handleRedirectPromise() (first attempt)");
 					await (instance as PublicClientApplication).handleRedirectPromise();
 					// Ensure an active account is set so downstream token acquisition and hooks
-					// (for example SyncMsalToken) see a stable active account. Some flows
-					// leave getActiveAccount() null even when getAllAccounts() contains an entry.
+					// (for example SyncMsalToken) see a stable active account.
 					try {
 						const maybeActive =
 							(instance as PublicClientApplication).getActiveAccount &&
@@ -45,7 +38,6 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 							const all = (instance as PublicClientApplication).getAllAccounts();
 							if (all && all.length > 0) {
 								try {
-									// setActiveAccount is available on PublicClientApplication
 									(instance as PublicClientApplication).setActiveAccount(all[0]);
 									console.debug("msal: active account set from existing accounts");
 								} catch (saErr) {
@@ -54,11 +46,10 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 							}
 						}
 					} catch (activeErr) {
-						// Log the error so the linter no longer flags the variable as unused.
 						console.debug("msal: checking/setting active account failed", activeErr);
 					}
 				} catch (hrErr: unknown) {
-					// If MSAL reports an uninitialized public client application, try initialize() then retry once
+					// If handleRedirectPromise failed because MSAL wasn't initialized, try initialize() then retry once.
 					const maybeObj =
 						hrErr && typeof hrErr === "object" ? (hrErr as Record<string, unknown>) : undefined;
 					const msg = maybeObj
@@ -68,12 +59,36 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 					if (String(msg).indexOf("uninitialized_public_client_application") !== -1) {
 						if (typeof maybeInitialize === "function") {
 							try {
-								console.debug("msal: retry initialize() after uninitialized error");
+								console.debug("msal: calling initialize() after uninitialized error");
 								await maybeInitialize.call(instance);
-								console.debug("msal: retrying handleRedirectPromise()");
+								console.debug("msal: retrying handleRedirectPromise() after initialize");
 								await (instance as PublicClientApplication).handleRedirectPromise();
-							} catch (retryErr) {
-								console.debug("msal handleRedirectPromise retry failed", retryErr);
+								// After successful redirect handling, ensure active account is set if possible
+								try {
+									const maybeActive =
+										(instance as PublicClientApplication).getActiveAccount &&
+										(instance as PublicClientApplication).getActiveAccount();
+									if (!maybeActive) {
+										const all = (instance as PublicClientApplication).getAllAccounts();
+										if (all && all.length > 0) {
+											try {
+												(instance as PublicClientApplication).setActiveAccount(all[0]);
+												console.debug(
+													"msal: active account set from existing accounts (after retry)",
+												);
+											} catch (saErr) {
+												console.debug("msal: setActiveAccount failed (after retry)", saErr);
+											}
+										}
+									}
+								} catch (activeErr) {
+									console.debug(
+										"msal: checking/setting active account failed (after retry)",
+										activeErr,
+									);
+								}
+							} catch (initErr) {
+								console.debug("msal initialize() failed on retry", initErr);
 							}
 						}
 					}

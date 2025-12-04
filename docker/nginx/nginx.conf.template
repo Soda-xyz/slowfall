@@ -3,6 +3,7 @@ worker_processes  auto;
 error_log  /dev/stdout warn;
 pid        /var/run/nginx.pid;
 
+
 events {
     worker_connections  1024;
 }
@@ -22,7 +23,10 @@ http {
     server_tokens off;
 
     upstream backend_upstream {
-        server $BACKEND_HOST:$BACKEND_PORT;
+        # Intentionally do not append a port here. When proxying over HTTPS,
+        # the default port 443 will be used. Avoiding an explicit port prevents
+        # attempts to contact the backend on a non-standard TLS port (e.g., 8080).
+        server $BACKEND_HOST;
         # Keepalive to reuse TCP/TLS connections to backend App Service and reduce connection setup overhead
         keepalive 16;
     }
@@ -130,7 +134,8 @@ http {
         location /api/ {
             # Proxy API traffic to the backend App Service over HTTPS using the configured BACKEND_HOST
             # Resolve backend hostname dynamically per-request (avoids stale IPs if App Service restarts)
-            proxy_pass https://$BACKEND_HOST:$BACKEND_PORT;
+            # Do not append an explicit port so the default TLS port (443) is used when HTTPS is required.
+            proxy_pass https://$BACKEND_HOST;
             proxy_http_version 1.1;
             # Present the backend's hostname as the Host header so the backend responds with correct absolute redirects
             proxy_set_header Host $BACKEND_HOST;

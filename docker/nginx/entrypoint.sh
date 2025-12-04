@@ -6,7 +6,7 @@ TARGET="/etc/nginx/nginx.conf"
 
 # Provide safe defaults and export them so child processes (envsubst) can read them
 export BACKEND_HOST="${BACKEND_HOST:-slowfall-backend.azurewebsites.net}"
-export BACKEND_PORT="${BACKEND_PORT:-8080}"
+export BACKEND_PORT="${BACKEND_PORT:-}"
 export FRONTEND_HOST="${FRONTEND_HOST:-slowfall-frontend.azurewebsites.net}"
 export CLIENT_MAX_BODY_SIZE="${CLIENT_MAX_BODY_SIZE:-10m}"
 export PROXY_READ_TIMEOUT="${PROXY_READ_TIMEOUT:-90s}"
@@ -21,6 +21,7 @@ echo "Container startup: hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_
 
 if [ -f "$TEMPLATE" ]; then
   echo "Generating $TARGET from template"
+  # When BACKEND_PORT is empty, template substitutions will not append a port.
   envsubst '\$BACKEND_HOST \$BACKEND_PORT \$FRONTEND_HOST \$CLIENT_MAX_BODY_SIZE \$PROXY_READ_TIMEOUT \$PROXY_SEND_TIMEOUT' < "$TEMPLATE" > "$TARGET"
 
   # Validate the generated nginx config and provide clear diagnostics on failure
