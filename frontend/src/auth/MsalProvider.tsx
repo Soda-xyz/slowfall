@@ -17,11 +17,22 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
  * This uses msal-react hooks to acquire a silent token for the first available account
  * and mirrors it into the shared `tokenStore` so other modules can access it.
  */
-export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({
-	scopes = ["openid", "profile"],
-}) => {
+export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 	const { instance, accounts } = useMsal();
 	const isAuthenticated = useIsAuthenticated();
+
+	// Compute runtime env and default scopes if not provided
+	type RuntimeEnv = Record<string, string | undefined>;
+	const runtimeEnv =
+		typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined;
+	const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
+	const env = Object.assign({}, buildEnv, runtimeEnv || {});
+	const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
+	const defaultScopes = backendClientId
+		? [`api://${backendClientId}/access_as_user`]
+		: ["openid", "profile"];
+
+	const effectiveScopes = scopes && scopes.length > 0 ? scopes : defaultScopes;
 
 	React.useEffect(() => {
 		let mounted = true;
@@ -33,7 +44,7 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({
 			const account = accounts[0];
 			if (!account) return;
 			try {
-				const resp = await instance.acquireTokenSilent({ account, scopes });
+				const resp = await instance.acquireTokenSilent({ account, scopes: effectiveScopes });
 				if (mounted && resp && resp.accessToken) {
 					tokenStore.setToken(resp.accessToken);
 				}
@@ -45,7 +56,7 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({
 		return () => {
 			mounted = false;
 		};
-	}, [instance, accounts, isAuthenticated, scopes]);
+	}, [instance, accounts, isAuthenticated, JSON.stringify(effectiveScopes)]);
 
 	return null;
 };

@@ -14,8 +14,12 @@ import mantineCssVariableResolver from "./theme/cssVariableResolver";
 import { BrowserRouter } from "react-router-dom";
 import { MsalAppProvider, SyncMsalToken } from "./auth/MsalProvider";
 
-const env = import.meta.env as unknown as Record<string, string | undefined>;
-const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
+// Prefer runtime-provided env (window.__env) set by index.html loader, then fall back to build-time import.meta.env
+// type RuntimeEnv = Record<string, string | undefined>;
+// const runtimeEnv = (typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined);
+// const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
+// const env = Object.assign({}, buildEnv, runtimeEnv || {});
+// runtime envs are read by modules that need them (msalClient, fetchClient, etc.)
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
@@ -23,7 +27,7 @@ createRoot(document.getElementById("root")!).render(
 			<Notifications position="top-right" />
 			<div className={styles.appRoot}>
 				<MsalAppProvider>
-					<SyncMsalToken scopes={[`api://${backendClientId}/access_as_user`]} />
+					<SyncMsalToken />
 					<BrowserRouter>
 						<App />
 					</BrowserRouter>
