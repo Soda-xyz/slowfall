@@ -9,3 +9,10 @@ interface ImportMetaEnv {
 interface ImportMeta {
 	readonly env: ImportMetaEnv;
 }
+
+// Declare a typed global `window.__env` (runtime-provided) so callers don't need to cast to `any`.
+declare global {
+	interface Window {
+		__env?: ImportMetaEnv;
+	}
+}
