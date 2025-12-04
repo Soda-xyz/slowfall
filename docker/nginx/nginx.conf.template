@@ -115,9 +115,15 @@ http {
 
         # API proxying unchanged
         location /api/ {
-            proxy_pass http://backend_upstream;
+            # Proxy API traffic to the backend App Service over HTTPS using the configured BACKEND_HOST
+            # This avoids connecting to a raw IP:port which can time out or not present a valid TLS certificate.
+            proxy_pass https://$BACKEND_HOST;
             proxy_http_version 1.1;
-            proxy_set_header Host $host;
+            # Present the backend's hostname as the Host header so the backend responds with correct absolute redirects
+            proxy_set_header Host $BACKEND_HOST;
+            # Enable TLS SNI for the upstream and ensure the TLS name is the backend host
+            proxy_ssl_server_name on;
+            proxy_ssl_name $BACKEND_HOST;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $xfp;
