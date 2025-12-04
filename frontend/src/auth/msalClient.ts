@@ -16,9 +16,9 @@ const buildEnv = importMeta.env;
 
 const env = Object.assign({}, buildEnv, runtimeEnv || {});
 
-let msalInstance: PublicClientApplication | null = null;
+export let msalInstance: PublicClientApplication | null = null;
 
-function createMsalInstanceIfPossible(): PublicClientApplication | null {
+export function createMsalInstanceIfPossible(): PublicClientApplication | null {
 	if (msalInstance) return msalInstance;
 	const clientId = (env.VITE_MSAL_CLIENT_ID || "").trim();
 	const tenantId = (env.VITE_MSAL_TENANT_ID || "").trim();

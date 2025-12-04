@@ -1,11 +1,15 @@
 import React from "react";
 import { MsalProvider, useIsAuthenticated, useMsal } from "@azure/msal-react";
-import { msalInstance } from "./msalClient";
+import { createMsalInstanceIfPossible, msalInstance } from "./msalClient";
 import * as tokenStore from "../lib/tokenStore";
 import { Button, Modal, Text, Group } from "@mantine/core";
 
 export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	return <MsalProvider instance={msalInstance}>{children}</MsalProvider>;
+	// Ensure we have an MSAL instance before passing into MsalProvider. If not configured,
+	// render children as-is (app can show login button that points to a non-MSAL fallback).
+	const instance = createMsalInstanceIfPossible();
+	if (instance) return <MsalProvider instance={instance}>{children}</MsalProvider>;
+	return <>{children}</>;
 };
 
 /**

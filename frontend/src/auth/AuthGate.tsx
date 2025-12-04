@@ -1,7 +1,7 @@
 import React from "react";
 import { useIsAuthenticated } from "@azure/msal-react";
 import { Center, Stack, Text, Container, Button } from "@mantine/core";
-import { msalInstance } from "./msalClient";
+import { createMsalInstanceIfPossible } from "./msalClient";
 
 /**
  * AuthGate: render children only when authenticated. Otherwise show a centered login UI.
@@ -12,7 +12,13 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
 	if (isAuthenticated) return <>{children}</>;
 
 	const handleLogin = () => {
-		msalInstance.loginRedirect?.({ scopes: [`openid`, `profile`] });
+		const instance = createMsalInstanceIfPossible();
+		if (instance && typeof instance.loginRedirect === "function") {
+			instance.loginRedirect({ scopes: [`openid`, `profile`] }).catch(() => {});
+		} else {
+			// MSAL not configured; open a help dialog or redirect to a static login URL if desired.
+			console.debug("MSAL not configured: cannot start redirect login");
+		}
 	};
 
 	return (
