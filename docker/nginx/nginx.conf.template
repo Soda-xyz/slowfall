@@ -25,6 +25,15 @@ http {
         server $BACKEND_HOST:$BACKEND_PORT;
     }
 
+    # Compute a reliable X-Forwarded-Proto for downstream upstreams. If the
+    # platform (Azure) already set X-Forwarded-Proto we prefer that value; if it
+    # is empty, fall back to $scheme. This handles TLS termination at the
+    # platform while keeping nginx config simple.
+    map $http_x_forwarded_proto $xfp {
+        "" $scheme;
+        default $http_x_forwarded_proto;
+    }
+
     # FRONTEND_HOST is provided via environment/application settings and substituted into
     # this template at container start (entrypoint.sh uses envsubst). It should be a
     # resolvable host (for example: frontend-app.azurewebsites.net). If a port is
@@ -58,7 +67,7 @@ http {
             proxy_set_header Host $FRONTEND_HOST;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $xfp;
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
             proxy_ssl_server_name on;
@@ -88,7 +97,7 @@ http {
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             # Keep this to let upstream know the original scheme as seen by the client
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $xfp;
             # Also forward the original host in a separate header if upstream needs it
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
@@ -111,7 +120,7 @@ http {
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto $xfp;
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
             proxy_redirect off;
