@@ -62,21 +62,33 @@ http {
         # any local index.html from the proxy image and ensures consistent routing to
         # the upstream frontend host configured via FRONTEND_HOST.
         location / {
-            # FRONTEND_HOST is substituted at container start by the entrypoint.
-            proxy_pass http://$FRONTEND_HOST;
+            # Use HTTPS to contact the frontend app (frontend App Service enforces TLS).
+            proxy_pass https://$FRONTEND_HOST;
             proxy_http_version 1.1;
-            proxy_set_header Host $host;
+
+            # IMPORTANT: pass the frontend's hostname as Host to the upstream so the
+            # frontend does not see the client's public host (www.oskarnilsson.net) and
+            # therefore will not issue canonical redirects back to that host.
+            proxy_set_header Host $FRONTEND_HOST;
+
+            # Preserve original client info in forwarded headers
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            # Keep this to let upstream know the original scheme as seen by the client
             proxy_set_header X-Forwarded-Proto $scheme;
+            # Also forward the original host in a separate header if upstream needs it
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
+
+            # Enable TLS SNI for upstream when proxying to https://$FRONTEND_HOST
+            proxy_ssl_server_name on;
+
+            # Avoid nginx rewriting upstream Location headers; upstream should return
+            # its own canonical URLs (we already set Host to the upstream hostname).
             proxy_redirect off;
             proxy_read_timeout $PROXY_READ_TIMEOUT;
             proxy_send_timeout $PROXY_SEND_TIMEOUT;
             proxy_set_header Connection "";
-            # If FRONTEND_HOST uses https, CI or the environment should provide the scheme
-            # and you may need to enable TLS SNI (proxy_ssl_server_name on) in the generated config.
         }
 
         # API proxying unchanged
