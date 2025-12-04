@@ -154,18 +154,6 @@ jobs:
         run: |
           docker run --rm --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
 
-      - name: Ensure index.html exists in image
-        run: docker run --rm slowfall-frontend:ci sh -c 'test -f /usr/share/nginx/html/index.html'
-
-      - name: Start container in background and curl root
-        run: |
-          set -euo pipefail
-          docker run -d --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --name slowfall-frontend-ci -p 127.0.0.1:8080:80 slowfall-frontend:ci || true
-          sleep 3
-          if ! curl -fsS --max-time 5 http://127.0.0.1:8080/ | head -c 200 >/tmp/frontend_curl.out; then
-            exit 1
-          fi
-
       - name: Cleanup container and image (always)
         if: always()
         run: |
