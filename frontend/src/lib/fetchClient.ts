@@ -10,7 +10,8 @@
 
 import * as tokenStore from "./tokenStore";
 import { getApiBaseUrl } from "./apiBase";
-import { acquireTokenSilentIfPossible } from "../auth/msalClient";
+import { acquireTokenSilentIfPossible, createMsalInstanceIfPossible } from "../auth/msalClient";
+import type { SilentRequest } from "@azure/msal-browser";
 
 const runtimeEnv = (typeof window !== "undefined" && window.__env) || undefined;
 const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
@@ -180,6 +181,39 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 							tokenStore.setToken(acquired);
 						} catch {
 							// swallow storage errors
+						}
+					} else {
+						// Fallback: directly ask MSAL instance to acquire tokenSilent using active account
+						try {
+							const msalInst = createMsalInstanceIfPossible();
+							if (msalInst) {
+								const active =
+									(msalInst.getActiveAccount && msalInst.getActiveAccount()) ??
+									(msalInst.getAllAccounts && msalInst.getAllAccounts()[0]);
+								if (active) {
+									try {
+										const resp = await msalInst.acquireTokenSilent({
+											account: active,
+											scopes: msalScopes,
+											forceRefresh: false,
+										} as SilentRequest);
+										if (resp && resp.accessToken) {
+											token = resp.accessToken;
+											try {
+												tokenStore.setToken(token);
+											} catch (e) {
+												// Log storage errors for debugging (do not log token value)
+												console.debug("fetchWithAuth: tokenStore.setToken failed", e);
+											}
+										}
+									} catch (msErr) {
+										// ignore MSAL silent errors here — we'll continue without token
+										console.debug("fetchWithAuth: msal fallback acquireTokenSilent failed", msErr);
+									}
+								}
+							}
+						} catch (fbErr) {
+							console.debug("fetchWithAuth: msal fallback unexpected error", fbErr);
 						}
 					}
 				} catch {

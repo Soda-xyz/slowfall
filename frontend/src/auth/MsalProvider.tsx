@@ -34,6 +34,29 @@ export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ child
 				try {
 					console.debug("msal: calling handleRedirectPromise()");
 					await (instance as PublicClientApplication).handleRedirectPromise();
+					// Ensure an active account is set so downstream token acquisition and hooks
+					// (for example SyncMsalToken) see a stable active account. Some flows
+					// leave getActiveAccount() null even when getAllAccounts() contains an entry.
+					try {
+						const maybeActive =
+							(instance as PublicClientApplication).getActiveAccount &&
+							(instance as PublicClientApplication).getActiveAccount();
+						if (!maybeActive) {
+							const all = (instance as PublicClientApplication).getAllAccounts();
+							if (all && all.length > 0) {
+								try {
+									// setActiveAccount is available on PublicClientApplication
+									(instance as PublicClientApplication).setActiveAccount(all[0]);
+									console.debug("msal: active account set from existing accounts");
+								} catch (saErr) {
+									console.debug("msal: setActiveAccount failed", saErr);
+								}
+							}
+						}
+					} catch (activeErr) {
+						// Log the error so the linter no longer flags the variable as unused.
+						console.debug("msal: checking/setting active account failed", activeErr);
+					}
 				} catch (hrErr: unknown) {
 					// If MSAL reports an uninitialized public client application, try initialize() then retry once
 					const maybeObj =

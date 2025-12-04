@@ -102,9 +102,12 @@ export async function acquireTokenSilentIfPossible(
 		const instance = createMsalInstanceIfPossible();
 		if (!instance) return null;
 		const scopeArray = Array.isArray(scopes) ? scopes : [scopes];
+		// Prefer getActiveAccount() when available - it is set by MsalProvider after redirects
+		const active = instance.getActiveAccount && instance.getActiveAccount();
 		const accounts = instance.getAllAccounts();
-		if (!accounts || accounts.length === 0) return null;
-		const request: SilentRequest = { account: accounts[0], scopes: scopeArray };
+		const accountToUse = active ?? (accounts && accounts.length > 0 ? accounts[0] : undefined);
+		if (!accountToUse) return null;
+		const request: SilentRequest = { account: accountToUse, scopes: scopeArray };
 		try {
 			const resp = await instance.acquireTokenSilent(request as SilentRequest);
 			return resp?.accessToken ?? null;
