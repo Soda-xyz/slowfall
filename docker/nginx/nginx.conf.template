@@ -72,6 +72,8 @@ http {
             proxy_set_header X-Forwarded-Port $server_port;
             proxy_ssl_server_name on;
             proxy_redirect off;
+            # Rewrite Set-Cookie Domain from the frontend upstream to the public host
+            proxy_cookie_domain $FRONTEND_HOST $host;
             # Allow the frontend to set caching headers; don't override cache-control
             proxy_read_timeout $PROXY_READ_TIMEOUT;
             proxy_send_timeout $PROXY_SEND_TIMEOUT;
@@ -132,6 +134,8 @@ http {
             # Forward cookies and any Authorization header from the client to the backend
             proxy_set_header Cookie $http_cookie;
             proxy_set_header Authorization $http_authorization;
+            # Rewrite Set-Cookie Domain from the backend upstream so cookies become valid for the public host
+            proxy_cookie_domain $BACKEND_HOST $host;
             proxy_redirect off;
             proxy_read_timeout $PROXY_READ_TIMEOUT;
             proxy_send_timeout $PROXY_SEND_TIMEOUT;
