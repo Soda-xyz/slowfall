@@ -16,7 +16,8 @@ CONFIG_PATH="/usr/share/nginx/html/config.json"
   echo "  \"VITE_MSAL_CLIENT_ID\": \"${VITE_MSAL_CLIENT_ID:-}\","
   echo "  \"VITE_MSAL_BACKEND_CLIENT_ID\": \"${VITE_MSAL_BACKEND_CLIENT_ID:-}\","
   echo "  \"VITE_MSAL_TENANT_ID\": \"${VITE_MSAL_TENANT_ID:-}\","
-  echo "  \"VITE_MSAL_AUTHORITY\": \"${VITE_MSAL_AUTHORITY:-}\""
+  echo "  \"VITE_MSAL_AUTHORITY\": \"${VITE_MSAL_AUTHORITY:-}\","
+  echo "  \"VITE_MSAL_API_SCOPE\": \"${VITE_MSAL_API_SCOPE:-}\""
   echo '}'
 } > "$CONFIG_PATH" || {
   echo "Failed to write runtime config to $CONFIG_PATH"
