@@ -23,14 +23,18 @@ export const SyncMsalToken: React.FC<{ scopes?: string[] }> = ({ scopes }) => {
 
 	// Compute runtime env and default scopes if not provided
 	type RuntimeEnv = Record<string, string | undefined>;
-	const runtimeEnv =
-		typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined;
+	const runtimeEnv = (typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined);
 	const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
 	const env = Object.assign({}, buildEnv, runtimeEnv || {});
 	const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
-	const defaultScopes = backendClientId
-		? [`api://${backendClientId}/access_as_user`]
-		: ["openid", "profile"];
+	// Allow an explicit API scope to be set at runtime (for custom App ID URI values)
+	const apiScopeFromEnv = env.VITE_MSAL_API_SCOPE && env.VITE_MSAL_API_SCOPE.trim();
+	const computedApiScope = apiScopeFromEnv
+		? apiScopeFromEnv
+		: backendClientId
+		? `api://${backendClientId}/access_as_user`
+		: "";
+	const defaultScopes = computedApiScope ? [computedApiScope] : ["openid", "profile"];
 
 	const effectiveScopes = scopes && scopes.length > 0 ? scopes : defaultScopes;
 
