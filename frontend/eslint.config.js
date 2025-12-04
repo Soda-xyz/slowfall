@@ -96,12 +96,59 @@ export default defineConfig([
 			react: { version: "detect" },
 			"import/resolver": {
 				typescript: {
-					project: [resolveTsConfig("./tsconfig.app.json"), resolveTsConfig("./tsconfig.node.json")],
+					project: [
+						resolveTsConfig("./tsconfig.app.json"),
+						resolveTsConfig("./tsconfig.node.json"),
+					],
 					alwaysTryTypes: true,
 					extensions: [".js", ".jsx", ".ts", ".tsx"],
 				},
 			},
 			// No special tsdoc settings required; plugin validates TSDoc syntax.
 		},
+	},
+	// Test files override: parse tests as TypeScript and relax noisy rules like `no-explicit-any` and unused-vars
+	{
+		files: [
+			"test/**/*.{js,jsx,ts,tsx}",
+			"**/*.{spec,test}.{js,jsx,ts,tsx}",
+			"**/setup.*",
+			"test.*",
+		],
+		plugins: {
+			"@typescript-eslint": tsEslint,
+			react: reactPlugin,
+			"jsx-a11y": jsxA11y,
+			prettier: prettierPlugin,
+			"react-hooks": reactHooks,
+			import: importPlugin,
+		},
+		languageOptions: {
+			ecmaVersion: 2020,
+			sourceType: "module",
+			globals: globals.browser,
+			parser: tsParser,
+			parserOptions: {
+				ecmaVersion: 2020,
+				sourceType: "module",
+				// Use dedicated test tsconfig so parserOptions.project includes test files
+				project: [resolveTsConfig("./tsconfig.test.json")],
+				warnOnMultipleProjects: false,
+			},
+		},
+		rules: {
+			// keep the bulk of shared rules but relax a few noisy ones for tests
+			...combinedRules,
+			"@typescript-eslint/no-explicit-any": "off",
+			"no-unused-vars": "off",
+			"@typescript-eslint/no-unused-vars": [
+				"warn",
+				{ argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+			],
+			"import/no-extraneous-dependencies": "off",
+			// Tests use JSX without explicit React import (new JSX transform) - allow this in tests
+			"react/react-in-jsx-scope": "off",
+		},
+		settings: { react: { version: "detect" } },
 	},
 ]);

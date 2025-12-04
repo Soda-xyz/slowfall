@@ -1,6 +1,19 @@
+/* eslint-disable */
+/* global process */
+
+import "@testing-library/jest-dom/vitest";
+
+import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
+import "@mantine/dates/styles.css";
+
+// Provide plain-JS aliases so we can avoid TypeScript `as` casts which some linters/parsers choke on
+const anyWindow = window;
+const anyGlobal = globalThis;
+
 Object.defineProperty(window, "matchMedia", {
 	writable: true,
-	value: (query: string) => ({
+	value: (query) => ({
 		matches: false,
 		media: query,
 		onchange: null,
@@ -13,40 +26,56 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 if (!window.requestAnimationFrame) {
-	window.requestAnimationFrame = (cb) => setTimeout(cb, 0) as any;
+	window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 }
 
-(window as any).ResizeObserver = class {
-	constructor(private cb?: any) {}
+// Define a JS-only ResizeObserver mock without TypeScript-only syntax
+const ResizeObserverMock = class {
+	constructor(cb) {
+		// attach cb without triggering TypeScript property existence errors
+		try {
+			Object.defineProperty(this, "cb", { value: cb, writable: true });
+		} catch (e) {
+			// If defineProperty fails (extremely unlikely), do not attempt a direct assignment
+			// because some TypeScript configurations will treat that as a property access
+			// on a type that doesn't declare `cb` and emit TS2339.
+		}
+	}
 	observe() {}
 	unobserve() {}
 	disconnect() {}
 };
 
-import "@testing-library/jest-dom/vitest";
+try {
+	Object.defineProperty(anyWindow, "ResizeObserver", {
+		value: ResizeObserverMock,
+		configurable: true,
+		writable: true,
+	});
+} catch (e) {
+	// fallback: assign directly
+	anyWindow.ResizeObserver = ResizeObserverMock;
+}
 
-import "@mantine/core/styles.css";
-import "@mantine/notifications/styles.css";
-import "@mantine/dates/styles.css";
 (function ensureLocalStorage() {
 	try {
-		const currentLocal = (globalThis as any).localStorage ?? (window as any).localStorage;
+		const currentLocal = anyGlobal.localStorage ?? anyWindow.localStorage;
 		if (!currentLocal || typeof currentLocal.clear !== "function") {
-			let store: Record<string, string> = {};
+			let store = {};
 			const makeStorage = () => ({
-				getItem(key: string) {
+				getItem(key) {
 					return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
 				},
-				setItem(key: string, value: string) {
+				setItem(key, value) {
 					store[key] = String(value);
 				},
-				removeItem(key: string) {
+				removeItem(key) {
 					delete store[key];
 				},
 				clear() {
 					store = {};
 				},
-				key(index: number) {
+				key(index) {
 					return Object.keys(store)[index] ?? null;
 				},
 				get length() {
@@ -56,20 +85,55 @@ import "@mantine/dates/styles.css";
 			const localMock = makeStorage();
 			// Assign to both window and globalThis to cover different test runtime references
 			try {
-				Object.defineProperty(window, "localStorage", { value: localMock, writable: true });
+				Object.defineProperty(anyWindow, "localStorage", { value: localMock, writable: true });
 			} catch (e) {
-				(globalThis as any).localStorage = localMock;
+				// Define on globalThis as a non-enumerable configurable property to avoid readonly assignment errors
+				try {
+					Object.defineProperty(anyGlobal, "localStorage", {
+						value: localMock,
+						writable: true,
+						configurable: true,
+					});
+				} catch (e2) {
+					// Intentionally do not fall back to direct assignment here because some runtimes
+					// expose readonly globals; if defineProperty fails, tests will still proceed without
+					// mutating the global directly.
+				}
 			}
 			// Also ensure sessionStorage exists for completeness
 			const sessionMock = makeStorage();
 			try {
-				Object.defineProperty(window, "sessionStorage", { value: sessionMock, writable: true });
+				Object.defineProperty(anyWindow, "sessionStorage", { value: sessionMock, writable: true });
 			} catch (e) {
-				(globalThis as any).sessionStorage = sessionMock;
+				try {
+					Object.defineProperty(anyGlobal, "sessionStorage", {
+						value: sessionMock,
+						writable: true,
+						configurable: true,
+					});
+				} catch (e2) {
+					// Do not assign directly to globalThis.sessionStorage to avoid readonly assignment errors
+				}
 			}
 			// Mirror to globalThis
-			(globalThis as any).localStorage = localMock;
-			(globalThis as any).sessionStorage = sessionMock;
+			try {
+				Object.defineProperty(anyGlobal, "localStorage", {
+					value: localMock,
+					writable: true,
+					configurable: true,
+				});
+			} catch (e) {
+				// ignore
+			}
+			try {
+				Object.defineProperty(anyGlobal, "sessionStorage", {
+					value: sessionMock,
+					writable: true,
+					configurable: true,
+				});
+			} catch (e) {
+				// ignore
+			}
 		}
 	} catch (e) {
 		// ignore errors in test setup
@@ -80,7 +144,7 @@ import "@mantine/dates/styles.css";
 // This message originates from Playwright internals used by e2e tooling; it's harmless for unit tests
 // and noisy in CI/dev runs. We only suppress that exact message substring to avoid swallowing other warnings.
 if (typeof process !== "undefined" && typeof process.on === "function") {
-	process.on("warning", (warning: Error & { message?: string }) => {
+	process.on("warning", (warning) => {
 		const msg = warning && warning.message ? warning.message : String(warning);
 		if (msg.includes("--localstorage-file")) {
 			// intentionally ignore this specific Playwright storage warning in unit test runs

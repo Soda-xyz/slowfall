@@ -9,7 +9,7 @@ import {
  * we can change values without rebuilding. Fall back to import.meta.env when the
  * project was built with Vite-provided environment variables.
  */
-const runtimeEnv = (typeof window !== "undefined" && (window as any).__env) || undefined;
+const runtimeEnv = (typeof window !== "undefined" && window.__env) || undefined;
 
 const importMeta = import.meta as unknown as { env: Record<string, string | undefined> };
 const buildEnv = importMeta.env;

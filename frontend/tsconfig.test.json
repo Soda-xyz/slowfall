@@ -1,0 +1,18 @@
+{
+	"extends": "./tsconfig.app.json",
+	"compilerOptions": {
+		"module": "ESNext",
+		"noUnusedLocals": false,
+		"noUnusedParameters": false
+	},
+	"include": [
+		"test/**/*",
+		"src/**/*",
+		"setupTests.ts",
+		"test-setup.ts",
+		"**/*.spec.ts",
+		"**/*.spec.tsx",
+		"**/*.test.ts",
+		"**/*.test.tsx"
+	]
+}

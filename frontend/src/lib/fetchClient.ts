@@ -12,7 +12,7 @@ import * as tokenStore from "./tokenStore";
 import { getApiBaseUrl } from "./apiBase";
 import { acquireTokenSilentIfPossible } from "../auth/msalClient";
 
-const runtimeEnv = (typeof window !== "undefined" && (window as any).__env) || undefined;
+const runtimeEnv = (typeof window !== "undefined" && window.__env) || undefined;
 const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
 const env = Object.assign({}, buildEnv, runtimeEnv || {});
 
