@@ -164,14 +164,34 @@ export const LoginButton: React.FC<{ usePopup?: boolean; scopes?: string[] }> = 
 }) => {
 	const { instance } = useMsal();
 	const handleLogin = async () => {
+		// Compute runtime env and include API scope if available so interactive login requests consent
+		type RuntimeEnv = Record<string, string | undefined>;
+		const runtimeEnv =
+			typeof window !== "undefined"
+				? (window as unknown as { __env?: RuntimeEnv }).__env
+				: undefined;
+		const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
+		const env = Object.assign({}, buildEnv, runtimeEnv || {});
+		const backendClientId = env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID || "";
+		const apiScopeFromEnv = env.VITE_MSAL_API_SCOPE && env.VITE_MSAL_API_SCOPE.trim();
+		const computedApiScope = apiScopeFromEnv
+			? apiScopeFromEnv
+			: backendClientId
+				? `api://${backendClientId}/access_as_user`
+				: "";
+		const interactiveScopes = (
+			scopes && scopes.length > 0 ? scopes.slice() : ["openid", "profile"]
+		).slice();
+		if (computedApiScope) interactiveScopes.push(computedApiScope);
+
 		if (usePopup) {
 			try {
-				await instance.loginPopup({ scopes });
+				await instance.loginPopup({ scopes: interactiveScopes });
 			} catch (error) {
 				console.debug("loginPopup failed:", error);
 			}
 		} else {
-			instance.loginRedirect({ scopes }).catch((error) => {
+			instance.loginRedirect({ scopes: interactiveScopes }).catch((error) => {
 				console.debug("loginRedirect failed:", error);
 			});
 		}
