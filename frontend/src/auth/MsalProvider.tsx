@@ -3,6 +3,7 @@ import { MsalProvider, useIsAuthenticated, useMsal } from "@azure/msal-react";
 import type { PublicClientApplication } from "@azure/msal-browser";
 import { createMsalInstanceIfPossible, msalInstance } from "./msalClient";
 import * as tokenStore from "../lib/tokenStore";
+import { clearPseudoCredentials } from "./BasicLogin";
 import { Button, Modal, Text, Group } from "@mantine/core";
 
 export const MsalAppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -229,6 +230,18 @@ export const SignOutButton: React.FC<{ usePopup?: boolean }> = ({ usePopup = fal
 	const handleConfirmLogout = async () => {
 		setOpened(false);
 		try {
+			// Ensure any local pseudo/basic credentials or tokens are cleared before logout
+			try {
+				clearPseudoCredentials();
+				try {
+					tokenStore.clearToken();
+					tokenStore.clearRefreshToken();
+				} catch {
+					// ignore tokenStore errors
+				}
+			} catch {
+				// ignore clearPseudoCredentials errors
+			}
 			const inst = msalInstance as unknown as MaybeLogout;
 			if (usePopup && typeof inst.logoutPopup === "function") {
 				await inst.logoutPopup();

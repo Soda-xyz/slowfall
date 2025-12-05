@@ -12,6 +12,7 @@ import * as tokenStore from "./tokenStore";
 import { getApiBaseUrl } from "./apiBase";
 import { acquireTokenSilentIfPossible, createMsalInstanceIfPossible } from "../auth/msalClient";
 import type { SilentRequest } from "@azure/msal-browser";
+import { getStoredPseudoCredentials } from "../auth/BasicLogin";
 
 const runtimeEnv = (typeof window !== "undefined" && window.__env) || undefined;
 const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
@@ -167,7 +168,23 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 		// Attach Authorization header if auth token available
 		try {
 			let token = getAuthToken();
-			// If no token in tokenStore, attempt to acquire silently from MSAL (optional)
+			// If no token, check for pseudo/basic credentials stored by the BasicLogin UI and attach Basic header
+			if (!token) {
+				try {
+					const creds = getStoredPseudoCredentials();
+					if (creds.user && creds.pass) {
+						const basic = btoa(`${creds.user}:${creds.pass}`);
+						headers.set("Authorization", `Basic ${basic}`);
+					}
+				} catch {
+					// ignore storage read errors
+				}
+			}
+			// If still no token, attempt to acquire silently from MSAL (optional)
+			// Note: MSAL logic below will run only if token is falsy
+			// and Basic header was not set above.
+			// This ordering ensures Basic creds are preferred when present.
+			// If Basic header was attached, we will still run MSAL flow but headers already include Basic auth.
 			if (!token && tryAcquireMsalToken) {
 				try {
 					const msalScopes: string[] = [

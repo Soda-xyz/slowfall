@@ -1,7 +1,7 @@
 import React from "react";
 import { useIsAuthenticated } from "@azure/msal-react";
 import { Center, Stack, Text, Container, Button } from "@mantine/core";
-import BasicLogin from "./BasicLogin";
+import BasicLogin, { getStoredPseudoCredentials } from "./BasicLogin";
 import { createMsalInstanceIfPossible } from "./msalClient";
 
 /**
@@ -12,7 +12,21 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
 	// Create an MSAL instance (if configured) for both the login handler and UI checks
 	const msalInst = createMsalInstanceIfPossible();
 
+	// MSAL authenticated users pass through
 	if (isAuthenticated) return <>{children}</>;
+
+	// If MSAL is not configured but pseudo/basic credentials were stored by the BasicLogin UI,
+	// treat the user as authenticated so the app can render. Read storage inside try/catch but
+	// avoid returning JSX inside the try block to satisfy react error-boundary lint rules.
+	let hasStoredPseudo = false;
+	try {
+		const stored = getStoredPseudoCredentials();
+		hasStoredPseudo = !msalInst && !!stored.user && !!stored.pass;
+	} catch {
+		hasStoredPseudo = false;
+	}
+
+	if (hasStoredPseudo) return <>{children}</>;
 
 	const handleLogin = () => {
 		const instance = msalInst;
