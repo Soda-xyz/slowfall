@@ -315,9 +315,8 @@ jobs:
 
           # Ensure Key Vault settings are propagated to the backend (and frontend when relevant).
           # These are provided as repository secrets and must be set in the environment.
-          # The backend expects APP_SECURITY_AZURE_KEYVAULT_VAULT_URL and APP_SECURITY_AZURE_KEYVAULT_KEY_NAME
-          # so that SecurityConfig can create/load the RSAKey bean at startup.
-          SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}")
+          # The backend expects the Key Vault URI (written as AZ_KEYVAULT_VAULT_URL) and APP_SECURITY_AZURE_KEYVAULT_KEY_NAME
+          SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
           SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}")
 
           # Build backend-specific and frontend-specific settings arrays so we can add toggles independently.
@@ -342,21 +341,24 @@ jobs:
           # - PSEUDO_AUTH_ENABLED (set to 'true' to enable)
           # - PSEUDO_USER
           # - PSEUDO_PASS
-          if [ "${{ secrets.PSEUDO_AUTH_ENABLED || '' }}" = "true" ]; then
+          # Default to pseudo auth enabled when the secret is not present so CI focuses on pseudo mode.
+          # This expression falls back to 'true' if the repository secret is missing.
+          if [ "${{ secrets.PSEUDO_AUTH_ENABLED || 'true' }}" = "true" ]; then
             echo "Pseudo auth enabled: adding pseudo-related app settings"
             BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
-            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER }}")
-            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS }}")
-            # Ensure explicit dev-bypass is disabled when using pseudo profile
-            BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+            # Provide safe defaults so CI can run pseudo mode even when secrets are not configured.
+            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER || 'pseudo' }}")
+            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS || 'devpass' }}")
+             # Ensure explicit dev-bypass is disabled when using pseudo profile
+             BACKEND_SETTINGS+=("app.security.dev-bypass=false")
 
-            # For the frontend, enable pseudo auth and provide runtime credentials via app settings
+             # For the frontend, enable pseudo auth and provide runtime credentials via app settings
             FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
-            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER }}")
-            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS }}")
-            # Also clear MSAL envs so MSAL won't initialize in the browser runtime
-            FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
-            FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER || 'pseudo' }}")
+            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS || 'devpass' }}")
+             # Also clear MSAL envs so MSAL won't initialize in the browser runtime
+             FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+             FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
           fi
 
           # Always include the allowed-group id for backend so role mapping continues to work
@@ -514,7 +516,7 @@ jobs:
           SETTINGS+=("CLIENT_MAX_BODY_SIZE=20m")
           SETTINGS+=("PROXY_READ_TIMEOUT=90s")
           SETTINGS+=("PROXY_SEND_TIMEOUT=90s")
-          SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}")
+          SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
 
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
@@ -551,7 +553,7 @@ jobs:
           AZ_RESOURCE_GROUP="${{ secrets.AZURE_RG }}"
           AZ_WEBAPP_BACKEND="${{ secrets.BACKEND_APP_NAME }}"
           AZ_WEBAPP_FRONTEND="${{ secrets.FRONTEND_APP_NAME }}"
-          AZ_KEYVAULT_VAULT_URL="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}"
+          AZ_KEYVAULT_VAULT_URL="${{ secrets.AZ_KEYVAULT_VAULT_URL }}"
           AZ_KEYVAULT_KEY_NAME="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}"
           missing=()
           [ -z "$AZ_SUBSCRIPTION_ID" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
@@ -560,7 +562,7 @@ jobs:
           [ -z "$AZ_RESOURCE_GROUP" ] && missing+=("AZURE_RG") || true
           [ -z "$AZ_WEBAPP_BACKEND" ] && missing+=("BACKEND_APP_NAME") || true
           [ -z "$AZ_WEBAPP_FRONTEND" ] && missing+=("FRONTEND_APP_NAME") || true
-          [ -z "$AZ_KEYVAULT_VAULT_URL" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL") || true
+          [ -z "$AZ_KEYVAULT_VAULT_URL" ] && missing+=("AZ_KEYVAULT_VAULT_URL") || true
           [ -z "$AZ_KEYVAULT_KEY_NAME" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME") || true
           if [ ${#missing[@]} -ne 0 ]; then
             echo "ERROR: Missing required Azure secrets: ${missing[*]}"

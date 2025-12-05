@@ -11,6 +11,8 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Startup check and HealthIndicator that verifies Azure Key Vault key availability.
@@ -20,6 +22,8 @@ import org.springframework.stereotype.Component;
 @Profile("!dev")
 @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
 public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
+
+    private static final Logger log = LoggerFactory.getLogger(KeyVaultHealthCheck.class);
 
     private final String vaultUrl;
     private final String keyName;
@@ -50,22 +54,25 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
     }
 
     @Override
-    public void run(ApplicationArguments args) throws Exception {
+    public void run(ApplicationArguments args) {
         // Fail fast on startup if the key cannot be retrieved, or log and continue if configured
-        KeyVaultKey key = null;
         try {
-            key = fetchKey();
+            KeyVaultKey key = fetchKey();
+            if (key == null && failFast) {
+                log.error("Key Vault fail-fast: key '{}' not found at {} — startup will abort", keyName, vaultUrl);
+                throw new IllegalStateException("Azure Key Vault key '" + keyName + "' not found at " + vaultUrl);
+            }
         } catch (Exception ex) {
+            // Emit a clear log message so operators can find the failure in startup logs.
             if (failFast) {
+                log.error("Key Vault fail-fast: failed to access key '{}' at {} — startup will abort", keyName, vaultUrl, ex);
+                // Rethrow wrapped exception so Spring fails startup (preserve stack for diagnostics)
                 throw new IllegalStateException(
                         "Azure Key Vault access failed for key '" + keyName + "' at " + vaultUrl, ex);
             }
-            // else continue; health() will report DOWN
-            return;
-        }
-
-        if (key == null && failFast) {
-            throw new IllegalStateException("Azure Key Vault key '" + keyName + "' not found at " + vaultUrl);
+            // When not failing fast, log at WARN so the startup logs contain an actionable message.
+            log.warn("Key Vault check failed for key '{}' at {} — continuing startup because fail-fast is disabled", keyName, vaultUrl, ex);
+            // health() will report DOWN
         }
     }
 
@@ -77,6 +84,8 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
                     ? Health.up().withDetail("keyId", key.getId()).build()
                     : Health.down().withDetail("error", "key-not-found").build();
         } catch (Exception ex) {
+            // Also log the health failure at debug level so operators can correlate health checks with startup logs
+            log.debug("Key Vault health check failed for key '{}' at {}", keyName, vaultUrl, ex);
             return Health.down(ex).build();
         }
     }

@@ -65,7 +65,7 @@ Required secrets (must exist for CI to deploy)
 - FRONTEND_APP_NAME — Frontend App Service name (e.g., `slowfall-frontend`).
 - DEPLOY_ENV — Deployment environment name used by CI (e.g., `prod`).
 - SLOWFALL_WEB_USERS_GROUP_ID — AAD group GUID used by the app (CI writes it to App Service as `APP_SECURITY_ALLOWED_GROUP_ID`).
-- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL — Full vault URI (e.g. `https://slowfall-keyvault-next.vault.azure.net/`). THIS IS REQUIRED: the CI/workflow and runtime will use this secret to configure Key Vault access; the workflow no longer falls back to a hardcoded URI.
+- AZ_KEYVAULT_VAULT_URL — Full vault URI (e.g. `https://slowfall-keyvault-next.vault.azure.net/`). THIS IS REQUIRED: the CI/workflow and runtime will use this secret to configure Key Vault access; do not rely on any alternative or legacy secret names.
 - ALLOWED_ORIGINS — optional comma-separated allowed origins used for CORS (CI will write it into app settings if present).
 
 Note on AZURE_CLIENT_ID and service principals vs Managed Identity (clarification)
@@ -102,8 +102,8 @@ App Service — Runtime App Settings (set in Azure Portal / App Service -> Confi
   - Purpose: Comma-separated list used by the backend for CORS (maps to `app.cors.allowed-origins`).
   - Example: `https://slowfall-frontend.azurewebsites.net`
 
-- APP_SECURITY_AZURE_KEYVAULT_VAULT_URL
-  - Purpose: Full Key Vault URI used by the apps. The workflow now *requires* this secret to be set in GitHub and will fail early if it is missing. Do not rely on defaults in CI.
+- AZ_KEYVAULT_VAULT_URL
+  - Purpose: Full Key Vault URI used by the apps. The workflow requires this secret to be set in GitHub and will fail early if it is missing. Use this exact name when creating/updating secrets.
   - Example: `https://slowfall-keyvault-next.vault.azure.net/`
 
 - APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST
@@ -185,21 +185,19 @@ Quick steps: set Key Vault URL secret for GitHub Actions
 
 Set repository secrets (recommended):
 
-- Required secret name (used by workflows): `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`
+- Required secret name (used by workflows): `AZ_KEYVAULT_VAULT_URL` — the workflow and deploy scripts require this exact secret name.
 - Convenience alias for scripts: `AZ_KEYVAULT_VAULT_URL` (optional duplicate)
 
 If you have the GitHub CLI (`gh`) and are authenticated, run these commands from the repository root (or add `--repo owner/repo` to target a specific repo):
 
 ```bash
-gh secret set APP_SECURITY_AZURE_KEYVAULT_VAULT_URL --body "https://slowfall-keyvault-next.vault.azure.net/" --visibility=private
 gh secret set AZ_KEYVAULT_VAULT_URL --body "https://slowfall-keyvault-next.vault.azure.net/" --visibility=private
 ```
 
 Or use the GitHub web UI:
 - Repo → Settings → Secrets and variables → Actions → New repository secret
-  - Name: `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`
+  - Name: `AZ_KEYVAULT_VAULT_URL`
   - Value: `https://slowfall-keyvault-next.vault.azure.net/`
-- Repeat for `AZ_KEYVAULT_VAULT_URL` if desired.
 
 Remember to also set the corresponding App Service runtime app setting for the backend (so the running app can access Key Vault):
 
@@ -207,7 +205,7 @@ Remember to also set the corresponding App Service runtime app setting for the b
 az webapp config appsettings set \
   --resource-group "<AZ_RESOURCE_GROUP>" \
   --name "<AZ_WEBAPP_BACKEND>" \
-  --settings APP_SECURITY_AZURE_KEYVAULT_VAULT_URL="https://slowfall-keyvault-next.vault.azure.net/"
+  --settings AZ_KEYVAULT_VAULT_URL="https://slowfall-keyvault-next.vault.azure.net/"
 ```
 
 Security reminder: Do not commit secret values into the repository. Use GitHub repository secrets and Azure Key Vault. If you want me to set the repository secrets now, I can run the `gh secret set` commands for you — I need either a configured git remote that points to the GitHub repo or the `owner/repo` string, and your confirmation to proceed.
@@ -217,7 +215,7 @@ Security reminder: Do not commit secret values into the repository. Use GitHub r
 Azure Key Vault: required properties and permissions
 
 - Required runtime env / Spring properties (set as App Service app settings or CI secrets):
-  - APP_SECURITY_AZURE_KEYVAULT_VAULT_URL (Spring property: app.security.azure.keyvault.vault-url)
+  - AZ_KEYVAULT_VAULT_URL (note: Spring property is `app.security.azure.keyvault.vault-url`)
     - Example: `https://slowfall-keyvault-next.vault.azure.net/`
   - APP_SECURITY_AZURE_KEYVAULT_KEY_NAME (Spring property: app.security.azure.keyvault.key-name)
     - Example: `slowfall-sign-key`
@@ -229,7 +227,7 @@ Azure Key Vault: required properties and permissions
   - Secrets: `get` (needed when using Key Vault Secrets to store PEM keys or credentials)
 
 - Troubleshooting tips if the application fails on startup with a Key Vault-related NPE or IllegalStateException:
-  1. Verify the vault URL is correct and accessible from the App Service (check `APP_SECURITY_AZURE_KEYVAULT_VAULT_URL`).
+  1. Verify the vault URL is correct and accessible from the App Service (check `AZ_KEYVAULT_VAULT_URL`).
   2. Confirm the configured key name (`APP_SECURITY_AZURE_KEYVAULT_KEY_NAME`) matches the name in the Key Vault `Keys` blade (watch for typos and case-sensitivity).
   3. In the Key Vault portal, verify the key is enabled and has a valid key identifier (a `kid`) and that the key has a JWK payload (RSA key). Soft-deleted or placeholder keys may not include JWK material.
   4. Ensure the app's managed identity or service principal has the `keys/get` and `keys/sign` permissions (or assign the built-in role `Key Vault Crypto User` / `Key Vault Crypto Service Encryption User` as appropriate). For secrets access, grant `secrets/get`.
@@ -279,5 +277,3 @@ After adding these secrets, trigger the CI workflow (push to `main` or use workf
 
 Security note
 - Treat `PSEUDO_PASS` as a secret. Only enable `PSEUDO_AUTH_ENABLED` for trusted test environments. Audit and rotate these values as needed.
-
-
