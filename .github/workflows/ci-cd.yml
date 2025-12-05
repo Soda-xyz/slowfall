@@ -373,33 +373,56 @@ jobs:
             fi
           done
 
-          # Deduplicate entries: prefer last occurrence of a key. Separate empty-valued keys to delete later.
+          # Deduplicate entries while preserving order so last occurrence wins.
+          # Build ordered key list and map for backend
           declare -A BACK_MAP
+          declare -a BACK_ORDER
           declare -a DELETE_BACK_KEYS
           for s in "${FILTERED_BACKEND[@]}"; do
             k="${s%%=*}"
             v="${s#*=}"
+            # remove existing occurrence of k in BACK_ORDER if present (so we can append and preserve last-occurrence order)
+            for i in "${!BACK_ORDER[@]}"; do
+              if [ "${BACK_ORDER[$i]}" = "$k" ]; then
+                unset 'BACK_ORDER[$i]'
+                break
+              fi
+            done
+            # append key to order
+            BACK_ORDER+=("$k")
             if [ -z "${v}" ]; then
-              # mark for deletion (last occurrence wins because we iterate in order)
               DELETE_BACK_KEYS+=("$k")
-              # ensure key is removed from map so it's not set
               unset BACK_MAP["$k"]
             else
               BACK_MAP["$k"]="$v"
             fi
           done
+          # Build FINAL_BACK using BACK_ORDER to preserve final order and avoid duplicates
           declare -a FINAL_BACK
           declare -a FINAL_BACK_KEYS
-          for k in "${!BACK_MAP[@]}"; do
+          for k in "${BACK_ORDER[@]}"; do
+            # skip keys that were marked for deletion
+            if [ -z "${BACK_MAP[$k]+_}" ]; then
+              continue
+            fi
             FINAL_BACK+=("${k}=${BACK_MAP[$k]}")
             FINAL_BACK_KEYS+=("$k")
           done
 
+          # Frontend: same logic
           declare -A FRONT_MAP
+          declare -a FRONT_ORDER
           declare -a DELETE_FRONT_KEYS
           for s in "${FILTERED_FRONT[@]}"; do
             k="${s%%=*}"
             v="${s#*=}"
+            for i in "${!FRONT_ORDER[@]}"; do
+              if [ "${FRONT_ORDER[$i]}" = "$k" ]; then
+                unset 'FRONT_ORDER[$i]'
+                break
+              fi
+            done
+            FRONT_ORDER+=("$k")
             if [ -z "${v}" ]; then
               DELETE_FRONT_KEYS+=("$k")
               unset FRONT_MAP["$k"]
@@ -409,7 +432,10 @@ jobs:
           done
           declare -a FINAL_FRONT
           declare -a FINAL_FRONT_KEYS
-          for k in "${!FRONT_MAP[@]}"; do
+          for k in "${FRONT_ORDER[@]}"; do
+            if [ -z "${FRONT_MAP[$k]+_}" ]; then
+              continue
+            fi
             FINAL_FRONT+=("${k}=${FRONT_MAP[$k]}")
             FINAL_FRONT_KEYS+=("$k")
           done
