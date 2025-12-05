@@ -373,12 +373,72 @@ jobs:
             fi
           done
 
-          # Echo only the names of the settings (avoid printing secret values)
-          echo "Applying backend app settings: ${FILTERED_BACKEND_KEYS[*]}"
-          echo "Applying frontend app settings: ${FILTERED_FRONT_KEYS[*]}"
+          # Deduplicate entries: prefer last occurrence of a key. Separate empty-valued keys to delete later.
+          declare -A BACK_MAP
+          declare -a DELETE_BACK_KEYS
+          for s in "${FILTERED_BACKEND[@]}"; do
+            k="${s%%=*}"
+            v="${s#*=}"
+            if [ -z "${v}" ]; then
+              # mark for deletion (last occurrence wins because we iterate in order)
+              DELETE_BACK_KEYS+=("$k")
+              # ensure key is removed from map so it's not set
+              unset BACK_MAP["$k"]
+            else
+              BACK_MAP["$k"]="$v"
+            fi
+          done
+          declare -a FINAL_BACK
+          declare -a FINAL_BACK_KEYS
+          for k in "${!BACK_MAP[@]}"; do
+            FINAL_BACK+=("${k}=${BACK_MAP[$k]}")
+            FINAL_BACK_KEYS+=("$k")
+          done
 
-          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FILTERED_BACKEND[@]}"
-          az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FILTERED_FRONT[@]}"
+          declare -A FRONT_MAP
+          declare -a DELETE_FRONT_KEYS
+          for s in "${FILTERED_FRONT[@]}"; do
+            k="${s%%=*}"
+            v="${s#*=}"
+            if [ -z "${v}" ]; then
+              DELETE_FRONT_KEYS+=("$k")
+              unset FRONT_MAP["$k"]
+            else
+              FRONT_MAP["$k"]="$v"
+            fi
+          done
+          declare -a FINAL_FRONT
+          declare -a FINAL_FRONT_KEYS
+          for k in "${!FRONT_MAP[@]}"; do
+            FINAL_FRONT+=("${k}=${FRONT_MAP[$k]}")
+            FINAL_FRONT_KEYS+=("$k")
+          done
+
+          # Echo only the names of the final settings (avoid printing secret values)
+          echo "Applying backend app settings: ${FINAL_BACK_KEYS[*]}"
+          echo "Applying frontend app settings: ${FINAL_FRONT_KEYS[*]}"
+
+          # Apply non-empty settings
+          if [ ${#FINAL_BACK[@]} -gt 0 ]; then
+            az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FINAL_BACK[@]}"
+          else
+            echo "No backend app settings to set"
+          fi
+          if [ ${#FINAL_FRONT[@]} -gt 0 ]; then
+            az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FINAL_FRONT[@]}"
+          else
+            echo "No frontend app settings to set"
+          fi
+
+          # Delete keys that were explicitly set to empty (clear them) if any
+          if [ ${#DELETE_BACK_KEYS[@]} -gt 0 ]; then
+            echo "Deleting backend keys: ${DELETE_BACK_KEYS[*]}"
+            az webapp config appsettings delete --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "${DELETE_BACK_KEYS[@]}"
+          fi
+          if [ ${#DELETE_FRONT_KEYS[@]} -gt 0 ]; then
+            echo "Deleting frontend keys: ${DELETE_FRONT_KEYS[*]}"
+            az webapp config appsettings delete --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "${DELETE_FRONT_KEYS[@]}"
+          fi
 
       - name: Set app settings on proxy
         run: |
