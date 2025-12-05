@@ -20,7 +20,10 @@ permissions:
   id-token: write
 
 env:
-  REGISTRY: ghcr.io
+  # Use Azure Container Registry (ACR) as the image registry. The CI expects these secrets to be set:
+  # - ACR_NAME: name of the ACR (short name, e.g. slowfallacr)
+  # - ACR_LOGIN_SERVER: login server of the ACR (e.g. slowfallacr.azurecr.io)
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   VITE_API_BASE_URL: ""
 
@@ -175,6 +178,9 @@ jobs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
       spring_profiles_active: ${{ steps.compute_spring_profile.outputs.spring_profiles_active }}
+      frontend_digest: ${{ steps.capture_frontend_digest.outputs.frontend_digest }}
+      proxy_digest: ${{ steps.capture_proxy_digest.outputs.proxy_digest }}
+      backend_digest: ${{ steps.capture_backend_digest.outputs.backend_digest }}
 
     steps:
       - name: Normalize repository owner to lowercase
@@ -188,13 +194,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Login to GitHub Container Registry (GHCR)
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute sanitized BACKEND_HOST for publish
         id: sanitize_backend_publish
@@ -215,6 +214,16 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.ACR_NAME || '' }}" ]; then
+            echo "ERROR: secret ACR_NAME is not set; cannot login to ACR"
+            exit 1
+          fi
+          echo "Logging in to ACR: ${{ secrets.ACR_NAME }}"
+          az acr login --name "${{ secrets.ACR_NAME }}"
 
       - name: (Optional) set app port on backend if provided
         run: |
@@ -260,6 +269,7 @@ jobs:
           echo "spring_profiles_active=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_OUTPUT"
 
       - name: Build & push backend image
+        id: build_backend
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -267,12 +277,23 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
             SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }}
 
+      - name: Capture backend image digest for immutable deploy reference
+        id: capture_backend_digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build_backend.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: backend build did not produce a digest output"
+            exit 1
+          fi
+          echo "backend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Build & push frontend image
+        id: build_frontend
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -280,14 +301,25 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
             VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILES_ACTIVE == 'prod' && 'production' || env.SPRING_PROFILES_ACTIVE) }}
             VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILES_ACTIVE == 'dev' && 'http://localhost:8080' || '') }}
             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
+      - name: Capture frontend image digest for immutable deploy reference
+        id: capture_frontend_digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build_frontend.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: frontend build did not produce a digest output"
+            exit 1
+          fi
+          echo "frontend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Build & push proxy image
+        id: build_proxy
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -295,22 +327,33 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:latest
           build-args: |
             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
+      - name: Capture proxy image digest for immutable deploy reference
+        id: capture_proxy_digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build_proxy.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: proxy build did not produce a digest output"
+            exit 1
+          fi
+          echo "proxy_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Verify proxy image pushed
         run: |
           set -euo pipefail
-          IMAGE="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
-          echo "Verifying pushed image: $IMAGE"
-          docker pull "$IMAGE"
-          docker image inspect "$IMAGE" >/dev/null
-          echo "Proxy image verified: $IMAGE"
+          IMAGE_LATEST="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:latest"
+          echo "Verifying pushed image: $IMAGE_LATEST"
+          docker pull "$IMAGE_LATEST"
+          docker image inspect "$IMAGE_LATEST" >/dev/null
+          echo "Proxy image verified: $IMAGE_LATEST"
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
+          # NOTE: when switching to ACR, ensure the App Service has AcrPull permissions on the ACR
           set -euo pipefail
           SETTINGS=()
           if [ -n "${SPRING_PROFILES_ACTIVE:-}" ]; then
@@ -532,7 +575,7 @@ jobs:
             SETTINGS+=("WEBSITES_PORT=80")
           fi
 
-          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+          az webapp config.appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Restart backend Web App
         run: az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
@@ -598,21 +641,57 @@ jobs:
 
       - name: Set backend container image
         run: |
-          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}"
+          set -euo pipefail
+          BACKEND_DIGEST="${{ needs.publish-images.outputs.backend_digest }}"
+          if [ -z "$BACKEND_DIGEST" ]; then
+            echo "ERROR: backend digest not available"
+            exit 1
+          fi
+          IMAGE_REF="${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-backend@${BACKEND_DIGEST}"
+          echo "Setting backend image to $IMAGE_REF"
+          az webapp config container set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "$IMAGE_REF"
 
       - name: Set frontend container image
         run: |
-          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}"
+          FRONTEND_DIGEST="${{ needs.publish-images.outputs.frontend_digest }}"
+          IMAGE_REF="${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-frontend@${FRONTEND_DIGEST}"
+          echo "Setting frontend image to $IMAGE_REF"
+          az webapp config container set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "$IMAGE_REF"
 
       - name: Set proxy container image
         run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}"
+          PROXY_DIGEST="${{ needs.publish-images.outputs.proxy_digest }}"
+          PROXY_IMAGE_REF="${{ env.REGISTRY }}/${{ needs.publish-images.outputs.owner_lower }}/slowfall-proxy@${PROXY_DIGEST}"
+          echo "Setting proxy image to $PROXY_IMAGE_REF"
+          az webapp config container set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --container-image-name "$PROXY_IMAGE_REF"
 
-      - name: Restart services
+      - name: Restart backend Web App
+        run: az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+
+      - name: Wait for backend health (slot or prod)
         run: |
-          az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
-          az webapp restart --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+          set -euo pipefail
+          APP_HOST=$(az webapp show --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --query defaultHostName -o tsv)
+          echo "Waiting for backend at https://$APP_HOST/actuator/health"
+          for i in $(seq 1 36); do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "https://$APP_HOST/actuator/health" || echo "000")
+            if [ "$HTTP" = "200" ]; then
+              echo "Backend healthy"
+              exit 0
+            fi
+            echo "Waiting for backend to become healthy ($i/36): got $HTTP"
+            sleep 5
+          done
+          echo "ERROR: backend did not become healthy in time"
+          az webapp log tail --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" || true
+          exit 1
+
+      - name: Restart frontend Web App
+        run: az webapp restart --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
+
+      - name: Restart proxy Web App
+        run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
           az webapp restart --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}"
 

@@ -58,7 +58,6 @@ import xyz.soda.slowfall.infra.security.DevBypassAuthFilter;
 
 /**
  * Spring Security configuration for the application.
- *
  * Key security decision: do NOT create any ephemeral RSA signing key in non-dev profiles.
  * - Dev-only ephemeral RSA JWK is provided under the 'dev' profile (helps local testing).
  * - In production, a Key Vault key or secret MUST be configured (via app.security.azure.keyvault.*)
@@ -299,7 +298,6 @@ public class SecurityConfig {
     /**
      * Build an {@link AuthenticationManager} backed by a {@link DaoAuthenticationProvider} and the
      * provided {@link UserDetailsService}.
-     *
      * This change accepts an ObjectProvider<UserDetailsService> so the application can start
      * even when no UserDetailsService is configured (for example in 'prod' when Key Vault
      * credentials are not provided). In that case we return an AuthenticationManager that
@@ -577,8 +575,7 @@ public class SecurityConfig {
      * <p>This encoder is configured with the vault URL and key name, and uses the
      * KeyVaultJwtSigner to sign tokens.
      *
-     * @param vaultUrl the URL of the Azure Key Vault
-     * @param keyName  the name of the key used for signing
+     * @param env the Spring Environment used to read Key Vault properties (vault-url and key-name)
      * @param keyClient the {@link KeyClient} used to build the CryptographyClient
      * @param credential the {@link com.azure.core.credential.TokenCredential} used to authenticate to Key Vault
      * @return a configured {@link JwtEncoder}
@@ -586,19 +583,44 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
     public JwtEncoder keyVaultJwtEncoder(
-            @Value("${app.security.azure.keyvault.vault-url}") String vaultUrl,
-            @Value("${app.security.azure.keyvault.key-name}") String keyName,
-            KeyClient keyClient,
-            com.azure.core.credential.TokenCredential credential) {
-        // Build CryptographyClient from injected KeyClient (use key id)
+            Environment env, KeyClient keyClient, com.azure.core.credential.TokenCredential credential) {
+        // Read properties from Environment to avoid placeholder resolution errors during bean
+        // parameter binding; this allows us to validate and emit clearer, actionable errors.
+        String vaultUrl = env.getProperty("app.security.azure.keyvault.vault-url", "");
+        String keyName = env.getProperty("app.security.azure.keyvault.key-name", "");
+
+        String[] activeProfiles = env.getActiveProfiles();
+        log.info(
+                "Initializing KeyVault JwtEncoder; activeProfiles={} key-name-present={} vault-url-present={}",
+                (Object) activeProfiles,
+                (keyName != null && !keyName.isBlank()),
+                (vaultUrl != null && !vaultUrl.isBlank()));
+
+        if (keyName.isBlank()) {
+            String msg = "Missing required property: 'app.security.azure.keyvault.key-name'. "
+                    + "This bean is enabled when 'app.security.azure.keyvault.key-name' is set. "
+                    + "Set the property or disable KeyVault signing in this profile.";
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
+        if (vaultUrl.isBlank()) {
+            String msg = "Missing required property: 'app.security.azure.keyvault.vault-url'. "
+                    + "When using Key Vault for signing, set 'app.security.azure.keyvault.vault-url' to the full vault URI (for example: https://<your-vault>.vault.azure.net/). "
+                    + "Active profiles: " + String.join(",", activeProfiles) + ".";
+            log.error(msg);
+            throw new IllegalStateException(msg);
+        }
+
+        // At this point, we have keyName and vaultUrl; use the injected KeyClient to read the key.
         KeyVaultKey key;
         try {
+            log.debug("Attempting to read Key Vault key '{}' from vault '{}'", keyName, vaultUrl);
             key = keyClient.getKey(keyName);
         } catch (Exception e) {
             String msg = String.format(
-                    "Failed to read key '%s' from Key Vault '%s': %s. Ensure the key exists and the application identity has 'keys/get' permission.",
+                    "Failed to read key '%s' from Key Vault '%s': %s.\nSuggested checks: 1) Ensure the application identity (managed identity or service principal) is configured and has the 'keys/get' permission on the Key Vault; 2) Verify Key Vault firewall/network settings allow access from your app; 3) Confirm the key name is correct and the key is Enabled.",
                     keyName, vaultUrl, e.getMessage());
-            log.error(msg);
+            log.error(msg, e);
             throw new IllegalStateException(msg, e);
         }
         if (key == null) {
@@ -615,6 +637,7 @@ public class SecurityConfig {
             log.error(msg);
             throw new IllegalStateException(msg);
         }
+
         com.azure.security.keyvault.keys.cryptography.CryptographyClient cryptoClient =
                 new com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder()
                         .keyIdentifier(key.getId())
@@ -629,11 +652,13 @@ public class SecurityConfig {
                 throw new IllegalStateException(msg);
             }
             RSAKey rsa = RSAKey.parse(key.getKey().toJsonString());
+            log.info("Successfully parsed RSA JWK from Key Vault key '{}' (kid={})", keyName, key.getId());
             return new xyz.soda.slowfall.auth.KeyVaultJwtSigner(cryptoClient, rsa);
         } catch (IllegalStateException e) {
             throw e; // rethrow our own clearer IllegalStateExceptions
         } catch (Exception e) {
-            String msg = "Failed to parse JWK from Key Vault key: " + e.getMessage();
+            String msg = "Failed to parse JWK from Key Vault key: " + e.getMessage()
+                    + ". Ensure the Key Vault key is an RSA key with a valid JWK representation.";
             log.error(msg, e);
             throw new IllegalStateException(msg, e);
         }
