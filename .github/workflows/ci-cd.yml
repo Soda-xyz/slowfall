@@ -81,6 +81,12 @@ jobs:
           VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env || 'production' }}
           VITE_API_BASE_URL: ${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
         run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
+        # Persist the chosen frontend build mode so downstream jobs use the same mode
+        continue-on-error: false
+      - name: Persist frontend build mode for downstream jobs
+        if: always()
+        run: |
+          echo "VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}" >> "$GITHUB_ENV"
 
       - name: Install brotli (for asset checks)
         if: runner.os == 'Linux'
@@ -272,8 +278,8 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
-            VITE_FRONTEND_ENV=${{ env.SPRING_PROFILE == 'prod' && 'production' || env.SPRING_PROFILE }}
-            VITE_API_BASE_URL=${{ env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '' }}
+            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILE == 'prod' && 'production' || env.SPRING_PROFILE) }}
+            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '') }}
             BACKEND_HOST=${{ env.BACKEND_FQDN }}
 
       - name: Build & push proxy image
@@ -314,8 +320,39 @@ jobs:
           SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_VAULT_URL=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_VAULT_URL }}")
           SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}")
 
-          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
-          az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+          # Build backend-specific and frontend-specific settings arrays so we can add toggles independently.
+          BACKEND_SETTINGS=("${SETTINGS[@]}")
+          FRONT_SETTINGS=("${SETTINGS[@]}")
+
+          # If pseudo auth is enabled via repository secret, configure backend to use the 'pseudo' profile
+          # and set the in-memory user credentials; configure frontend to send Basic auth credentials.
+          # Required repository secrets when enabling pseudo auth:
+          # - PSEUDO_AUTH_ENABLED (set to 'true' to enable)
+          # - PSEUDO_USER
+          # - PSEUDO_PASS
+          if [ "${{ secrets.PSEUDO_AUTH_ENABLED || '' }}" = "true" ]; then
+            echo "Pseudo auth enabled: adding pseudo-related app settings"
+            BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
+            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER }}")
+            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS }}")
+            # Ensure explicit dev-bypass is disabled when using pseudo profile
+            BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+
+            # For the frontend, enable pseudo auth and provide runtime credentials via app settings
+            FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
+            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER }}")
+            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS }}")
+            # Also clear MSAL envs so MSAL won't initialize in the browser runtime
+            FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+            FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+          fi
+
+          # Always include the allowed-group id for backend so role mapping continues to work
+          BACKEND_SETTINGS+=("APP_SECURITY_ALLOWED_GROUP_ID=${{ secrets.SLOWFALL_WEB_USERS_GROUP_ID }}")
+
+          # Apply the settings to the backend and frontend app services
+          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${BACKEND_SETTINGS[@]}"
+          az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FRONT_SETTINGS[@]}"
 
       - name: Set app settings on proxy
         run: |

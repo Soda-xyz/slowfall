@@ -1,6 +1,7 @@
 import React from "react";
 import { useIsAuthenticated } from "@azure/msal-react";
 import { Center, Stack, Text, Container, Button } from "@mantine/core";
+import BasicLogin from "./BasicLogin";
 import { createMsalInstanceIfPossible } from "./msalClient";
 
 /**
@@ -8,11 +9,13 @@ import { createMsalInstanceIfPossible } from "./msalClient";
  */
 export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const isAuthenticated = useIsAuthenticated();
+	// Create an MSAL instance (if configured) for both the login handler and UI checks
+	const msalInst = createMsalInstanceIfPossible();
 
 	if (isAuthenticated) return <>{children}</>;
 
 	const handleLogin = () => {
-		const instance = createMsalInstanceIfPossible();
+		const instance = msalInst;
 		// Compute runtime env to include API scope in interactive login
 		type RuntimeEnv = Record<string, string | undefined>;
 		const runtimeEnv =
@@ -34,19 +37,23 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
 		if (instance && typeof instance.loginRedirect === "function") {
 			instance.loginRedirect({ scopes }).catch(() => {});
 		} else {
-			// MSAL not configured; open a help dialog or redirect to a static login URL if desired.
-			console.debug("MSAL not configured: cannot start redirect login");
+			// MSAL not configured: fall back to pseudo/basic login UI when credentials can be entered
+			console.debug("MSAL not configured: showing pseudo/basic login fallback");
 		}
 	};
 
 	return (
 		<Container mih="100vh">
-			<Center style={{ minHeight: "60vh" }}>
-				<Stack align="center">
-					<Text size="lg">You must sign in to use the application.</Text>
-					<Button onClick={handleLogin}>Sign in</Button>
-				</Stack>
-			</Center>
+			{msalInst && typeof msalInst.loginRedirect === "function" ? (
+				<Center style={{ minHeight: "60vh" }}>
+					<Stack align="center">
+						<Text size="lg">You must sign in to use the application.</Text>
+						<Button onClick={handleLogin}>Sign in</Button>
+					</Stack>
+				</Center>
+			) : (
+				<BasicLogin onDone={() => window.location.reload()} />
+			)}
 		</Container>
 	);
 };

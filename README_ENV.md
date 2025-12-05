@@ -240,3 +240,44 @@ Azure Key Vault: required properties and permissions
   - Update `README_ENV.md` (this file), and `infra/DEPLOY.md` / `README_CLOUD.md` so CI and deploy scripts reflect the new variable names and values.
 
 ---
+
+### Pseudo / Basic auth (testing-only)
+
+This project includes an optional "pseudo" authentication mode intended for testing or isolated "fake prod" scenarios where Entra/Keycloak are not used.
+Use this only for development, classroom, or temporarily for debugging — do NOT enable in public production environments.
+
+- Toggle (CI): `PSEUDO_AUTH_ENABLED` — set this GitHub Actions secret to `true` to enable CI to write pseudo auth app settings during deploy.
+- Credentials (secrets): `PSEUDO_USER` and `PSEUDO_PASS` — username/password for the in-memory HTTP Basic user.
+
+When `PSEUDO_AUTH_ENABLED=true` the CI will write the following runtime App Service app settings:
+- Backend:
+  - `SPRING_PROFILES_ACTIVE=pseudo` (enables the in-memory user + HTTP Basic auth)
+  - `app.security.dev-username=<PSEUDO_USER>`
+  - `app.security.dev-password=<PSEUDO_PASS>`
+  - `app.security.dev-bypass=false` (explicitly disabled)
+- Frontend (runtime):
+  - `VITE_PSEUDO_AUTH=true`
+  - `VITE_PSEUDO_USER=<PSEUDO_USER>`
+  - `VITE_PSEUDO_PASS=<PSEUDO_PASS>`
+  - `VITE_MSAL_CLIENT_ID=` (cleared so MSAL does not initialize)
+  - `VITE_MSAL_AUTHORITY=` (cleared)
+
+Frontend behavior:
+- The SPA includes a simple login UI (`BasicLogin`) shown when MSAL is not configured. Users may enter username and password which are stored in `localStorage` for that browser session.
+- The `fetchWithAuth` client prefers these stored UI credentials and will attach an `Authorization: Basic <base64>` header to API requests automatically if present.
+- If no stored UI creds exist, the frontend will fall back to CI-injected `VITE_PSEUDO_*` values when `VITE_PSEUDO_AUTH=true`.
+- There is a header-friendly logout button labeled "Sign out (pseudo)" in the app header that clears stored UI credentials and tokens and reloads the page.
+
+How to add the secrets (quick gh CLI):
+```bash
+gh secret set PSEUDO_AUTH_ENABLED --body "true"
+gh secret set PSEUDO_USER --body "test"
+gh secret set PSEUDO_PASS --body "devpass"
+```
+
+After adding these secrets, trigger the CI workflow (push to `main` or use workflow_dispatch) and CI will update App Service app settings accordingly.
+
+Security note
+- Treat `PSEUDO_PASS` as a secret. Only enable `PSEUDO_AUTH_ENABLED` for trusted test environments. Audit and rotate these values as needed.
+
+

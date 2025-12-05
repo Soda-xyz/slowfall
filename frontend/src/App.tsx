@@ -5,7 +5,7 @@ import { DashboardPage } from "./features/dashboard";
 import { DatabaseControlPage } from "./features/databaseControl";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import AuthGate from "./auth/AuthGate";
-import { SignOutButton } from "./auth/MsalProvider";
+import { PseudoLogoutButton } from "./auth/PseudoAuth";
 
 /**
  * App
@@ -52,7 +52,7 @@ export default function App(): React.JSX.Element {
 
 							<Group>
 								<AirportSelector />
-								<SignOutButton />
+								<PseudoLogoutButton />
 							</Group>
 						</Group>
 					</AppShell.Header>
