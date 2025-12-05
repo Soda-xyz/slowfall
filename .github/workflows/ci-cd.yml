@@ -444,26 +444,59 @@ jobs:
           echo "Applying backend app settings: ${FINAL_BACK_KEYS[*]}"
           echo "Applying frontend app settings: ${FINAL_FRONT_KEYS[*]}"
 
-          # Apply non-empty settings
+          # Apply non-empty settings per-key to isolate failures and provide clearer logs
           if [ ${#FINAL_BACK[@]} -gt 0 ]; then
-            az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FINAL_BACK[@]}"
+            echo "Setting backend app settings one-by-one"
+            for entry in "${FINAL_BACK[@]}"; do
+              key="${entry%%=*}"
+              echo "Applying backend key: $key"
+              if ! az webapp config.appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" >/dev/null 2>&1; then
+                echo "ERROR: Failed to set backend setting for key: $key" >&2
+                echo "Current backend app settings (keys only):" >&2
+                az webapp config appsettings list --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
+                exit 1
+              fi
+            done
           else
             echo "No backend app settings to set"
           fi
+
           if [ ${#FINAL_FRONT[@]} -gt 0 ]; then
-            az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FINAL_FRONT[@]}"
+            echo "Setting frontend app settings one-by-one"
+            for entry in "${FINAL_FRONT[@]}"; do
+              key="${entry%%=*}"
+              echo "Applying frontend key: $key"
+              if ! az webapp config.appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" >/dev/null 2>&1; then
+                echo "ERROR: Failed to set frontend setting for key: $key" >&2
+                echo "Current frontend app settings (keys only):" >&2
+                az webapp config appsettings list --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
+                exit 1
+              fi
+            done
           else
             echo "No frontend app settings to set"
           fi
 
-          # Delete keys that were explicitly set to empty (clear them) if any
+          # Delete keys that were explicitly set to empty (clear them) if any, do per-key to isolate failures
           if [ ${#DELETE_BACK_KEYS[@]} -gt 0 ]; then
             echo "Deleting backend keys: ${DELETE_BACK_KEYS[*]}"
-            az webapp config appsettings delete --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "${DELETE_BACK_KEYS[@]}"
+            for k in "${DELETE_BACK_KEYS[@]}"; do
+              echo "Deleting backend key: $k"
+              if ! az webapp config appsettings delete --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" >/dev/null 2>&1; then
+                echo "ERROR: Failed to delete backend key: $k" >&2
+                exit 1
+              fi
+            done
           fi
           if [ ${#DELETE_FRONT_KEYS[@]} -gt 0 ]; then
             echo "Deleting frontend keys: ${DELETE_FRONT_KEYS[*]}"
-            az webapp config appsettings delete --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "${DELETE_FRONT_KEYS[@]}"
+            for k in "${DELETE_FRONT_KEYS[@]}"; do
+              echo "Deleting frontend key: $k"
+              if ! az webapp config appsettings delete --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" >/dev/null 2>&1; then
+                echo "ERROR: Failed to delete frontend key: $k" >&2
+                exit 1
+              fi
+            done
           fi
 
       - name: Set app settings on proxy
