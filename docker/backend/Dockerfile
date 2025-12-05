@@ -52,7 +52,17 @@ set -e
 CONTAINER_HOSTNAME="$(hostname)"
 CONTAINER_INSTANCE_ID="${WEBSITE_INSTANCE_ID:-unknown}"
 
-echo "Container startup: hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_INSTANCE_ID}"
+# Timestamped startup marker
+echo "Container startup: hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_INSTANCE_ID} time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+# --- Diagnostics: print a small set of non-secret envs to aid debugging ---
+echo "--- Startup diagnostics ---"
+echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-<not-set>}"
+echo "PORT=${PORT:-<not-set>}"
+echo "JAVA_OPTS=${JAVA_OPTS:-<not-set>}"
+# These two are not secrets (URL and key name) and are useful to log when debugging Key Vault access
+echo "AZ_KEYVAULT_VAULT_URL=${AZ_KEYVAULT_VAULT_URL:-<not-set>}"
+echo "APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${APP_SECURITY_AZURE_KEYVAULT_KEY_NAME:-<not-set>}"
 
 # Validate the jar exists and is readable
 if [ ! -f /app/app.jar ]; then
@@ -61,12 +71,38 @@ if [ ! -f /app/app.jar ]; then
   exit 1
 fi
 
+# Show tiny filesystem /app snapshot to help debugging
+ls -la /app || true
+
+# Show Java version info (helps diagnose JVM incompatibilities)
+if command -v java >/dev/null 2>&1; then
+  echo "--- Java version ---"
+  java -version 2>&1 || true
+else
+  echo "Java not found in PATH"
+fi
+
+# Quick connectivity check to Key Vault URL (will usually return 401/403 without auth)
+if [ -n "${AZ_KEYVAULT_VAULT_URL}" ]; then
+  echo "Testing connectivity to Key Vault: ${AZ_KEYVAULT_VAULT_URL} (this only verifies network/DNS/TLS, not auth)"
+  if command -v curl >/dev/null 2>&1; then
+    # Use a fast HEAD-style request; Key Vault may redirect, so use -I to fetch headers and capture HTTP code
+    HTTP_CODE=$(curl -I -sS -o /dev/null -w '%{http_code}' --max-time 10 "${AZ_KEYVAULT_VAULT_URL}" || echo "000")
+    echo "Key Vault HTTP response code: ${HTTP_CODE}"
+    # If 000 then curl failed (network/DNS). If 401/403 it's reachable but auth required (expected for secured vaults).
+  else
+    echo "curl not available to test Key Vault connectivity"
+  fi
+else
+  echo "AZ_KEYVAULT_VAULT_URL not set; skipping Key Vault connectivity test"
+fi
+
 # Optionally run `java -jar --help` to ensure Java can execute the jar (fast check)
 if ! java -jar /app/app.jar --help >/dev/null 2>&1; then
   echo "WARNING: quick java -jar check failed; proceeding to exec java to show full error logs"
 fi
 
-# Finally exec the java process
+# Finally exec the java process (stdout/stderr will stream to container logs)
 exec java $JAVA_OPTS -jar /app/app.jar
 SH
 
