@@ -323,6 +323,18 @@ jobs:
           # Build backend-specific and frontend-specific settings arrays so we can add toggles independently.
           BACKEND_SETTINGS=("${SETTINGS[@]}")
           FRONT_SETTINGS=("${SETTINGS[@]}")
+          # Remove backend-only keys from FRONT_SETTINGS (for example SPRING_PROFILES_ACTIVE)
+          # so we don't attempt to write backend-specific Spring properties into the frontend App Service.
+          _tmp_front=()
+          for s in "${FRONT_SETTINGS[@]}"; do
+            k="${s%%=*}"
+            if [ "$k" = "SPRING_PROFILES_ACTIVE" ]; then
+              echo "Skipping frontend write of SPRING_PROFILES_ACTIVE"
+              continue
+            fi
+            _tmp_front+=("$s")
+          done
+          FRONT_SETTINGS=("${_tmp_front[@]}")
 
           # If pseudo auth is enabled via repository secret, configure backend to use the 'pseudo' profile
           # and set the in-memory user credentials; configure frontend to send Basic auth credentials.
@@ -450,11 +462,15 @@ jobs:
             for entry in "${FINAL_BACK[@]}"; do
               key="${entry%%=*}"
               echo "Applying backend key: $key"
-              if ! az webapp config.appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" >/dev/null 2>&1; then
+              out=$(az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
+              rc=$?
+              if [ $rc -ne 0 ]; then
                 echo "ERROR: Failed to set backend setting for key: $key" >&2
+                echo "az output:" >&2
+                echo "$out" >&2
                 echo "Current backend app settings (keys only):" >&2
                 az webapp config appsettings list --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
-                exit 1
+                exit $rc
               fi
             done
           else
@@ -466,11 +482,15 @@ jobs:
             for entry in "${FINAL_FRONT[@]}"; do
               key="${entry%%=*}"
               echo "Applying frontend key: $key"
-              if ! az webapp config.appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" >/dev/null 2>&1; then
+              out=$(az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
+              rc=$?
+              if [ $rc -ne 0 ]; then
                 echo "ERROR: Failed to set frontend setting for key: $key" >&2
+                echo "az output:" >&2
+                echo "$out" >&2
                 echo "Current frontend app settings (keys only):" >&2
                 az webapp config appsettings list --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
-                exit 1
+                exit $rc
               fi
             done
           else
@@ -482,9 +502,13 @@ jobs:
             echo "Deleting backend keys: ${DELETE_BACK_KEYS[*]}"
             for k in "${DELETE_BACK_KEYS[@]}"; do
               echo "Deleting backend key: $k"
-              if ! az webapp config appsettings delete --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" >/dev/null 2>&1; then
+              out=$(az webapp config appsettings delete --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" 2>&1) || true
+              rc=$?
+              if [ $rc -ne 0 ]; then
                 echo "ERROR: Failed to delete backend key: $k" >&2
-                exit 1
+                echo "az output:" >&2
+                echo "$out" >&2
+                exit $rc
               fi
             done
           fi
@@ -492,9 +516,13 @@ jobs:
             echo "Deleting frontend keys: ${DELETE_FRONT_KEYS[*]}"
             for k in "${DELETE_FRONT_KEYS[@]}"; do
               echo "Deleting frontend key: $k"
-              if ! az webapp config appsettings delete --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" >/dev/null 2>&1; then
+              out=$(az webapp config appsettings delete --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" 2>&1) || true
+              rc=$?
+              if [ $rc -ne 0 ]; then
                 echo "ERROR: Failed to delete frontend key: $k" >&2
-                exit 1
+                echo "az output:" >&2
+                echo "$out" >&2
+                exit $rc
               fi
             done
           fi
