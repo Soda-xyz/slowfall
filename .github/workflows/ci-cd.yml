@@ -575,8 +575,7 @@ jobs:
             SETTINGS+=("WEBSITES_PORT=80")
           fi
 
-          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings
-          "${SETTINGS[@]}"
+          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Restart backend Web App
         run: az webapp restart --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}"
