@@ -122,26 +122,10 @@ Build-time / CI / Docker build-args (set at build-time in CI or local docker bui
   - Purpose: Vite API base URL baked into the SPA at build-time. The production default is intentionally empty so the SPA uses relative paths like `/api/...`.
   - Example (production): empty string `""`; Example (dev): `http://localhost:8080`
 
-- VITE_MSAL_CLIENT_ID (build-time)
-  - Purpose: Client id for Entra (Azure AD) SPA integration; baked into the SPA at build-time.
-  - Example: `e4b1a2c3-...`
-
-- VITE_MSAL_TENANT_ID or VITE_MSAL_AUTHORITY (build-time)
-  - Purpose: Tenant id or full authority URL for MSAL; set at build-time so SPA is compiled with the correct authority.
-
-- VITE_MSAL_REDIRECT_URI (optional, build-time)
-  - Purpose: Redirect/callback URI baked into SPA during build.
-
-- VITE_MSAL_BACKEND_CLIENT_ID (optional, build-time)
-  - Purpose: Backend API client id used to compute scopes like `api://<client-id>/access_as_user`.
-
-- SPRING_PROFILES_ACTIVE (as a Docker build-arg for backend image)
-  - Purpose: CI may pass this as a build-arg to bake a default Spring profile into the image; App Service runtime app settings can still override it.
-  - Example: `prod`
-
-- BACKEND_HOST (build-arg used by frontend Dockerfile / nginx template)
-  - Purpose: Host baked into frontend/nginx configs to proxy API calls to the backend.
-  - Example: `slowfall-backend.azurewebsites.net`
+NOTE: MSAL/Entra integration has been removed from this repository. The VITE_MSAL_* build-time
+variables are no longer used. The project supports a pseudo/basic auth mode for test/pseudo-prod
+scenarios (see the Pseudo / Basic auth section below). If you later re-enable Entra, add the
+appropriate VITE_MSAL_* variables and document them here.
 
 ---
 

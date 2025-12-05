@@ -13,8 +13,6 @@
 		"eslint": "eslint . --ext .js,.jsx,.ts,.tsx --fix"
 	},
 	"dependencies": {
-		"@azure/msal-browser": "^4.26.0",
-		"@azure/msal-react": "^3.0.22",
 		"@mantine/core": "^8.3.9",
 		"@mantine/dates": "^8.3.9",
 		"@mantine/hooks": "^8.3.9",

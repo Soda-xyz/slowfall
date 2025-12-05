@@ -13,11 +13,10 @@ echo "Container startup: hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_
 CONFIG_PATH="/usr/share/nginx/html/config.json"
 {
   echo '{'
-  echo "  \"VITE_MSAL_CLIENT_ID\": \"${VITE_MSAL_CLIENT_ID:-}\","
-  echo "  \"VITE_MSAL_BACKEND_CLIENT_ID\": \"${VITE_MSAL_BACKEND_CLIENT_ID:-}\","
-  echo "  \"VITE_MSAL_TENANT_ID\": \"${VITE_MSAL_TENANT_ID:-}\","
-  echo "  \"VITE_MSAL_AUTHORITY\": \"${VITE_MSAL_AUTHORITY:-}\","
-  echo "  \"VITE_MSAL_API_SCOPE\": \"${VITE_MSAL_API_SCOPE:-}\""
+  # Keep pseudo auth runtime keys if present so CI can still inject pseudo credentials
+  echo "  \"VITE_PSEUDO_AUTH\": \"${VITE_PSEUDO_AUTH:-}\","
+  echo "  \"VITE_PSEUDO_USER\": \"${VITE_PSEUDO_USER:-}\","
+  echo "  \"VITE_PSEUDO_PASS\": \"${VITE_PSEUDO_PASS:-}\""
   echo '}'
 } > "$CONFIG_PATH" || {
   echo "Failed to write runtime config to $CONFIG_PATH"

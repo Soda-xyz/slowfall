@@ -10,20 +10,9 @@
 
 import * as tokenStore from "./tokenStore";
 import { getApiBaseUrl } from "./apiBase";
-import { acquireTokenSilentIfPossible, createMsalInstanceIfPossible } from "../auth/msalClient";
-import type { SilentRequest } from "@azure/msal-browser";
 import { getStoredPseudoCredentials } from "../auth/BasicLogin";
 
-const runtimeEnv = (typeof window !== "undefined" && window.__env) || undefined;
-const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
-const env = Object.assign({}, buildEnv, runtimeEnv || {});
-
-let tryAcquireMsalToken: ((scopes?: string[]) => Promise<string | null>) | null = async (
-	scopes?: string[],
-) => {
-	return acquireTokenSilentIfPossible(scopes ?? []);
-};
-
+// Token helpers (simple wrappers around tokenStore). These are intentionally small and swallow storage errors.
 export function getAuthToken(): string | null {
 	try {
 		return tokenStore.getToken();
@@ -43,7 +32,6 @@ export function setAuthToken(token: string): void {
 export function clearAuthToken(): void {
 	try {
 		tokenStore.clearToken();
-		// also clear refresh token when clearing auth state
 		try {
 			tokenStore.clearRefreshToken();
 		} catch {
@@ -178,63 +166,6 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 					}
 				} catch {
 					// ignore storage read errors
-				}
-			}
-			// If still no token, attempt to acquire silently from MSAL (optional)
-			// Note: MSAL logic below will run only if token is falsy
-			// and Basic header was not set above.
-			// This ordering ensures Basic creds are preferred when present.
-			// If Basic header was attached, we will still run MSAL flow but headers already include Basic auth.
-			if (!token && tryAcquireMsalToken) {
-				try {
-					const msalScopes: string[] = [
-						`api://${env.VITE_MSAL_BACKEND_CLIENT_ID || env.VITE_MSAL_CLIENT_ID}/access_as_user`,
-					];
-					const acquired = await tryAcquireMsalToken(msalScopes);
-					if (acquired) {
-						token = acquired;
-						// Mirror into tokenStore for other consumers
-						try {
-							tokenStore.setToken(acquired);
-						} catch {
-							// swallow storage errors
-						}
-					} else {
-						// Fallback: directly ask MSAL instance to acquire tokenSilent using active account
-						try {
-							const msalInst = createMsalInstanceIfPossible();
-							if (msalInst) {
-								const active =
-									(msalInst.getActiveAccount && msalInst.getActiveAccount()) ??
-									(msalInst.getAllAccounts && msalInst.getAllAccounts()[0]);
-								if (active) {
-									try {
-										const resp = await msalInst.acquireTokenSilent({
-											account: active,
-											scopes: msalScopes,
-											forceRefresh: false,
-										} as SilentRequest);
-										if (resp && resp.accessToken) {
-											token = resp.accessToken;
-											try {
-												tokenStore.setToken(token);
-											} catch (e) {
-												// Log storage errors for debugging (do not log token value)
-												console.debug("fetchWithAuth: tokenStore.setToken failed", e);
-											}
-										}
-									} catch (msErr) {
-										// ignore MSAL silent errors here — we'll continue without token
-										console.debug("fetchWithAuth: msal fallback acquireTokenSilent failed", msErr);
-									}
-								}
-							}
-						} catch (fbErr) {
-							console.debug("fetchWithAuth: msal fallback unexpected error", fbErr);
-						}
-					}
-				} catch {
-					// swallow msal errors and continue without token
 				}
 			}
 			if (token) headers.set("Authorization", `Bearer ${token}`);

@@ -12,7 +12,6 @@ import { mantineTheme } from "./theme/theme";
 import styles from "./theme/app-global.module.css";
 import mantineCssVariableResolver from "./theme/cssVariableResolver";
 import { BrowserRouter } from "react-router-dom";
-import { MsalAppProvider, SyncMsalToken } from "./auth/MsalProvider";
 
 // Prefer runtime-provided env (window.__env) set by index.html loader, then fall back to build-time import.meta.env
 // type RuntimeEnv = Record<string, string | undefined>;
@@ -26,12 +25,9 @@ createRoot(document.getElementById("root")!).render(
 		<MantineProvider theme={mantineTheme} cssVariablesResolver={mantineCssVariableResolver}>
 			<Notifications position="top-right" />
 			<div className={styles.appRoot}>
-				<MsalAppProvider>
-					<SyncMsalToken />
-					<BrowserRouter>
-						<App />
-					</BrowserRouter>
-				</MsalAppProvider>
+				<BrowserRouter>
+					<App />
+				</BrowserRouter>
 			</div>
 		</MantineProvider>
 	</StrictMode>,

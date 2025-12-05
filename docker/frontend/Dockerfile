@@ -10,10 +10,6 @@ ARG VITE_FRONTEND_ENV=production
 ARG VITE_API_BASE_URL=""
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
-# Allow optional MSAL/client ids at build time (can be provided with --build-arg)
-ARG VITE_MSAL_CLIENT_ID=""
-ARG VITE_MSAL_BACKEND_CLIENT_ID=""
-
 # Copy only package files first for efficient caching
 COPY frontend/package.json frontend/package-lock.json* ./
 COPY frontend/ .
@@ -21,7 +17,7 @@ COPY frontend/ .
 # the .env.production file in the repository (if present) with the
 # build-arg values. This prevents a committed .env.production from
 # silently overriding CI build arguments.
-RUN printf 'VITE_API_BASE_URL=%s\nVITE_FRONTEND_ENV=%s\nVITE_MSAL_CLIENT_ID=%s\nVITE_MSAL_BACKEND_CLIENT_ID=%s\n' "${VITE_API_BASE_URL}" "${VITE_FRONTEND_ENV}" "${VITE_MSAL_CLIENT_ID}" "${VITE_MSAL_BACKEND_CLIENT_ID}" > .env.production || true
+RUN printf 'VITE_API_BASE_URL=%s\nVITE_FRONTEND_ENV=%s\n' "${VITE_API_BASE_URL}" "${VITE_FRONTEND_ENV}" > .env.production || true
 # Enforce deterministic install when lockfile exists
 RUN npm ci --silent
 # Run the build with the requested Vite mode

@@ -215,13 +215,17 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set backend App Service allowed-group app setting from secret
+      - name: (Optional) set app port on backend if provided
         run: |
           set -euo pipefail
-          az webapp config appsettings set \
-            --name "${{ secrets.BACKEND_APP_NAME }}" \
-            --resource-group "${{ secrets.AZURE_RG }}" \
-            --settings "APP_SECURITY_ALLOWED_GROUP_ID=${{ secrets.SLOWFALL_WEB_USERS_GROUP_ID }}"
+          if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
+            az webapp config.appsettings set \
+              --name "${{ secrets.BACKEND_APP_NAME }}" \
+              --resource-group "${{ secrets.AZURE_RG }}" \
+              --settings "PORT=${{ secrets.APP_PORT }}"
+          else
+            echo "APP_PORT not set; leaving backend PORT unchanged"
+          fi
 
       - name: Resolve backend defaultHostName (use as BACKEND_FQDN)
         run: |
@@ -361,8 +365,10 @@ jobs:
              FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
           fi
 
-          # Always include the allowed-group id for backend so role mapping continues to work
-          BACKEND_SETTINGS+=("APP_SECURITY_ALLOWED_GROUP_ID=${{ secrets.SLOWFALL_WEB_USERS_GROUP_ID }}")
+          # Optionally include a PORT setting if the secret APP_PORT is present
+          if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
+            BACKEND_SETTINGS+=("PORT=${{ secrets.APP_PORT }}")
+          fi
 
           # Apply the settings to the backend and frontend app services
           # Sanitize settings: only pass entries that contain an '=' character (valid key=value or key=)
@@ -517,6 +523,13 @@ jobs:
           SETTINGS+=("PROXY_READ_TIMEOUT=90s")
           SETTINGS+=("PROXY_SEND_TIMEOUT=90s")
           SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
+
+          # If APP_PORT secret exists, use it for the proxy WEBSITES_PORT; otherwise default to 80
+          if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
+            SETTINGS+=("WEBSITES_PORT=${{ secrets.APP_PORT }}")
+          else
+            SETTINGS+=("WEBSITES_PORT=80")
+          fi
 
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 

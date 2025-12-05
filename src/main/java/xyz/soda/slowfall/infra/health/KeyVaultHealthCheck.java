@@ -2,6 +2,8 @@ package xyz.soda.slowfall.infra.health;
 
 import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -11,8 +13,6 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Startup check and HealthIndicator that verifies Azure Key Vault key availability.
@@ -65,13 +65,21 @@ public class KeyVaultHealthCheck implements ApplicationRunner, HealthIndicator {
         } catch (Exception ex) {
             // Emit a clear log message so operators can find the failure in startup logs.
             if (failFast) {
-                log.error("Key Vault fail-fast: failed to access key '{}' at {} — startup will abort", keyName, vaultUrl, ex);
+                log.error(
+                        "Key Vault fail-fast: failed to access key '{}' at {} — startup will abort",
+                        keyName,
+                        vaultUrl,
+                        ex);
                 // Rethrow wrapped exception so Spring fails startup (preserve stack for diagnostics)
                 throw new IllegalStateException(
                         "Azure Key Vault access failed for key '" + keyName + "' at " + vaultUrl, ex);
             }
             // When not failing fast, log at WARN so the startup logs contain an actionable message.
-            log.warn("Key Vault check failed for key '{}' at {} — continuing startup because fail-fast is disabled", keyName, vaultUrl, ex);
+            log.warn(
+                    "Key Vault check failed for key '{}' at {} — continuing startup because fail-fast is disabled",
+                    keyName,
+                    vaultUrl,
+                    ex);
             // health() will report DOWN
         }
     }
