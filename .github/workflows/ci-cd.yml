@@ -351,8 +351,34 @@ jobs:
           BACKEND_SETTINGS+=("APP_SECURITY_ALLOWED_GROUP_ID=${{ secrets.SLOWFALL_WEB_USERS_GROUP_ID }}")
 
           # Apply the settings to the backend and frontend app services
-          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${BACKEND_SETTINGS[@]}"
-          az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FRONT_SETTINGS[@]}"
+          # Sanitize settings: only pass entries that contain an '=' character (valid key=value or key=)
+          FILTERED_BACKEND=()
+          FILTERED_FRONT=()
+          FILTERED_BACKEND_KEYS=()
+          FILTERED_FRONT_KEYS=()
+          for s in "${BACKEND_SETTINGS[@]}"; do
+            if [[ "$s" == *=* ]]; then
+              FILTERED_BACKEND+=("$s")
+              FILTERED_BACKEND_KEYS+=("${s%%=*}")
+            else
+              echo "Skipping invalid backend setting (no '=' found): $s" >&2
+            fi
+          done
+          for s in "${FRONT_SETTINGS[@]}"; do
+            if [[ "$s" == *=* ]]; then
+              FILTERED_FRONT+=("$s")
+              FILTERED_FRONT_KEYS+=("${s%%=*}")
+            else
+              echo "Skipping invalid frontend setting (no '=' found): $s" >&2
+            fi
+          done
+
+          # Echo only the names of the settings (avoid printing secret values)
+          echo "Applying backend app settings: ${FILTERED_BACKEND_KEYS[*]}"
+          echo "Applying frontend app settings: ${FILTERED_FRONT_KEYS[*]}"
+
+          az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FILTERED_BACKEND[@]}"
+          az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "${FILTERED_FRONT[@]}"
 
       - name: Set app settings on proxy
         run: |
