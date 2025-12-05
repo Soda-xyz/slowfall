@@ -497,35 +497,6 @@ jobs:
             echo "No frontend app settings to set"
           fi
 
-          # Delete keys that were explicitly set to empty (clear them) if any, do per-key to isolate failures
-          if [ ${#DELETE_BACK_KEYS[@]} -gt 0 ]; then
-            echo "Deleting backend keys: ${DELETE_BACK_KEYS[*]}"
-            for k in "${DELETE_BACK_KEYS[@]}"; do
-              echo "Deleting backend key: $k"
-              out=$(az webapp config appsettings delete --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" 2>&1) || true
-              rc=$?
-              if [ $rc -ne 0 ]; then
-                echo "ERROR: Failed to delete backend key: $k" >&2
-                echo "az output:" >&2
-                echo "$out" >&2
-                exit $rc
-              fi
-            done
-          fi
-          if [ ${#DELETE_FRONT_KEYS[@]} -gt 0 ]; then
-            echo "Deleting frontend keys: ${DELETE_FRONT_KEYS[*]}"
-            for k in "${DELETE_FRONT_KEYS[@]}"; do
-              echo "Deleting frontend key: $k"
-              out=$(az webapp config appsettings delete --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --setting-names "$k" 2>&1) || true
-              rc=$?
-              if [ $rc -ne 0 ]; then
-                echo "ERROR: Failed to delete frontend key: $k" >&2
-                echo "az output:" >&2
-                echo "$out" >&2
-                exit $rc
-              fi
-            done
-          fi
 
       - name: Set app settings on proxy
         run: |
