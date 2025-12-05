@@ -119,9 +119,12 @@ else
   echo "AZ_KEYVAULT_VAULT_URL not set; skipping Key Vault connectivity test"
 fi
 
-# Optionally run `java -jar --help` to ensure Java can execute the jar (fast check)
-if ! java -jar /app/app.jar --help >/dev/null 2>&1; then
-  echo "WARNING: quick java -jar check failed; proceeding to exec java to show full error logs"
+# Quick runtime check: verify Java executable works (do not execute the jar)
+if command -v java >/dev/null 2>&1; then
+  echo "Java available; version:"
+  java -version 2>&1 || true
+else
+  echo "Java not found in PATH"
 fi
 
 # Finally exec the java process (stdout/stderr will stream to container logs)
