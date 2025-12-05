@@ -60,9 +60,31 @@ echo "--- Startup diagnostics ---"
 echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-<not-set>}"
 echo "PORT=${PORT:-<not-set>}"
 echo "JAVA_OPTS=${JAVA_OPTS:-<not-set>}"
-# These two are not secrets (URL and key name) and are useful to log when debugging Key Vault access
+# Use AZ_KEYVAULT_VAULT_URL as the canonical external env name (this is what Azure/CI sets)
 echo "AZ_KEYVAULT_VAULT_URL=${AZ_KEYVAULT_VAULT_URL:-<not-set>}"
-echo "APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${APP_SECURITY_AZURE_KEYVAULT_KEY_NAME:-<not-set>}"
+
+# --- Map presence of canonical Key Vault env (do NOT create any duplicate env names) ---
+# Use AZ_KEYVAULT_VAULT_URL as the canonical external env name and do not duplicate it into
+# another env variable to avoid confusion. The application should be configured to read
+# the Spring property app.security.azure.keyvault.vault-url from the AZ_KEYVAULT_VAULT_URL env
+# provided by CI/App Service.
+if [ -n "${AZ_KEYVAULT_VAULT_URL}" ]; then
+  echo "AZ_KEYVAULT_VAULT_URL is present"
+else
+  echo "AZ_KEYVAULT_VAULT_URL not set; ensure the application property 'app.security.azure.keyvault.vault-url' is provided via your deployment environment"
+fi
+
+# Enforce single canonical env name for Key Vault key name: AZ_KEYVAULT_KEY_NAME
+# We intentionally do NOT map alternate App Service or legacy secret names. Use exactly
+# `AZ_KEYVAULT_KEY_NAME` as the repository secret and App Service app setting.
+if [ -n "${AZ_KEYVAULT_KEY_NAME}" ]; then
+  echo "AZ_KEYVAULT_KEY_NAME is present"
+else
+  echo "AZ_KEYVAULT_KEY_NAME not set; ensure the deployment provides AZ_KEYVAULT_KEY_NAME as the Key Vault Key name (Spring property: app.security.azure.keyvault.key-name)"
+fi
+
+echo "AZ_KEYVAULT_VAULT_URL=${AZ_KEYVAULT_VAULT_URL:-<not-set>}"
+echo "AZ_KEYVAULT_KEY_NAME=${AZ_KEYVAULT_KEY_NAME:-<not-set>}"
 
 # Validate the jar exists and is readable
 if [ ! -f /app/app.jar ]; then

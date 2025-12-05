@@ -111,88 +111,35 @@ App Service — Runtime App Settings (set in Azure Portal / App Service -> Confi
 
 - Any other runtime setting described earlier in this README should be set here as needed.
 
----
+Canonical environment names & migration
+------------------------------------
+We are standardizing on a single canonical name per runtime concept across CI, Docker builds, and App Service app settings to reduce confusion.
 
-Build-time / CI / Docker build-args (set at build-time in CI or local docker build args)
-- VITE_FRONTEND_ENV
-  - Purpose: Vite build mode passed into the frontend build (`production` or `development`). CI sets this based on `DEPLOY_ENV`.
-  - Example: `production`
+Canonical names (current):
+- `BACKEND_HOST` — canonical baked-in backend FQDN used by Docker builds and proxy configuration (replaces older `BACKEND_FQDN` / `BACKEND_HOST_VAL`).
+- `SPRING_PROFILES_ACTIVE` — canonical Spring profile app setting (replaces `SPRING_PROFILE`).
+- `AZ_KEYVAULT_KEY_NAME` — canonical GitHub secret name for the Key Vault Key name.
 
-- VITE_API_BASE_URL
-  - Purpose: Vite API base URL baked into the SPA at build-time. The production default is intentionally empty so the SPA uses relative paths like `/api/...`.
-  - Example (production): empty string `""`; Example (dev): `http://localhost:8080`
-
-NOTE: MSAL/Entra integration has been removed from this repository. The VITE_MSAL_* build-time
-variables are no longer used. The project supports a pseudo/basic auth mode for test/pseudo-prod
-scenarios (see the Pseudo / Basic auth section below). If you later re-enable Entra, add the
-appropriate VITE_MSAL_* variables and document them here.
-
----
-
-Key Vault entries (create in Key Vault — prefer Key Vault + managed identities rather than committing secrets)
-- slowfall-credentials (example secret name)
-  - Purpose: Optional secret containing production backend credentials when a simple single-login approach is used. Prefer JSON with `{"username":"...","passwordHash":"..."}` or use other secure credential stores for multi-user setups.
-
-- slowfall-sign-key (example Key name)
-  - Purpose: Key used for signing operations if the backend uses Key Vault Keys for JWT signing.
-
-- Other keys/secrets
-  - Purpose: Store any client secrets, certs, or runtime configuration values that must remain secret. Use Key Vault RBAC and assign the backend's / proxy's system-assigned managed identity appropriate roles (Secrets User, Crypto User when needed).
-
----
-
-Local development overrides (set locally / in your shell or dev environment)
-- SPRING_PROFILES_ACTIVE (local)
-  - Purpose: Run the backend using `dev` profile locally.
-  - Example: `dev`
-
-- VITE_API_BASE_URL (local frontend dev)
-  - Purpose: Point SPA to a local backend during development.
-  - Example: `http://localhost:8080`
-
-- Any other dev-only environment variables may be set in your local environment or `.env` files; avoid committing secrets.
-
----
-
-Changing names or adding variables
-- If you rename or add secrets/vars, update this file and `README_CLOUD.md` / `infra/DEPLOY.md` and any CI workflow references so operators and CI remain consistent.
-
-Security reminder
-- Do not commit secrets into the repository. Use Key Vault and GitHub repository secrets, and prefer OIDC-based federated credentials where possible.
-
----
-
-Quick steps: set Key Vault URL secret for GitHub Actions
-
-- Key Vault name: `slowfall-keyvault-next`
-- Key Vault URL: `https://slowfall-keyvault-next.vault.azure.net/`
-
-Set repository secrets (recommended):
-
-- Required secret name (used by workflows): `AZ_KEYVAULT_VAULT_URL` — the workflow and deploy scripts require this exact secret name.
-- Convenience alias for scripts: `AZ_KEYVAULT_VAULT_URL` (optional duplicate)
-
-If you have the GitHub CLI (`gh`) and are authenticated, run these commands from the repository root (or add `--repo owner/repo` to target a specific repo):
+Migration steps (recommended)
+1. Create a repository secret `AZ_KEYVAULT_KEY_NAME` with the correct Key Vault Key name value.
+   - If you know the plaintext value, set it directly in the GitHub UI: Settings → Secrets and variables → Actions → New repository secret.
+   - If you prefer the CLI (and you know the plaintext value), run:
 
 ```bash
-gh secret set AZ_KEYVAULT_VAULT_URL --body "https://slowfall-keyvault-next.vault.azure.net/" --visibility=private
+# Example: replace <value> with the actual key name (e.g. "slowfall-sign-key") and add --repo owner/repo if not running in the repo
+gh secret set AZ_KEYVAULT_KEY_NAME --body "<value>" --visibility=private
 ```
 
-Or use the GitHub web UI:
-- Repo → Settings → Secrets and variables → Actions → New repository secret
-  - Name: `AZ_KEYVAULT_VAULT_URL`
-  - Value: `https://slowfall-keyvault-next.vault.azure.net/`
+Note: GitHub does not allow retrieving existing secret plaintext via the API or CLI. If you don't know the current secret value, coordinate a rotation: create a new key in Key Vault (or request the plaintext from the secret owner), set `AZ_KEYVAULT_KEY_NAME` to the new value, and deploy.
 
-Remember to also set the corresponding App Service runtime app setting for the backend (so the running app can access Key Vault):
+2. Update docs and infra: this file (`README_ENV.md`), `README_CLOUD.md`, and `infra/DEPLOY.md` should list the canonical names. After you verify deployments succeed with `AZ_KEYVAULT_KEY_NAME`, remove any legacy or duplicate secret names from the repository to avoid confusion.
 
-```
-az webapp config appsettings set \
-  --resource-group "<AZ_RESOURCE_GROUP>" \
-  --name "<AZ_WEBAPP_BACKEND>" \
-  --settings AZ_KEYVAULT_VAULT_URL="https://slowfall-keyvault-next.vault.azure.net/"
-```
+Where to update docs and infra:
+- `README_ENV.md` (this file).
+- `README_CLOUD.md`.
+- `infra/DEPLOY.md`.
 
-Security reminder: Do not commit secret values into the repository. Use GitHub repository secrets and Azure Key Vault. If you want me to set the repository secrets now, I can run the `gh secret set` commands for you — I need either a configured git remote that points to the GitHub repo or the `owner/repo` string, and your confirmation to proceed.
+If you want, I can create a branch and PR with these doc changes and a short deploy checklist. Let me know if you'd like that.
 
 ---
 
@@ -201,9 +148,9 @@ Azure Key Vault: required properties and permissions
 - Required runtime env / Spring properties (set as App Service app settings or CI secrets):
   - AZ_KEYVAULT_VAULT_URL (note: Spring property is `app.security.azure.keyvault.vault-url`)
     - Example: `https://slowfall-keyvault-next.vault.azure.net/`
-  - APP_SECURITY_AZURE_KEYVAULT_KEY_NAME (Spring property: app.security.azure.keyvault.key-name)
+  - AZ_KEYVAULT_KEY_NAME (Spring property: app.security.azure.keyvault.key-name)
     - Example: `slowfall-sign-key`
-  - (Optional) APP_SECURITY_AZURE_KEYVAULT_SECRET_NAME (Spring property: app.security.azure.keyvault.secret-name)
+    - (Optional) APP_SECURITY_AZURE_KEYVAULT_SECRET_NAME (Spring property: app.security.azure.keyvault.secret-name)
     - Used when storing a PEM private key as a Key Vault secret instead of a Key Vault Key.
 
 - Required Key Vault permissions for the application identity (Managed Identity or Service Principal):
@@ -212,7 +159,7 @@ Azure Key Vault: required properties and permissions
 
 - Troubleshooting tips if the application fails on startup with a Key Vault-related NPE or IllegalStateException:
   1. Verify the vault URL is correct and accessible from the App Service (check `AZ_KEYVAULT_VAULT_URL`).
-  2. Confirm the configured key name (`APP_SECURITY_AZURE_KEYVAULT_KEY_NAME`) matches the name in the Key Vault `Keys` blade (watch for typos and case-sensitivity).
+  2. Confirm the configured key name (`AZ_KEYVAULT_KEY_NAME`) matches the name in the Key Vault `Keys` blade (watch for typos and case-sensitivity).
   3. In the Key Vault portal, verify the key is enabled and has a valid key identifier (a `kid`) and that the key has a JWK payload (RSA key). Soft-deleted or placeholder keys may not include JWK material.
   4. Ensure the app's managed identity or service principal has the `keys/get` and `keys/sign` permissions (or assign the built-in role `Key Vault Crypto User` / `Key Vault Crypto Service Encryption User` as appropriate). For secrets access, grant `secrets/get`.
   5. If using RBAC rather than legacy access policies, grant the matching Key Vault roles at the correct scope.

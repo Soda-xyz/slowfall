@@ -56,6 +56,29 @@ Proxy & deployment notes
   app settings with `WEBSITES_PORT=80`, `BACKEND_HOST=<your-backend-fqdn>` (for example `slowfall-backend.azurewebsites.net`),
   and `BACKEND_PORT=8080`. The proxy image reads these values via environment variable substitution at container start.
 
+Canonical environment names & migration
+
+We standardize on a single canonical environment variable name per concept across CI, containers, and App Service settings.
+This reduces duplication and ambiguity.
+
+Canonical names (current):
+- `BACKEND_HOST` — baked-in backend FQDN used by Docker builds and the nginx proxy (replaces older `BACKEND_FQDN`).
+- `SPRING_PROFILES_ACTIVE` — Spring profile for the backend runtime (replaces `SPRING_PROFILE`).
+- `AZ_KEYVAULT_KEY_NAME` — canonical GitHub secret name for the Key Vault Key name.
+
+Migration recommendation:
+1. Set a new repository secret `AZ_KEYVAULT_KEY_NAME` with the correct Key Vault key-name value (rotate if you do not know the current plaintext).
+2. Update App Service app settings and any infra templates to use `BACKEND_HOST`, `SPRING_PROFILES_ACTIVE`, and `AZ_KEYVAULT_KEY_NAME`.
+3. Keep legacy names only during a short transition window if needed; prefer to remove them once all consumers use the canonical names.
+
+Example CLI to set the canonical Key Vault key-name secret (replace owner/repo and <value>):
+
+```bash
+gh secret set AZ_KEYVAULT_KEY_NAME --repo owner/repo --body "<value>" --visibility=private
+```
+
+Operators performing deployments should verify that CI logs and App Service app settings show `AZ_KEYVAULT_KEY_NAME` and `AZ_KEYVAULT_VAULT_URL` are present.
+
 High-level deployment flow (CLI-first, CI-driven)
 
 1. Set subscription and create a new resource group.

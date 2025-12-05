@@ -120,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     env:
-      BACKEND_FQDN: ${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
+      BACKEND_HOST: ${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
 
     steps:
       - name: Checkout
@@ -140,7 +140,7 @@ jobs:
           else
             FQDN="$SANITIZED.azurewebsites.net"
           fi
-          echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
+          echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
 
       - name: Build frontend image (load into local Docker)
         uses: docker/build-push-action@v4
@@ -154,11 +154,11 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
             VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
-            BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: nginx config syntax test inside image
         run: |
-          docker run --rm --add-host ${BACKEND_FQDN}:127.0.0.1 --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
+          docker run --rm --add-host ${BACKEND_HOST}:127.0.0.1 --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
 
       - name: Cleanup container and image (always)
         if: always()
@@ -174,7 +174,7 @@ jobs:
     outputs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
-      spring_profile: ${{ steps.compute_spring_profile.outputs.spring_profile }}
+      spring_profiles_active: ${{ steps.compute_spring_profile.outputs.spring_profiles_active }}
 
     steps:
       - name: Normalize repository owner to lowercase
@@ -196,7 +196,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute sanitized BACKEND_FQDN for publish
+      - name: Compute sanitized BACKEND_HOST for publish
         id: sanitize_backend_publish
         run: |
           set -euo pipefail
@@ -207,6 +207,7 @@ jobs:
           else
             FQDN="$SANITIZED.azurewebsites.net"
           fi
+          echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
 
       - name: Azure login (OIDC) for resolving backend FQDN
         uses: azure/login@v1
@@ -227,13 +228,13 @@ jobs:
             echo "APP_PORT not set; leaving backend PORT unchanged"
           fi
 
-      - name: Resolve backend defaultHostName (use as BACKEND_FQDN)
+      - name: Resolve backend defaultHostName (use as BACKEND_HOST)
         run: |
           set -euo pipefail
           RAW_NAME="${{ secrets.BACKEND_APP_NAME }}"
           RG="${{ secrets.AZURE_RG }}"
           FQDN=$(az webapp show --name "$RAW_NAME" --resource-group "$RG" --query defaultHostName -o tsv)
-          echo "BACKEND_FQDN=$FQDN" >> "$GITHUB_ENV"
+          echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
 
       - name: Compute SPRING_PROFILE from DEPLOY_ENV secret
         id: compute_spring_profile
@@ -246,17 +247,17 @@ jobs:
           fi
           case "$DEPLOY" in
             production|prod)
-              SPRING_PROFILE="prod"
+              SPRING_PROFILES_ACTIVE="prod"
               ;;
             development|dev)
-              SPRING_PROFILE="dev"
+              SPRING_PROFILES_ACTIVE="dev"
               ;;
             *)
-              SPRING_PROFILE="$DEPLOY"
+              SPRING_PROFILES_ACTIVE="$DEPLOY"
               ;;
           esac
-          echo "SPRING_PROFILE=$SPRING_PROFILE" >> "$GITHUB_ENV"
-          echo "spring_profile=$SPRING_PROFILE" >> "$GITHUB_OUTPUT"
+          echo "SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_ENV"
+          echo "spring_profiles_active=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_OUTPUT"
 
       - name: Build & push backend image
         uses: docker/build-push-action@v4
@@ -269,7 +270,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-backend:latest
           build-args: |
-            SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILE }}
+            SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }}
 
       - name: Build & push frontend image
         uses: docker/build-push-action@v4
@@ -282,9 +283,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-frontend:latest
           build-args: |
-            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILE == 'prod' && 'production' || env.SPRING_PROFILE) }}
-            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILE == 'dev' && 'http://localhost:8080' || '') }}
-            BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILES_ACTIVE == 'prod' && 'production' || env.SPRING_PROFILES_ACTIVE) }}
+            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILES_ACTIVE == 'dev' && 'http://localhost:8080' || '') }}
+            BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: Build & push proxy image
         uses: docker/build-push-action@v4
@@ -297,7 +298,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall-proxy:latest
           build-args: |
-            BACKEND_HOST=${{ env.BACKEND_FQDN }}
+            BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: Verify proxy image pushed
         run: |
@@ -312,16 +313,16 @@ jobs:
         run: |
           set -euo pipefail
           SETTINGS=()
-          if [ -n "${SPRING_PROFILE:-}" ]; then
-            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}")
+          if [ -n "${SPRING_PROFILES_ACTIVE:-}" ]; then
+            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}")
           fi
           SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
 
           # Ensure Key Vault settings are propagated to the backend (and frontend when relevant).
           # These are provided as repository secrets and must be set in the environment.
-          # The backend expects the Key Vault URI (written as AZ_KEYVAULT_VAULT_URL) and APP_SECURITY_AZURE_KEYVAULT_KEY_NAME
+          # The backend expects the Key Vault URI (written as AZ_KEYVAULT_VAULT_URL) and AZ_KEYVAULT_KEY_NAME
           SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
-          SETTINGS+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME=${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}")
+          SETTINGS+=("AZ_KEYVAULT_KEY_NAME=${{ secrets.AZ_KEYVAULT_KEY_NAME }}")
 
           # Build backend-specific and frontend-specific settings arrays so we can add toggles independently.
           BACKEND_SETTINGS=("${SETTINGS[@]}")
@@ -509,8 +510,8 @@ jobs:
       - name: Set app settings on proxy
         run: |
           PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          if [ -n "${BACKEND_FQDN:-}" ]; then
-            BACKEND_HOST_VAL="${BACKEND_FQDN}"
+          if [ -n "${BACKEND_HOST:-}" ]; then
+            BACKEND_HOST_VAL="${BACKEND_HOST}"
           else
             BACKEND_HOST_VAL="${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net"
           fi
@@ -551,7 +552,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     env:
-      SPRING_PROFILE: ${{ needs.publish-images.outputs.spring_profile }}
+      SPRING_PROFILES_ACTIVE: ${{ needs.publish-images.outputs.spring_profiles_active }}
 
     steps:
       - name: Checkout
@@ -567,7 +568,7 @@ jobs:
           AZ_WEBAPP_BACKEND="${{ secrets.BACKEND_APP_NAME }}"
           AZ_WEBAPP_FRONTEND="${{ secrets.FRONTEND_APP_NAME }}"
           AZ_KEYVAULT_VAULT_URL="${{ secrets.AZ_KEYVAULT_VAULT_URL }}"
-          AZ_KEYVAULT_KEY_NAME="${{ secrets.APP_SECURITY_AZURE_KEYVAULT_KEY_NAME }}"
+          AZ_KEYVAULT_KEY_NAME="${{ secrets.AZ_KEYVAULT_KEY_NAME }}"
           missing=()
           [ -z "$AZ_SUBSCRIPTION_ID" ] && missing+=("AZURE_SUBSCRIPTION_ID") || true
           [ -z "$AZ_TENANT_ID" ] && missing+=("AZURE_TENANT_ID") || true
@@ -576,7 +577,7 @@ jobs:
           [ -z "$AZ_WEBAPP_BACKEND" ] && missing+=("BACKEND_APP_NAME") || true
           [ -z "$AZ_WEBAPP_FRONTEND" ] && missing+=("FRONTEND_APP_NAME") || true
           [ -z "$AZ_KEYVAULT_VAULT_URL" ] && missing+=("AZ_KEYVAULT_VAULT_URL") || true
-          [ -z "$AZ_KEYVAULT_KEY_NAME" ] && missing+=("APP_SECURITY_AZURE_KEYVAULT_KEY_NAME") || true
+          [ -z "$AZ_KEYVAULT_KEY_NAME" ] && missing+=("AZ_KEYVAULT_KEY_NAME") || true
           if [ ${#missing[@]} -ne 0 ]; then
             echo "ERROR: Missing required Azure secrets: ${missing[*]}"
             exit 1

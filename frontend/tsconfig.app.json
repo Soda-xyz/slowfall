@@ -5,7 +5,6 @@
 		"useDefineForClassFields": true,
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"module": "ESNext",
-		// Only include Vite client types for the app build; test-related types were removed.
 		"types": ["vite/client"],
 		"skipLibCheck": true,
 		"moduleResolution": "bundler",
