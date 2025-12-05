@@ -219,7 +219,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
-            az webapp config.appsettings set \
+            az webapp config appsettings set \
               --name "${{ secrets.BACKEND_APP_NAME }}" \
               --resource-group "${{ secrets.AZURE_RG }}" \
               --settings "PORT=${{ secrets.APP_PORT }}"
