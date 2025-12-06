@@ -185,10 +185,11 @@ public class SecurityConfig {
         // Determine if we're running in 'dev' profile (allow a safe fallback there)
         boolean isDev = java.util.Arrays.asList(env.getActiveProfiles()).contains("dev");
 
-        // If allowedGroupId wasn't provided, fail fast in non-dev; otherwise use a dev fallback
+        // If allowedGroupId wasn't provided, previously we failed-fast in non-dev; make this optional now.
         if (allowedGroupId == null || allowedGroupId.isBlank()) {
             if (!isDev) {
-                throw new IllegalStateException("Missing required configuration: 'app.security.allowed-group-id'");
+                // Do not fail startup for missing allowed-group-id; instead log and allow any authenticated user.
+                log.info("app.security.allowed-group-id is not set; skipping group-based authorization and requiring authenticated users");
             } else {
                 // development convenience: use the previously provisioned test group id so local dev doesn't break
                 allowedGroupId = "1dea5e51-d15e-4081-9722-46da3bfdee79";
@@ -227,8 +228,13 @@ public class SecurityConfig {
                     auth.requestMatchers("/auth/**", "/web-auth/**", "/actuator/health", "/.well-known/**")
                             .permitAll();
                     // Require membership in the configured AAD group or allow a dev ROLE_USER for local/testing.
-                    String requiredAuthority = "ROLE_" + finalAllowedGroupId;
-                    auth.anyRequest().hasAuthority(requiredAuthority);
+                    if (finalAllowedGroupId != null && !finalAllowedGroupId.isBlank()) {
+                        String requiredAuthority = "ROLE_" + finalAllowedGroupId;
+                        auth.anyRequest().hasAuthority(requiredAuthority);
+                    } else {
+                        // No group configured: require any authenticated user (no group-based restriction).
+                        auth.anyRequest().authenticated();
+                    }
                 })
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // httpBasic is applied conditionally below instead of being unconditionally disabled
