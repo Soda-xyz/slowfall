@@ -240,7 +240,7 @@ jobs:
       - name: Resolve backend defaultHostName (use as BACKEND_HOST)
         run: |
           set -euo pipefail
-          RAW_NAME="${{ secrets.BACKEND_APP_NAME }}
+          RAW_NAME="${{ secrets.BACKEND_APP_NAME }}"
           RG="${{ secrets.AZURE_RG }}"
           FQDN=$(az webapp show --name "$RAW_NAME" --resource-group "$RG" --query defaultHostName -o tsv)
           echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
