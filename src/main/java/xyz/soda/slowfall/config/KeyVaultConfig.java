@@ -7,6 +7,8 @@ import com.azure.security.keyvault.keys.KeyClient;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
 import com.azure.security.keyvault.secrets.SecretClient;
 import com.azure.security.keyvault.secrets.SecretClientBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +22,8 @@ import org.springframework.context.annotation.Profile;
 @Configuration
 @Profile("!dev")
 public class KeyVaultConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(KeyVaultConfig.class);
 
     /**
      * Provides a TokenCredential bean for authenticating to Azure Key Vault.
@@ -61,6 +65,16 @@ public class KeyVaultConfig {
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "secret-name")
     public SecretClient secretClient(
             @Value("${app.security.azure.keyvault.vault-url:}") String vaultUrl, TokenCredential credential) {
+        // Fallback to environment variable used by App Service/CI if property isn't provided
+        if (vaultUrl == null || vaultUrl.isBlank()) {
+            String envVault = System.getenv("AZ_KEYVAULT_VAULT_URL");
+            if (envVault != null && !envVault.isBlank()) {
+                log.info("Using AZ_KEYVAULT_VAULT_URL from environment for SecretClient");
+                vaultUrl = envVault;
+            }
+        } else {
+            log.debug("Using property 'app.security.azure.keyvault.vault-url' for SecretClient");
+        }
         validateVaultUrl(vaultUrl, "secret client");
         return new SecretClientBuilder()
                 .vaultUrl(vaultUrl)
@@ -79,6 +93,16 @@ public class KeyVaultConfig {
     @ConditionalOnProperty(prefix = "app.security.azure.keyvault", name = "key-name")
     public KeyClient keyClient(
             @Value("${app.security.azure.keyvault.vault-url:}") String vaultUrl, TokenCredential credential) {
+        // Fallback to environment variable used by App Service/CI if property isn't provided
+        if (vaultUrl == null || vaultUrl.isBlank()) {
+            String envVault = System.getenv("AZ_KEYVAULT_VAULT_URL");
+            if (envVault != null && !envVault.isBlank()) {
+                log.info("Using AZ_KEYVAULT_VAULT_URL from environment for KeyClient");
+                vaultUrl = envVault;
+            }
+        } else {
+            log.debug("Using property 'app.security.azure.keyvault.vault-url' for KeyClient");
+        }
         validateVaultUrl(vaultUrl, "key client");
         return new KeyClientBuilder().vaultUrl(vaultUrl).credential(credential).buildClient();
     }
