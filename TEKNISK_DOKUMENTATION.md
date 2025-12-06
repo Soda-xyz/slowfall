@@ -35,7 +35,7 @@ Systemet stödjer CRUD-operationer för fyra huvuddomäner:
 
 Slowfall är en skydiving dashboard-applikation ("Skydive Dash") som ger användare möjlighet att:
 - Registrera och hantera fallskärmshoppare och piloter
-- Schemalägga hopp med information om tid, plats, höjd och deltagare
+- Schemalagda hopp med information om tid, plats, höjd och deltagare
 - Administrera flygplan och flygplatsdata
 - Visualisera hoppstatistik och aktivitet i realtid
 
@@ -91,7 +91,7 @@ Slowfall är en skydiving dashboard-applikation ("Skydive Dash") som ger använd
 | Spring Data JPA | (via Spring Boot) | Databas-access och ORM |
 | Hibernate | (via Spring Boot) | JPA-implementation |
 | H2 Database | (runtime) | In-memory databas för dev/test |
-| Gradle | 8.x | Build-verktyg |
+| Gradle | 8.14+ | Build-verktyg |
 | JUnit 5 | (via Spring Boot) | Testramverk |
 
 **Motivering:**
@@ -861,9 +861,9 @@ az webapp restart --name slowfall-backend --resource-group slowfall-rg
 **App Service App Settings (Backend):**
 - `SPRING_PROFILES_ACTIVE` - Spring profile (prod/dev/pseudo)
 - `AZ_KEYVAULT_VAULT_URL` - Key Vault URI
-- `AZ_KEYVAULT_KEY_NAME` - Key för JWT signing
+- `AZ_KEYVAULT_KEY_NAME` - Nyckel för JWT-signering
 - `ALLOWED_ORIGINS` - CORS config
-- `APP_SECURITY_ALLOWED_GROUP_ID` - AD group för access
+- `APP_SECURITY_ALLOWED_GROUP_ID` - AD-grupp för åtkomst
 - `PORT` - Server port (8080)
 
 **App Service App Settings (Frontend):**
@@ -897,7 +897,7 @@ az webapp restart --name slowfall-backend --resource-group slowfall-rg
 **RBAC och Permissions:**
 - Backend managed identity: `Key Vault Secrets User`, `Key Vault Crypto User`
 - Proxy managed identity: `Key Vault Secrets User`
-- Entra ID: Frontend har scope för att anropa backend API
+- Entra ID: Frontend har scope för att anropa backend-API
 
 **IaC (Infrastructure as Code):**
 - Dokumenterat i `README_CLOUD.md`
