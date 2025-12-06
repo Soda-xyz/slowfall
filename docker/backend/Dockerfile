@@ -60,31 +60,6 @@ echo "--- Startup diagnostics ---"
 echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-<not-set>}"
 echo "PORT=${PORT:-<not-set>}"
 echo "JAVA_OPTS=${JAVA_OPTS:-<not-set>}"
-# Use AZ_KEYVAULT_VAULT_URL as the canonical external env name (this is what Azure/CI sets)
-echo "AZ_KEYVAULT_VAULT_URL=${AZ_KEYVAULT_VAULT_URL:-<not-set>}"
-
-# --- Map presence of canonical Key Vault env (do NOT create any duplicate env names) ---
-# Use AZ_KEYVAULT_VAULT_URL as the canonical external env name and do not duplicate it into
-# another env variable to avoid confusion. The application should be configured to read
-# the Spring property app.security.azure.keyvault.vault-url from the AZ_KEYVAULT_VAULT_URL env
-# provided by CI/App Service.
-if [ -n "${AZ_KEYVAULT_VAULT_URL}" ]; then
-  echo "AZ_KEYVAULT_VAULT_URL is present"
-else
-  echo "AZ_KEYVAULT_VAULT_URL not set; ensure the application property 'app.security.azure.keyvault.vault-url' is provided via your deployment environment"
-fi
-
-# Enforce single canonical env name for Key Vault key name: AZ_KEYVAULT_KEY_NAME
-# We intentionally do NOT map alternate App Service or legacy secret names. Use exactly
-# `AZ_KEYVAULT_KEY_NAME` as the repository secret and App Service app setting.
-if [ -n "${AZ_KEYVAULT_KEY_NAME}" ]; then
-  echo "AZ_KEYVAULT_KEY_NAME is present"
-else
-  echo "AZ_KEYVAULT_KEY_NAME not set; ensure the deployment provides AZ_KEYVAULT_KEY_NAME as the Key Vault Key name (Spring property: app.security.azure.keyvault.key-name)"
-fi
-
-echo "AZ_KEYVAULT_VAULT_URL=${AZ_KEYVAULT_VAULT_URL:-<not-set>}"
-echo "AZ_KEYVAULT_KEY_NAME=${AZ_KEYVAULT_KEY_NAME:-<not-set>}"
 
 # Validate the jar exists and is readable
 if [ ! -f /app/app.jar ]; then
@@ -102,21 +77,6 @@ if command -v java >/dev/null 2>&1; then
   java -version 2>&1 || true
 else
   echo "Java not found in PATH"
-fi
-
-# Quick connectivity check to Key Vault URL (will usually return 401/403 without auth)
-if [ -n "${AZ_KEYVAULT_VAULT_URL}" ]; then
-  echo "Testing connectivity to Key Vault: ${AZ_KEYVAULT_VAULT_URL} (this only verifies network/DNS/TLS, not auth)"
-  if command -v curl >/dev/null 2>&1; then
-    # Use a fast HEAD-style request; Key Vault may redirect, so use -I to fetch headers and capture HTTP code
-    HTTP_CODE=$(curl -I -sS -o /dev/null -w '%{http_code}' --max-time 10 "${AZ_KEYVAULT_VAULT_URL}" || echo "000")
-    echo "Key Vault HTTP response code: ${HTTP_CODE}"
-    # If 000 then curl failed (network/DNS). If 401/403 it's reachable but auth required (expected for secured vaults).
-  else
-    echo "curl not available to test Key Vault connectivity"
-  fi
-else
-  echo "AZ_KEYVAULT_VAULT_URL not set; skipping Key Vault connectivity test"
 fi
 
 # Quick runtime check: verify Java executable works (do not execute the jar)
