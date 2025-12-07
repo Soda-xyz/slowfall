@@ -4,4 +4,15 @@ import checker from "vite-plugin-checker";
 
 export default defineConfig({
 	plugins: [react(), checker({ typescript: true })],
+	server: {
+        port: 5173,
+        proxy: {
+          '/api': {
+            target: 'http://localhost:8080',
+            changeOrigin: true,
+            secure: false,
+            rewrite: (path) => path.replace(/^\/api/, '/api')
+          }
+        }
+}
 });

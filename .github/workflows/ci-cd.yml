@@ -246,7 +246,7 @@ jobs:
           echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
 
       - name: Compute SPRING_PROFILE from DEPLOY_ENV secret
-        id: compute_spring_profile
+        id: compute_spring_profiles
         run: |
           set -euo pipefail
           DEPLOY="${{ secrets.DEPLOY_ENV || '' }}"
