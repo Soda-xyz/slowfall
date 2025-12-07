@@ -9,16 +9,9 @@ operators remain consistent.
 
 ---
 
-Recorded provision values (non-secret)
-- BACKEND_APP_ID=628940e9-8851-4a41-a023-ca8183a04263
-- FRONTEND_APP_ID=ce0f64ea-3635-4be7-ad93-7954f04cfa83
-- Key Vault secret (credentials) name: `slowfall-backend-client-secret`
-- Key Vault URI (example): `https://slowfall-keyvault-next.vault.azure.net/`
-- Public proxy domain (frontend): `https://www.oskarnilsson.net` (set as `ALLOWED_ORIGINS` for CORS)
-- AAD group for web users (GUID): `SLOWFALL_WEB_USERS_GROUP_ID=1dea5e51-d15e-4081-9722-46da3bfdee79`
-- Test user (member account, non-secret record): `kisse@Sodezangmail.onmicrosoft.com` (created for testing only)
+Recorded provision values
 
-Note: Do NOT store raw secret values in the repository. Store secret names, appIds, Key Vault URIs and group ids here as a reference; actual secret values should remain in Key Vault or GitHub Actions secrets.
+NOTE: Provision values and any sensitive identifiers should not be stored in the repository. If you need to keep non-secret references for operational convenience, put them in a restricted location (for example `LocalFiles/` or an internal ops repo) and mark them clearly. Do not commit actual secrets or private credentials. Use Key Vault and GitHub Actions secrets for sensitive values.
 
 ---
 
@@ -68,15 +61,14 @@ Required secrets (must exist for CI to deploy)
 - ALLOWED_ORIGINS — optional comma-separated allowed origins used for CORS (CI will write it into app settings if present).
 
 Note on AZURE_CLIENT_ID and service principals vs Managed Identity (clarification)
-- CI (GitHub Actions): the workflow uses OIDC and requires a repository secret `AZURE_CLIENT_ID` which is the App Registration (client) id that has been configured with a federated credential for this repo/branch. This is required by the `azure/login` step in the workflow and is *not* the same as a runtime client secret. Keep `AZURE_CLIENT_ID` in your repository secrets for CI.
+- CI (GitHub Actions): the workflow uses OIDC and a baked-in App Registration client id in `.github/workflows/ci-cd.yml`. The client id is an identifier (not a secret). CI still requires a federated credential configured in Azure AD for the App Registration and appropriate RBAC (for example `AcrPush` on the registry). You do **not** need to add `AZURE_CLIENT_ID` as a repository secret for CI in this configuration.
 
-- Runtime (App Service / backend): the backend code prefers Azure managed identity / `DefaultAzureCredential` when running in Azure. The code also supports an optional service-principal fallback for local testing or for environments where a managed identity isn't available.
-  - If you want to run the app locally and authenticate Key Vault using a service principal, set the following environment variables locally (or in your `.env`):
+- Runtime (App Service / backend): the backend code prefers Azure managed identity / `DefaultAzureCredential` when running in Azure. The application also supports a service-principal fallback for local testing.
+  - To run locally with a service principal set these environment variables (local `.env` or other secure store):
     - `AZURE_CLIENT_ID` (or Spring property `azure.client.id`) — client id of the service principal
     - `AZURE_TENANT_ID` (or Spring property `azure.tenant.id`) — tenant id
     - `AZURE_CLIENT_SECRET` (or Spring property `azure.client.secret`) — client secret
-  - If these three runtime variables are present, `KeyVaultConfig` will create a `ClientSecretCredential` (service principal) and use it to authenticate to Key Vault. If they are not present, the application will fall back to `DefaultAzureCredential`, which will try MSIs/managed identity, Azure CLI login, Visual Studio/Azure developer credentials, etc.
-  - Recommendation: prefer `DefaultAzureCredential` / managed identity for production (no secrets). Use the service principal variables only for local debugging when necessary. If you do set them for local dev, *do not* commit secrets into the repository — use a local `.env` excluded by `.gitignore` or other secure local secret storage.
+  - If all three runtime variables are present, `KeyVaultConfig` will use `ClientSecretCredential` to authenticate to Key Vault. Otherwise the app falls back to `DefaultAzureCredential` (managed identity, az cli creds, etc.). Prefer managed identity in production; only use service-principal values locally as needed and do not commit them.
 
 Secrets you may remove (NOT used by current OIDC workflow)
 - AZURE_CLIENT_SECRET — not required by CI's OIDC-based workflow. However, the application still supports a runtime service-principal fallback when `azure.client.id`, `azure.client.secret`, and `azure.tenant.id` properties are present; only remove this secret if you are sure no team member relies on service-principal local auth or any external automation needs it.
