@@ -148,3 +148,35 @@ jobs:
           build-args: |
             VITE_FRONTEND_ENV=production
             VITE_API_BASE_URL=
+
+      - name: Write backend app settings (pseudo mode)
+        if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
+        env:
+          BACKEND_APP_NAME: ${{ secrets.BACKEND_APP_NAME }}
+          AZURE_RG: ${{ secrets.AZURE_RG }}
+          PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
+          PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
+        run: |
+          echo "Writing pseudo app settings to backend: $BACKEND_APP_NAME"
+          az webapp config appsettings set \
+            --name "$BACKEND_APP_NAME" \
+            --resource-group "$AZURE_RG" \
+            --settings PSEUDO_AUTH_ENABLED="true" app.security.dev-username="$PSEUDO_USER" app.security.dev-password="$PSEUDO_PASS" SPRING_PROFILES_ACTIVE="pseudo" \
+            --output none
+        shell: bash
+
+      - name: Write frontend app settings (pseudo mode)
+        if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
+        env:
+          FRONTEND_APP_NAME: ${{ secrets.FRONTEND_APP_NAME }}
+          AZURE_RG: ${{ secrets.AZURE_RG }}
+          PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
+          PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
+        run: |
+          echo "Writing pseudo app settings to frontend: $FRONTEND_APP_NAME"
+          az webapp config appsettings set \
+            --name "$FRONTEND_APP_NAME" \
+            --resource-group "$AZURE_RG" \
+            --settings VITE_PSEUDO_AUTH="true" VITE_PSEUDO_USER="$PSEUDO_USER" VITE_PSEUDO_PASS="$PSEUDO_PASS" VITE_MSAL_CLIENT_ID="" VITE_MSAL_AUTHORITY="" \
+            --output none
+        shell: bash

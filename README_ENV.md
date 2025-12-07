@@ -91,11 +91,9 @@ App Service — Runtime App Settings (set in Azure Portal / App Service -> Confi
 
 - ALLOWED_ORIGINS
   - Purpose: Comma-separated list used by the backend for CORS (maps to `app.cors.allowed-origins`).
-  - Example: `https://slowfall-frontend.azurewebsites.net`
 
 - AZ_KEYVAULT_VAULT_URL
   - Purpose: Full Key Vault URI used by the apps. The workflow requires this secret to be set in GitHub and will fail early if it is missing. Use this exact name when creating/updating secrets.
-  - Example: `https://slowfall-keyvault-next.vault.azure.net/`
 
 - APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST
   - Purpose: When true the application will fail startup if required Key Vault secrets/keys are not accessible. Useful in production. If the app is failing on startup due to Key Vault, temporarily set this to `false` while you fix RBAC.
@@ -138,7 +136,6 @@ Azure Key Vault: required properties and permissions
 
 - Required runtime env / Spring properties (set as App Service app settings or CI secrets):
   - AZ_KEYVAULT_VAULT_URL (note: Spring property is `app.security.azure.keyvault.vault-url`)
-    - Example: `https://slowfall-keyvault-next.vault.azure.net/`
   - AZ_KEYVAULT_KEY_NAME (Spring property: app.security.azure.keyvault.key-name)
     - Example: `slowfall-sign-key`
     - (Optional) APP_SECURITY_AZURE_KEYVAULT_SECRET_NAME (Spring property: app.security.azure.keyvault.secret-name)
@@ -180,7 +177,6 @@ When `PSEUDO_AUTH_ENABLED=true` the CI will write the following runtime App Serv
   - `VITE_PSEUDO_USER=<PSEUDO_USER>`
   - `VITE_PSEUDO_PASS=<PSEUDO_PASS>`
   - `VITE_MSAL_CLIENT_ID=` (cleared so MSAL does not initialize)
-  - `VITE_MSAL_AUTHORITY=` (cleared)
 
 Frontend behavior:
 - The SPA includes a simple login UI (`BasicLogin`) shown when MSAL is not configured. Users may enter username and password which are stored in `localStorage` for that browser session.
@@ -199,3 +195,55 @@ After adding these secrets, trigger the CI workflow (push to `main` or use workf
 
 Security note
 - Treat `PSEUDO_PASS` as a secret. Only enable `PSEUDO_AUTH_ENABLED` for trusted test environments. Audit and rotate these values as needed.
+
+---
+
+<!-- Added: Quick parity instructions for enabling pseudo in production (Option A) -->
+
+## Enable pseudo parity in production (quick parity)
+
+If you want production to behave the same as the project's existing pseudo mode (pseudo is the source of truth), you can enable pseudo parity quickly using the CI-managed secrets and runtime app settings. This approach is fast but should be temporary — follow the deprecation checklist below when you no longer need pseudo parity.
+
+Required repository secrets (set in GitHub → Settings → Secrets → Actions):
+- `PSEUDO_AUTH_ENABLED=true`
+- `PSEUDO_USER` — pseudo username (treat as secret)
+- `PSEUDO_PASS` — pseudo password (treat as secret)
+
+What CI must write into App Service runtime settings (backend + frontend) during deploy:
+- Backend app settings (App Service -> Configuration -> Application settings):
+  - `SPRING_PROFILES_ACTIVE=pseudo`
+  - `app.security.dev-username=<PSEUDO_USER>`
+  - `app.security.dev-password=<PSEUDO_PASS>`
+  - `app.security.dev-bypass=false`
+  - `APP_SECURITY_ALLOWED_GROUP_ID` (unchanged if you use AAD group enforcement)
+  - `ALLOWED_ORIGINS` (set to your frontend origin(s), comma-separated)
+- Frontend runtime settings (written by CI to the App Service frontend container):
+  - `VITE_PSEUDO_AUTH=true`
+  - `VITE_PSEUDO_USER=<PSEUDO_USER>`
+  - `VITE_PSEUDO_PASS=<PSEUDO_PASS>`
+  - `VITE_MSAL_CLIENT_ID=` (clear)
+  - `VITE_MSAL_AUTHORITY=` (clear)
+
+How the frontend receives the values at runtime
+- The frontend container's `entrypoint.sh` already writes a `config.json` from environment variables into the built SPA. When CI writes `VITE_PSEUDO_*` into the frontend App Service app settings, the SPA will consume them at runtime without a rebuild.
+
+Quick gh CLI (example) to add the secrets:
+```bash
+gh secret set PSEUDO_AUTH_ENABLED --body "true"
+gh secret set PSEUDO_USER --body "<your-pseudo-user>"
+gh secret set PSEUDO_PASS --body "<your-pseudo-pass>"
+```
+
+Deprecation & operational checklist (do these after parity is verified):
+1. Add a date to the repo (Issue or PR) marking when pseudo parity will be removed and who owns the change.
+2. Rotate or remove `PSEUDO_*` secrets from GitHub once you switch to real auth (or set them to empty strings in CI to disable pseudo at deploy time).
+3. Update `README_ENV.md`, `README_CLOUD.md`, and `infra/DEPLOY.md` to remove the pseudo instructions when fully deprecated.
+4. Ensure any monitoring/alerts verify that production is using the expected `app.security.mode` or profile.
+
+Security & operational notes
+- Running pseudo mode in prod temporarily reduces auth assurance. Limit access, audit secrets, rotate `PSEUDO_PASS` regularly, and remove the mode as soon as real auth is available.
+- Prefer setting secrets in the GitHub repo with environment-scoped visibility and keep `PSEUDO_AUTH_ENABLED` required only for the deploy environment where parity is needed.
+
+If you want, I can also:
+- Inspect your CI workflow file (if present) and add or confirm the mapping from `PSEUDO_*` secrets into the exact App Service app settings.
+- Create a small smoke-test script that runs after deploy to verify pseudo login works (example: curl + basic auth to a protected endpoint) and add it to the release checklist.
