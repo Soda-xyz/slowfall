@@ -8,6 +8,7 @@ import prettierPlugin from "eslint-plugin-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import importPlugin from "eslint-plugin-import";
 import tsdocPlugin from "eslint-plugin-tsdoc";
+import jsdocPlugin from "eslint-plugin-jsdoc";
 import { defineConfig, globalIgnores } from "eslint/config";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -37,6 +38,7 @@ export default defineConfig([
 			"react-hooks": reactHooks,
 			import: importPlugin,
 			tsdoc: tsdocPlugin,
+			jsdoc: jsdocPlugin,
 		},
 		languageOptions: {
 			ecmaVersion: 2020,
@@ -80,9 +82,31 @@ export default defineConfig([
 			"@typescript-eslint/explicit-module-boundary-types": ["warn"],
 			// Validate TSDoc syntax (warn-level as requested)
 			"tsdoc/syntax": ["warn"],
-			// Disallow single-letter variable names in most contexts to improve readability.
-			// Allows common loop indices and error variables: e, E, i, j, k.
-			// This uses ESLint core rule `id-length` (https://eslint.org/docs/latest/rules/id-length).
+
+			// Require JSDoc/TSDoc presence for exported symbols (warn so we can triage)
+			"jsdoc/require-jsdoc": [
+				"warn",
+				{
+					"require": {
+						"FunctionDeclaration": true,
+						"MethodDefinition": false,
+						"ClassDeclaration": true,
+						"ArrowFunctionExpression": true,
+						"FunctionExpression": true
+					},
+					"contexts": [
+						"ExportNamedDeclaration > FunctionDeclaration",
+						"ExportDefaultDeclaration > FunctionDeclaration",
+						"ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > ArrowFunctionExpression",
+						"ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > FunctionExpression",
+						"ExportDefaultDeclaration > ArrowFunctionExpression",
+						"ExportNamedDeclaration > ClassDeclaration",
+						"ExportDefaultDeclaration > ClassDeclaration"
+					]
+				}
+			],
+			"jsdoc/require-description": "warn",
+			"jsdoc/check-tag-names": "warn",
 			"id-length": [
 				"warn",
 				{

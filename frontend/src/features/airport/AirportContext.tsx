@@ -67,8 +67,14 @@ export function useAirport(): AirportContextType {
 		return {
 			airports: [] as Airport[],
 			selectedAirportId: null,
+			/**
+			 * No-op setter used when AirportProvider is not present.
+			 */
 			setSelectedAirportId: () => {},
 			loading: false,
+			/**
+			 * No-op refresh used when AirportProvider is not present.
+			 */
 			refresh: async () => {},
 		} as AirportContextType;
 	}

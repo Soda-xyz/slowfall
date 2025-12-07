@@ -1,5 +1,5 @@
-import { Card, Container, createTheme, Paper, rem, Select } from "@mantine/core";
-import type { MantineThemeOverride } from "@mantine/core";
+import { createTheme, rem } from "@mantine/core";
+import type { MantineThemeOverride, MantineTheme } from "@mantine/core";
 
 /**
  * Container size tokens used by the application's Mantine Container override.
@@ -74,42 +74,45 @@ export const mantineTheme: MantineThemeOverride = createTheme({
 	primaryColor: "brand",
 	primaryShade: 6,
 	components: {
-		Container: Container.extend({
-			vars: (_theme, { size, fluid }) => {
-				void _theme;
+		Container: {
+			/**
+			 * Inject Container-level CSS variables based on the configured `size` prop.
+			 */
+			vars: (theme: MantineTheme, { size, fluid }: { size?: string | number; fluid?: boolean }) => {
+				void theme;
 				return {
 					root: {
 						"--container-size": fluid
 							? "100%"
 							: size !== undefined && size in CONTAINER_SIZES
-								? CONTAINER_SIZES[size]
-								: rem(size),
+							? CONTAINER_SIZES[size as string]
+							: rem(String(size)),
 					},
 				};
 			},
-		}),
-		Paper: Paper.extend({
+		},
+		Paper: {
 			defaultProps: {
 				p: "md",
 				shadow: "xl",
 				radius: "md",
 				withBorder: true,
 			},
-		}),
+		},
 
-		Card: Card.extend({
+		Card: {
 			defaultProps: {
 				p: "xl",
 				shadow: "xl",
 				radius: "var(--mantine-radius-default)",
 				withBorder: true,
 			},
-		}),
-		Select: Select.extend({
+		},
+		Select: {
 			defaultProps: {
 				checkIconPosition: "right",
 			},
-		}),
+		},
 	},
 	other: {
 		style: "mantine",

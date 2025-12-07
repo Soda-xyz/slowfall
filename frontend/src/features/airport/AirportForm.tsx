@@ -21,6 +21,9 @@ export default function AirportForm({ onCreated }: Props): React.JSX.Element {
 	const [icaoCode, setIcaoCode] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 
+	/**
+	 * Handle form submission: validate fields and call the createAirport API.
+	 */
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
 		const clientTimeZone = Intl?.DateTimeFormat?.()?.resolvedOptions?.()?.timeZone ?? "UTC";

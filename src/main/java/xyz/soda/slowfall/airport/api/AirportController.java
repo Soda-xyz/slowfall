@@ -12,11 +12,12 @@ import xyz.soda.slowfall.airport.domain.Airport;
 @RequestMapping("/api/airports")
 public class AirportController {
 
+    /**
+     * Note: CORS is handled globally by the application's CorsConfigurationSource
+     * and per-profile settings (see application-dev.properties). Remove per-controller
+     * {@code @CrossOrigin} to centralize CORS policy for dev vs. prod environments.
+     */
     private final AirportService service;
-
-    // Note: CORS is handled globally by the application's CorsConfigurationSource
-    // and per-profile settings (see application-dev.properties). Remove per-controller
-    // @CrossOrigin to centralize CORS policy for dev vs. prod environments.
 
     /**
      * Create a new AirportController.

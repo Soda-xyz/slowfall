@@ -13,6 +13,7 @@ import { fetchPilots } from "../person/api";
 import { fetchAirports } from "../airport/api";
 import { fetchCrafts } from "../craft/api";
 import { useAirport } from "../airport/AirportContext";
+import { logger } from "../../lib/log";
 
 type Props = {
 	/** Called when a jump is successfully created */
@@ -56,8 +57,8 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					pilotsList.map((pilot) => ({ value: String(pilot.id), label: pilot.name })),
 				);
 			})
-			.catch(() => {
-				// no-op
+			.catch((err) => {
+				logger.debug("JumpForm: fetchPilots failed:", err);
 			});
 		return () => {
 			mountedRef.current = false;
@@ -79,8 +80,8 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					prev ? prev : craftsList.length > 0 ? String(craftsList[0].registrationNumber) : "",
 				);
 			})
-			.catch(() => {
-				// no-op
+			.catch((err) => {
+				logger.debug("JumpForm: fetchCrafts failed:", err);
 			});
 		return () => {
 			mounted = false;
@@ -103,8 +104,8 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 						return airportsResponse.length > 0 ? String(airportsResponse[0].id) : prev;
 					});
 				})
-				.catch(() => {
-					// no-op
+				.catch((err) => {
+					logger.debug("JumpForm: fetchAirports failed:", err);
 				});
 		} else {
 			setSelectedAirportId(
@@ -120,6 +121,9 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 		};
 	}, [airports, airportId, globalAirportId]);
 
+	/**
+	 * Update the internal date state when the date input changes.
+	 */
 	const handleDateChange = (value: Date | string | null) => {
 		if (!value) {
 			setJumpDate(null);
@@ -129,18 +133,22 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 		setJumpDate(dayjs(dateObj).format("YYYY-MM-DD"));
 	};
 
+	/**
+	 * Update the internal time state when the TimePicker changes.
+	 */
 	const handleTimeChange = (timeValue: string | null) => {
 		setJumpTime(timeValue);
 	};
 
+	/**
+	 * Submit the form to create a Jump; validation, API call and notification flow.
+	 */
 	const handleSubmit = async (event: React.FormEvent) => {
 		event.preventDefault();
 		const airportToUse = airportId ?? selectedAirportId ?? globalAirportId;
-		// Ensure we have a craft selected; if state is empty, fall back to the first loaded craft option
 		const fallbackCraft =
 			craftRegistrationNumber || (craftsOptions.length > 0 ? craftsOptions[0].value : "");
 		if (fallbackCraft && fallbackCraft !== craftRegistrationNumber) {
-			// persist the fallback into state so the UI reflects it
 			setCraftRegistrationNumber(fallbackCraft);
 			console.debug("JumpForm: applied fallback craftRegistrationNumber:", fallbackCraft);
 		}
@@ -174,11 +182,8 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 			const created = await createJump(payload);
 			console.debug("JumpForm: created jump:", created);
 			notifications.show({ color: "green", title: "Jump created", message: "Jump scheduled" });
-			// reset to today's date so the DateInput remains populated by default
 			setJumpDate(dayjs().format("YYYY-MM-DD"));
-			// clear time and altitude for the next jump but keep the selected craft
 			setJumpTime(null);
-			// force remount of TimePicker so its internal input is reset visually
 			setTimeKey((prevKey) => prevKey + 1);
 			setAltitudeFeet("");
 			setPilotId(null);
@@ -194,15 +199,13 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 				}
 			}
 
-			// Broadcast a global event so other parts of the app can refresh their data
 			try {
 				console.debug("JumpForm: dispatching global jumpCreated event", created);
-				// bubbles & composed help the event reach listeners across shadow DOM boundaries
 				window?.dispatchEvent(
 					new CustomEvent("jumpCreated", { detail: created, bubbles: true, composed: true }),
 				);
-			} catch {
-				// no-op (non-browser/test environments)
+			} catch (err) {
+				logger.debug("JumpForm: failed to dispatch jumpCreated event:", err);
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to create jump";
@@ -247,9 +250,6 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 								<IconClock size={14} stroke={1.5} />
 							</ActionIcon>
 						}
-						/* Pass `jumpTime` directly (null when cleared). Mantine TimePicker treats
-						   null as an empty controlled value; using `undefined` can make it
-						   uncontrolled and retain the previous visual value. */
 						value={jumpTime ?? undefined}
 						onChange={(timeValue: string | null) => {
 							handleTimeChange(timeValue);
@@ -258,6 +258,11 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 						popoverProps={{
 							withinPortal: true,
 							opened: dropdownOpened,
+							/**
+							 * Popover onChange: close the dropdown when the popover is closed.
+							 * Mantine passes the `opened` boolean; when it becomes false we ensure
+							 * the local `dropdownOpened` state is cleared.
+							 */
 							onChange: (_opened) => !_opened && setDropdownOpened(false),
 						}}
 					/>
@@ -300,7 +305,7 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 					</Button>
 				</Group>
 			</Stack>
-			{/* debug: state after submit reset (use devtools or console elsewhere) */}
+			{}
 		</form>
 	);
 }

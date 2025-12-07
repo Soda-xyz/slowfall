@@ -28,6 +28,10 @@ export default function JumpPage(): React.JSX.Element {
 		mountedRef.current = true;
 		const controller = new AbortController();
 
+		/**
+		 * Fetch jumps, pilots, and skydivers and populate local state.
+		 * @param signal - optional AbortSignal to cancel the request
+		 */
 		const fetchAndSet = async (signal?: AbortSignal) => {
 			try {
 				const [jumpsData, pilotsData, skydiversData] = await Promise.all([
@@ -76,9 +80,11 @@ export default function JumpPage(): React.JSX.Element {
 		};
 	}, []);
 
-	// Listen for global jumpCreated events (dispatched by JumpForm after create)
 	useEffect(() => {
 		if (typeof window === "undefined") return;
+		/**
+		 * Handle global `jumpCreated` event by reloading all data.
+		 */
 		const handler = async (ev: Event) => {
 			const detail = (ev as CustomEvent).detail;
 			console.debug("JumpPage: received global jumpCreated event detail:", detail);
@@ -93,6 +99,9 @@ export default function JumpPage(): React.JSX.Element {
 		return () => window.removeEventListener("jumpCreated", handler as EventListener);
 	}, []);
 
+	/**
+	 * When a jump is created locally, add it to the list and refresh server data.
+	 */
 	const onCreated = async (createdJump: Jump) => {
 		console.debug("JumpPage: onCreated received:", createdJump);
 		setJumps((prev) => {
@@ -109,11 +118,17 @@ export default function JumpPage(): React.JSX.Element {
 		}
 	};
 
+	/**
+	 * Prepare UI to add a skydiver to the specified jump.
+	 */
 	const handleAddSkydiver = async (jumpId: string) => {
 		setTargetJumpId(jumpId);
 		setActionMode("skydiver");
 	};
 
+	/**
+	 * Submit the selected skydiver to be added to the target jump.
+	 */
 	const submitAddSkydiver = async () => {
 		if (!targetJumpId || !selectedPersonId) return;
 		try {
@@ -135,11 +150,17 @@ export default function JumpPage(): React.JSX.Element {
 		}
 	};
 
+	/**
+	 * Prepare UI to add a pilot to the specified jump.
+	 */
 	const handleAddPilot = async (jumpId: string) => {
 		setTargetJumpId(jumpId);
 		setActionMode("pilot");
 	};
 
+	/**
+	 * Submit the selected pilot to be added to the target jump.
+	 */
 	const submitAddPilot = async () => {
 		if (!targetJumpId || !selectedPersonId) return;
 		try {
