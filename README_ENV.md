@@ -57,7 +57,6 @@ IMPORTANT: OIDC-ONLY policy
 - This repository and CI are configured to use Azure AD OIDC (federated credential) for GitHub Actions. Do not rely on long-lived client secrets for automated CI deploys. The workflow uses `azure/login` with a federated credential; that is the required auth mechanism for deployments.
 
 Required secrets (must exist for CI to deploy)
-- AZURE_CLIENT_ID — Azure AD application (app registration) id that has a federated credential for this repository/branch (used by `azure/login`).
 - AZURE_TENANT_ID — Azure tenant id used for Azure login.
 - AZURE_SUBSCRIPTION_ID — Azure subscription id used by `az` operations.
 - AZURE_RG — Azure resource group where App Services and Key Vault exist (e.g., `slowfall-appservice-prod`).

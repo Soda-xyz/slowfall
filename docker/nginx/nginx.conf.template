@@ -1,3 +1,4 @@
+# nginx proxy template (concise comments)
 user  nginx;
 worker_processes  auto;
 error_log  /dev/stdout warn;
@@ -23,36 +24,27 @@ http {
     server_tokens off;
 
     upstream backend_upstream {
-        # Intentionally do not append a port here. When proxying over HTTPS,
-        # the default port 443 will be used. Avoiding an explicit port prevents
-        # attempts to contact the backend on a non-standard TLS port (e.g., 8080).
+        # Use hostname only; TLS default port (443) will be used
         server $BACKEND_HOST;
-        # Keepalive to reuse TCP/TLS connections to backend App Service and reduce connection setup overhead
+        # Reuse backend connections
         keepalive 16;
     }
-    # Tune default timeouts to be a bit more forgiving for occasional long-running requests
-    # These defaults can be overridden via environment variables if needed.
+
+    # Timeouts (can be overridden)
     proxy_connect_timeout 10s;
     proxy_send_timeout 120s;
     proxy_read_timeout 120s;
 
-    # Use Azure internal DNS resolver so nginx can resolve backend/frontends names at runtime when
-    # App Service IPs change due to restarts. 168.63.129.16 is the recommended VM DNS in Azure.
+    # Use Azure VM DNS so names resolve reliably in App Service
     resolver 168.63.129.16 valid=300s;
 
-    # Compute a reliable X-Forwarded-Proto for downstream upstreams. If the
-    # platform (Azure) already set X-Forwarded-Proto we prefer that value; if it
-    # is empty, fall back to $scheme. This handles TLS termination at the
-    # platform while keeping nginx config simple.
+    # Compute X-Forwarded-Proto: prefer existing header, otherwise $scheme
     map $http_x_forwarded_proto $xfp {
         "" $scheme;
         default $http_x_forwarded_proto;
     }
 
-    # FRONTEND_HOST is provided via environment/application settings and substituted into
-    # this template at container start (entrypoint.sh uses envsubst). It should be a
-    # resolvable host (for example: frontend-app.azurewebsites.net). If a port is
-    # required, include it in FRONTEND_HOST (for example: host:port).
+    # FRONTEND_HOST substituted at container start (entrypoint)
 
     server {
         listen 80;
@@ -63,19 +55,13 @@ http {
             return 200 'OK';
         }
 
-        # Azure App Service uses randomized probe paths like /robots12345.txt.
-        # Respond directly here with 200 so probes don't get proxied to the backend
-        # (which can cause timeouts and 499 logs during startup).
+        # Reply to Azure probe patterns directly
         location ~ ^/robots[0-9]+\.txt$ {
             access_log off;
             return 200 'OK';
         }
 
-        # --- STATIC ASSET LOCATION (proxy to frontend) ---
-        # Previously we attempted to serve hashed assets from the local image. That
-        # caused 404s (nginx returning HTML) when the container didn't contain the
-        # build artifacts. Instead, forward asset requests to the frontend upstream
-        # so the frontend App Service delivers the correct files.
+        # Static asset requests -> frontend upstream
         location ~* \.(?:css|js|json|xml|svg|png|jpg|jpeg|gif|ico)$ {
             proxy_pass https://$FRONTEND_HOST;
             proxy_http_version 1.1;
@@ -87,59 +73,35 @@ http {
             proxy_set_header X-Forwarded-Port $server_port;
             proxy_ssl_server_name on;
             proxy_redirect off;
-            # Rewrite Set-Cookie Domain from the frontend upstream to the public host
+            # Map the frontend cookie domain to the public host
             proxy_cookie_domain $FRONTEND_HOST $host;
-            # Allow the frontend to set caching headers; don't override cache-control
             proxy_read_timeout $PROXY_READ_TIMEOUT;
             proxy_send_timeout $PROXY_SEND_TIMEOUT;
             proxy_set_header Connection "";
         }
 
-        # --- STRONG-FALLBACK: FORCE PROXY FOR ALL NON-ASSET ROOT REQUESTS ---
-        # Replace previous 'root /usr/share/nginx/html; try_files $uri $uri/ @proxy;' behavior
-        # with an explicit proxy to FRONTEND_HOST. This prevents accidental serving of
-        # any local index.html from the proxy image and ensures consistent routing to
-        # the upstream frontend host configured via FRONTEND_HOST.
+        # Force proxy to frontend for all non-asset root requests
         location / {
-            # Use HTTPS to contact the frontend app (frontend App Service enforces TLS).
             proxy_pass https://$FRONTEND_HOST;
             proxy_http_version 1.1;
-
-            # IMPORTANT: pass the frontend's hostname as Host to the upstream so the
-            # frontend does not see the client's public host (www.oskarnilsson.net) and
-            # therefore will not issue canonical redirects back to that host.
             proxy_set_header Host $FRONTEND_HOST;
-
-            # Preserve original client info in forwarded headers
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            # Keep this to let upstream know the original scheme as seen by the client
             proxy_set_header X-Forwarded-Proto $xfp;
-            # Also forward the original host in a separate header if upstream needs it
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
-
-            # Enable TLS SNI for upstream when proxying to https://$FRONTEND_HOST
             proxy_ssl_server_name on;
-
-            # Avoid nginx rewriting upstream Location headers; upstream should return
-            # its own canonical URLs (we already set Host to the upstream hostname).
             proxy_redirect off;
             proxy_read_timeout $PROXY_READ_TIMEOUT;
             proxy_send_timeout $PROXY_SEND_TIMEOUT;
             proxy_set_header Connection "";
         }
 
-        # API proxying unchanged
+        # API proxy to backend (HTTPS, dynamic resolve)
         location /api/ {
-            # Proxy API traffic to the backend App Service over HTTPS using the configured BACKEND_HOST
-            # Resolve backend hostname dynamically per-request (avoids stale IPs if App Service restarts)
-            # Do not append an explicit port so the default TLS port (443) is used when HTTPS is required.
             proxy_pass https://$BACKEND_HOST;
             proxy_http_version 1.1;
-            # Present the backend's hostname as the Host header so the backend responds with correct absolute redirects
             proxy_set_header Host $BACKEND_HOST;
-            # Enable TLS SNI for the upstream and ensure the TLS name is the backend host
             proxy_ssl_server_name on;
             proxy_ssl_name $BACKEND_HOST;
             proxy_set_header X-Real-IP $remote_addr;
@@ -147,10 +109,8 @@ http {
             proxy_set_header X-Forwarded-Proto $xfp;
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Port $server_port;
-            # Forward cookies and any Authorization header from the client to the backend
             proxy_set_header Cookie $http_cookie;
             proxy_set_header Authorization $http_authorization;
-            # Rewrite Set-Cookie Domain from the backend upstream so cookies become valid for the public host
             proxy_cookie_domain $BACKEND_HOST $host;
             proxy_redirect off;
             proxy_read_timeout $PROXY_READ_TIMEOUT;
