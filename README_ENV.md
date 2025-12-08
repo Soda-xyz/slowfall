@@ -9,6 +9,41 @@ operators remain consistent.
 
 ---
 
+Local Docker (3 containers)
+
+Use the provided Docker Compose and example env file to run the backend, frontend, and optional proxy locally.
+
+1. Copy the example env file and edit values (do not commit secrets):
+
+   cp docker/.env.local docker/.env
+
+2. From the repository root start the three containers (build images first):
+
+   docker compose -f docker/docker-compose.yml --env-file docker/.env up --build
+
+3. Access the services in your browser:
+   - Frontend SPA: http://localhost/
+   - Backend (health): http://localhost:8080/actuator/health
+
+Example env vars used when running locally (keys and descriptions):
+
+- SPRING_PROFILES_ACTIVE — Spring profile used by the backend container (default `dev` in compose)
+- PORT — Backend port (Dockerfile default `8080`)
+- JAVA_OPTS — JVM options passed to the java process (optional override)
+- AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET — Optional service-principal credentials for Key Vault when running locally; leave empty to use DefaultAzureCredential (az cli creds)
+- VITE_API_BASE_URL — Frontend runtime API base URL used by the SPA (for example `http://backend:8080/api` when using Docker Compose)
+- VITE_PSEUDO_AUTH, VITE_PSEUDO_USER, VITE_PSEUDO_PASS — Frontend pseudo-auth runtime values; useful for local dev
+- BACKEND_HOST — Used by proxy/nginx when running the optional proxy; typically `backend:8080` in Compose
+- CLIENT_MAX_BODY_SIZE, PROXY_READ_TIMEOUT, PROXY_SEND_TIMEOUT — Optional nginx tuning for the proxy
+
+The repository includes `docker/.env.local` as an example that you can copy to `docker/.env` and edit with local values.
+
+Security notes:
+- Do not commit secrets into the repo. Use a local-only `.env` file or your system's secret store.
+- When adding or renaming env vars that CI or infra rely on, update `README_ENV.md`, `README_CLOUD.md`, and `infra/DEPLOY.md` accordingly.
+
+---
+
 Recorded provision values
 
 NOTE: Provision values and any sensitive identifiers should not be stored in the repository. If you need to keep non-secret references for operational convenience, put them in a restricted location (for example `LocalFiles/` or an internal ops repo) and mark them clearly. Do not commit actual secrets or private credentials. Use Key Vault and GitHub Actions secrets for sensitive values.
