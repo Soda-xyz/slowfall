@@ -28,10 +28,6 @@ frontend/*.local
 # Build / IDE / CI output
 build/
 tmp/
-.gradle
-.gradle/
-.gradle/*
-gradle/wrapper/**/*
 test-results/
 reports/
 coverage/
