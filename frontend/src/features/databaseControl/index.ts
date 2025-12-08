@@ -1,5 +1,6 @@
 export * from "../person";
 export * from "../airport";
+export * from "../craft";
 
 /**
  * Database control feature exports
