@@ -26,3 +26,4 @@ Notes about CI / builds / Docker (current)
 
 See `README_ENV.md` and `README_CLOUD.md` for environment, secret, and deployment instructions.
 
+Note: `README_ENV.md` documents CI secrets used by the workflow (for example `DEPLOY_ENV`, `PSEUDO_AUTH_ENABLED`, `PSEUDO_USER`, `PSEUDO_PASS`) and the frontend build-mode propagation used by the Docker build step.

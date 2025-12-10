@@ -282,3 +282,26 @@ Security & operational notes
 If you want, I can also:
 - Inspect your CI workflow file (if present) and add or confirm the mapping from `PSEUDO_*` secrets into the exact App Service app settings.
 - Create a small smoke-test script that runs after deploy to verify pseudo login works (example: curl + basic auth to a protected endpoint) and add it to the release checklist.
+
+---
+
+### CI behavior notes (recent changes)
+
+- DEPLOY_ENV (repository secret)
+  - Purpose: CI reads `DEPLOY_ENV` to determine the canonical runtime profile for deploys (for example `prod` or `dev`). The workflow sets `SPRING_PROFILES_ACTIVE` in the `docker-build-push` job from this secret when present.
+  - Note: GitHub does not expose repository secrets to workflows running from forked repositories or untrusted contexts. The workflow includes a branch-derived fallback that maps `refs/heads/main` -> `production`, otherwise `development` when `DEPLOY_ENV` is unavailable. If you require a strict behavior where `DEPLOY_ENV` must be present, consider removing the fallback and making the absence of the secret a hard error.
+
+- Frontend build mode propagation
+  - The `frontend-build-and-upload` job persists the chosen frontend build mode as job outputs (`vite_frontend_env` and `vite_api_base_url`). Downstream jobs (for example `docker-build-push`) prefer this job output over other sources to ensure the Docker images and App Service settings use the exact same frontend build mode.
+  - If you change how frontend build modes are chosen (for example adding more modes), update both the workflow and this README to keep the mapping consistent.
+
+- Job ordering: docker image build and push
+  - The CI workflow now makes `docker-build-push` depend on `frontend-build-and-upload` so image builds and pushes occur only after successful frontend and backend builds. This avoids races and guarantees the frontend artifact used for image build/push matches the built artifact uploaded by the frontend job.
+
+- Pseudo/auth secrets reminder
+  - `PSEUDO_AUTH_ENABLED`, `PSEUDO_USER`, `PSEUDO_PASS` are still valid repository secrets used by CI when you want to enable pseudo mode at deploy time (CI writes app settings when `PSEUDO_AUTH_ENABLED=true`). See the "Pseudo / Basic auth (testing-only)" section above for examples and security notes.
+
+- Where to update documentation when changing env names or secrets
+  - `README_ENV.md` (this file)
+  - `README_CLOUD.md`
+  - `infra/DEPLOY.md`

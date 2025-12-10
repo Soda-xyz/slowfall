@@ -78,9 +78,14 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
       - name: Build & test backend (production profile)
+        # Run tests first without forcing production profile so test resources and H2 (dev) settings apply
+        run: ./gradlew --no-daemon clean test
+        shell: bash
+
+      - name: Build backend artifact (production profile)
         env:
           SPRING_PROFILES_ACTIVE: prod
-        run: ./gradlew --no-daemon clean build
+        run: ./gradlew --no-daemon assemble
         shell: bash
 
   frontend-build-and-upload:

@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import xyz.soda.slowfall.airport.domain.Airport;
 import xyz.soda.slowfall.airport.infra.AirportRepository;
 import xyz.soda.slowfall.craft.domain.Craft;
@@ -20,6 +21,7 @@ import xyz.soda.slowfall.person.infra.PersonRepository;
  * insertion is guarded by repository counts.</p>
  */
 @Configuration
+@Profile("!prod")
 public class DataSeeder {
 
     /**
