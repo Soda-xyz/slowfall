@@ -9,6 +9,17 @@ on:
 
 permissions:
   contents: read
+  packages: write
+  id-token: write
+
+env:
+  # Use Azure Container Registry (ACR) as the image registry. The CI expects these secrets to be set:
+  # - ACR_NAME: name of the ACR (short name, e.g. slowfallacr)
+  # - ACR_LOGIN_SERVER: login server of the ACR (e.g. slowfallacr.azurecr.io)
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+  ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+  VITE_API_BASE_URL: ""
+  PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED }}
 
 jobs:
   lint:
@@ -94,8 +105,60 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
-      - name: Build frontend (production)
-        run: npm --prefix frontend run build -- --mode production
+      - name: Lint frontend
+        run: npm --prefix frontend run lint --if-present
+
+      - name: Test frontend
+        run: npm --prefix frontend run test --if-present
+
+      - name: Build frontend
+        env:
+          VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env }}
+        run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
+        # Persist the chosen frontend build mode so downstream jobs use the same mode
+        continue-on-error: false
+      - name: Persist frontend build mode for downstream jobs
+        if: always()
+        run: |
+          set -euo pipefail
+          FRONT_INPUT="${{ github.event.inputs.frontend_env || '' }}"
+          if [ -z "$FRONT_INPUT" ]; then
+            echo "ERROR: workflow input 'frontend_env' is not set; refusing to use a fallback" >&2
+            exit 1
+          fi
+          echo "VITE_FRONTEND_ENV=$FRONT_INPUT" >> "$GITHUB_ENV"
+          if [ "$FRONT_INPUT" = "development" ]; then
+            echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
+          else
+            echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
+          fi
+          # Export job outputs for downstream jobs to avoid relying on job-level env inheritance
+          echo "vite_frontend_env=$FRONT_INPUT" >> "$GITHUB_OUTPUT"
+          if [ "$FRONT_INPUT" = "development" ]; then
+            echo "vite_api_base_url=http://localhost:8080" >> "$GITHUB_OUTPUT"
+          else
+            echo "vite_api_base_url=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install brotli (for asset checks)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y brotli
+
+      - name: 'CI assertion: ensure frontend build didn''t bake /api/api'
+        run: |
+          set -euo pipefail
+          found=0
+          if ls frontend/dist/*.js frontend/dist/**/*.js >/dev/null 2>&1; then
+            if grep -R --line-number --binary-files=without-match "/api/api" frontend/dist/*.js frontend/dist/**/*.js 2>/dev/null; then
+              echo "ERROR: '/api/api' found in built assets"
+              found=1
+            fi
+          fi
+          if [ "$found" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
@@ -139,6 +202,42 @@ jobs:
           az acr login --name "$ACR_NAME"
         shell: bash
 
+      - name: Validate and persist frontend mode (no fallbacks)
+        id: validate_frontend_mode
+        run: |
+          set -euo pipefail
+          # Prefer explicit workflow input if provided; otherwise rely on SPRING_PROFILES_ACTIVE (which is required above)
+          FRONT_INPUT="${{ github.event.inputs.frontend_env || '' }}"
+          if [ -n "$FRONT_INPUT" ]; then
+            CHOSEN="$FRONT_INPUT"
+          else
+            if [ -z "${SPRING_PROFILES_ACTIVE:-}" ]; then
+              echo "ERROR: SPRING_PROFILES_ACTIVE is not set; cannot determine frontend env" >&2
+              exit 1
+            fi
+            case "${SPRING_PROFILES_ACTIVE}" in
+              prod|production)
+                CHOSEN="production"
+                ;;
+              dev|development)
+                CHOSEN="development"
+                ;;
+              *)
+                # For any other profile, require explicit workflow input to avoid accidental deploys
+                echo "ERROR: SPRING_PROFILES_ACTIVE='${SPRING_PROFILES_ACTIVE}' is not a known mapping; please provide explicit workflow input 'frontend_env'" >&2
+                exit 1
+                ;;
+            esac
+          fi
+          echo "VITE_FRONTEND_ENV=$CHOSEN" >> "$GITHUB_ENV"
+          if [ "$CHOSEN" = "development" ]; then
+            echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
+          else
+            echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
+          fi
+          echo "chosen_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
+          echo "Selected frontend env: $CHOSEN"
+
       - name: Build & push backend image
         uses: docker/build-push-action@v4
         with:
@@ -157,9 +256,9 @@ jobs:
           push: true
           tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-frontend:${{ github.sha }}
           build-args: |
-            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILES_ACTIVE == 'prod' && 'production' || env.SPRING_PROFILES_ACTIVE) }}
-            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILES_ACTIVE == 'dev' && 'http://localhost:8080' || '') }}
-            BACKEND_HOST=${{ env.BACKEND_HOST }}
+            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV }}
+            VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
+             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: Capture frontend image digest for immutable deploy reference
         id: capture_frontend_digest
@@ -403,9 +502,11 @@ jobs:
           SETTINGS+=("PROXY_READ_TIMEOUT=90s")
           SETTINGS+=("PROXY_SEND_TIMEOUT=90s")
           SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
+          SETTINGS+=("AZ_KEYVAULT_KEY_NAME=${{ secrets.AZ_KEYVAULT_KEY_NAME }}")
 
-
-
+          # Apply settings to the proxy app service
+          set -euo pipefail
+          echo "Setting proxy app settings: ${SETTINGS[*]}"
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Write backend app settings (pseudo mode)
