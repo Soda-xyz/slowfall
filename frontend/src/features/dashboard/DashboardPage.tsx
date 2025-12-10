@@ -94,7 +94,12 @@ export default function DashboardPage(): React.JSX.Element {
 				<JumpTable jumps={jumps} pilots={pilots} skydivers={skydivers} onRefresh={loadAll} />
 			</Card>
 			<Card>
-				<JumpPlanner />
+				<JumpPlanner
+					jumps={jumps}
+					pilots={pilots.map((p) => p.name)}
+					skydivers={skydivers.map((p) => p.name)}
+					onRefresh={loadAll}
+				/>
 			</Card>
 		</Stack>
 	);

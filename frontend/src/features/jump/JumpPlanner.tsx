@@ -1,5 +1,5 @@
 // frontend/src/features/jump/JumpPlanner.tsx
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {ActionIcon, Box, Text, useCombobox, Combobox, Group, Stack, Card} from '@mantine/core';
 import {IconParachute, IconParkingCircle, IconRefresh} from '@tabler/icons-react';
 import type {Jump} from './types';
@@ -16,20 +16,30 @@ export default function JumpPlanner({jumps, pilots, skydivers, people, onRefresh
 	// If a combined people list is provided, prefer that for both pilot and skydiver options.
 	const combined = people ?? [];
 
-	// Fallback sample data if API data not provided yet
-	const defaultPilots = ['Pilot A', 'Pilot B', 'Pilot C'];
-	const defaultSkydivers = [
-		'Skydiver 1',
-		'Skydiver 2',
-		'Skydiver 3',
-		'Skydiver 4',
-		'Skydiver 5',
-		'Skydiver 6',
-	];
+	// Use combined list if present, otherwise prefer next upcoming jump data, otherwise props lists, otherwise empty.
+	const getNextJump = (): Jump | null => {
+		if (!jumps || jumps.length === 0) return null;
+		const now = Date.now();
+		const sorted = [...jumps].sort((a, b) => new Date(a.jumpTime).getTime() - new Date(b.jumpTime).getTime());
+		return sorted.find((j) => new Date(j.jumpTime).getTime() > now) ?? sorted[0] ?? null;
+	};
 
-	// Use combined list if present, otherwise the specific lists, otherwise defaults.
-	const pilotList = combined.length > 0 ? combined : pilots ?? defaultPilots;
-	const skydiverList = combined.length > 0 ? combined : skydivers ?? defaultSkydivers;
+	const nextJump = getNextJump();
+
+	const toName = (p: any): string => {
+		if (!p) return '';
+		if (typeof p === 'string') return p;
+		if (typeof p === 'object' && (p.name || p.id)) return String(p.name ?? p.id ?? '');
+		return String(p);
+	};
+
+	const pilotList = combined.length > 0
+		? combined
+		: (nextJump?.pilots?.map(toName) ?? pilots ?? []);
+
+	const skydiverList = combined.length > 0
+		? combined
+		: (nextJump?.skydivers?.map(toName) ?? skydivers ?? []);
 
 	const [selectedPilots, setSelectedPilots] = useState<(string | null)[]>([null, null]);
 	const [selectedSkydivers, setSelectedSkydivers] = useState<{ left: (string | null)[]; right: (string | null)[] }>({
@@ -69,18 +79,30 @@ export default function JumpPlanner({jumps, pilots, skydivers, people, onRefresh
 		});
 	}
 
-	if (jumps && jumps.length === 0) return <Text>No upcoming jumps</Text>;
+	// When mounts or when `jumps` updates (for example after refresh), populate slots from next jump if present
+	useEffect(() => {
+		const nj = getNextJump();
+		if (!nj) return;
+		// populate pilots (if present on the jump)
+		const psrc = (nj.pilots ?? []).map(toName);
+		setSelectedPilots([psrc[0] ?? null, psrc[1] ?? null]);
+		// populate skydivers - try to split into left and right evenly if possible
+		const ssrc = (nj.skydivers ?? []).map(toName);
+		const left = Array(3).fill(null);
+		const right = Array(3).fill(null);
+		for (let i = 0; i < Math.min(3, ssrc.length); i++) left[i] = ssrc[i] ?? null;
+		for (let i = 3; i < Math.min(6, ssrc.length); i++) right[i - 3] = ssrc[i] ?? null;
+		setSelectedSkydivers({ left, right });
+	}, [jumps]);
 
 	function ComboboxField({
-				   onChange,
-				   options,
-				   placeholder,
-				   icon,
-				}: {
+		onChange,
+		options,
+		icon,
+	}: {
 		value: string | null;
 		onChange: (v: string) => void;
 		options: string[];
-		placeholder?: string;
 		icon?: React.ReactNode;
 	}) {
 		const store = useCombobox();
@@ -102,10 +124,9 @@ export default function JumpPlanner({jumps, pilots, skydivers, people, onRefresh
 						variant="light"
 						size="lg"
 						onClick={() => {
-							store.toggleDropdown();
+						store.toggleDropdown();
 						}}
-						aria-label={placeholder ?? 'open'}
-						title={placeholder}
+						aria-label={'open'}
 					>
 						{icon}
 					</ActionIcon>
@@ -158,64 +179,50 @@ export default function JumpPlanner({jumps, pilots, skydivers, people, onRefresh
 								value={selectedPilots[idx]}
 								onChange={(v) => setPilotAtUnique(idx, v)}
 								options={pilotList}
-								placeholder={`Pilot ${idx + 1}`}
 								icon={<IconParkingCircle size={18} />}
 							/>
 							<Text size="sm">
-								{selectedPilots[idx] ?? 'None'}
+								{selectedPilots[idx] || ''}
 							</Text>
 						</Box>
 					))}
 				</Group>
 				<Group>
 					<Stack>
-						<Text mt="lg" mb="xs">
-							Skydivers
-						</Text>
+						<Text mt="lg" mb="xs">Skydivers</Text>
 						<Group>
 							<Group>
 								<Box mt="xs">
-									<Text mt="lg" mb="xs">
-										Left
-									</Text>
+									<Text mt="lg" mb="xs">Left</Text>
 									{Array.from({length: 3}).map((_, idx) => (
 										<Group key={`sky-left-${idx}`}>
 											<ComboboxField
 												value={selectedSkydivers.left[idx]}
 												onChange={(v) => setSkydiverAtUnique('left', idx, v)}
 												options={skydiverList}
-												placeholder={`Skydiver ${idx + 1}`}
 												icon={<IconParachute size={16}/>}
 
 											/>
-											<Text size="sm">
-												{selectedSkydivers.left[idx] ?? 'None'}
-											</Text>
+											<Text size="sm">{selectedSkydivers.left[idx] || ''}</Text>
 										</Group>
 									))}
 								</Box>
 							</Group>
 							<Group>
 								<Box mt="xs">
-									<Text mt="lg" mb="xs">
-										Right
-									</Text>
+									<Text mt="lg" mb="xs">Right</Text>
 									{Array.from({length: 3}).map((_, idx) => (
 										<Group key={`sky-right-${idx}`}>
 											<ComboboxField
 												value={selectedSkydivers.right[idx]}
 												onChange={(v) => setSkydiverAtUnique('right', idx, v)}
 												options={skydiverList}
-												placeholder={`Skydiver ${idx + 1}`}
 												icon={<IconParachute size={16}/>}
 											/>
-											<Text size="sm">
-												{selectedSkydivers.right[idx] ?? 'None'}
-											</Text>
+											<Text size="sm">{selectedSkydivers.right[idx] || ''}</Text>
 										</Group>
 									))}
 								</Box>
-
 							</Group>
 						</Group>
 					</Stack>
