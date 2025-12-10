@@ -336,22 +336,9 @@ jobs:
 
           # Use job env variables instead of inline expression evaluation
           #          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
-#          echo "Pseudo auth enabled: adding pseudo-related app settings"
-#          BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
-#          BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
-#          BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
-#          BACKEND_SETTINGS+=("app.security.dev-bypass=false")
-#
-#          FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
-#          FRONT_SETTINGS+=("VITE_PSEUDO_USER=${PSEUDO_USER}")
-#          FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${PSEUDO_PASS}")
-#          FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
-#          FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
-#          fi
-          # If pseudo auth is enabled in secrets, pass the credentials through as app settings
-          # Do NOT change SPRING_PROFILES_ACTIVE here — there is no pseudo runtime profile.
+
           if [ "${PSEUDO_AUTH_ENABLED:-}" = "true" ]; then
-            echo "Pseudo auth enabled: adding pseudo-related app settings"
+            echo "Pseudo auth enabled: "adding pseudo-related app settings"
             BACKEND_SETTINGS+=("PSEUDO_AUTH_ENABLED=true")
             BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
             BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
