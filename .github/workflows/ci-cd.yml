@@ -229,6 +229,25 @@ jobs:
           az acr login --name "$ACR_NAME"
         shell: bash
 
+      - name: Normalize owner for image tags
+        id: normalize_owner
+        run: |
+          set -euo pipefail
+          # Prefer explicit repository owner context; fall back to actor if unavailable
+          OWNER="${OWNER:-}"
+          if [ -z "$OWNER" ]; then
+            OWNER="${GITHUB_REPOSITORY_OWNER:-}"
+          fi
+          if [ -z "$OWNER" ]; then
+            OWNER="${GITHUB_ACTOR:-}"
+          fi
+          OWNER_LOWER="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "normalize_owner: owner=$OWNER owner_lower=$OWNER_LOWER"
+          echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
+          echo "owner_lower=$OWNER_LOWER" >> "$GITHUB_OUTPUT"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
       - name: Validate and persist frontend mode (no fallbacks)
         id: validate_frontend_mode
         run: |
@@ -326,8 +345,8 @@ jobs:
           file: docker/nginx/Dockerfile
           push: true
           platforms: linux/amd64
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:proxy-latest
+          # Use canonical ACR name and commit SHA for immutable tagging (no fallbacks)
+          tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-proxy:${{ github.sha }}
           build-args: |
             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
@@ -345,7 +364,8 @@ jobs:
       - name: Verify proxy image pushed
         run: |
           set -euo pipefail
-          IMAGE_LATEST="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:proxy-latest"
+          # Use the exact image tag pushed above (no fallbacks)
+          IMAGE_LATEST="${{ secrets.ACR_NAME }}.azurecr.io/slowfall-proxy:${{ github.sha }}"
           echo "Verifying pushed image: $IMAGE_LATEST"
           docker pull "$IMAGE_LATEST"
           docker image inspect "$IMAGE_LATEST" >/dev/null
