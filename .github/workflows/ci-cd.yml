@@ -246,9 +246,9 @@ jobs:
           push: true
           tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-frontend:${{ github.sha }}
           build-args: |
-            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV }}
-            VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
-             BACKEND_HOST=${{ env.BACKEND_HOST }}
+            VITE_FRONTEND_ENV=${{ steps.validate_frontend_mode.outputs.vite_frontend_env }}
+            VITE_API_BASE_URL=${{ steps.validate_frontend_mode.outputs.vite_api_base_url }}
+            BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: Capture frontend image digest for immutable deploy reference
         id: capture_frontend_digest
@@ -338,7 +338,7 @@ jobs:
           #          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
 
           if [ "${PSEUDO_AUTH_ENABLED:-}" = "true" ]; then
-            echo "Pseudo auth enabled: "adding pseudo-related app settings"
+            echo "Pseudo auth enabled: adding pseudo-related app settings"
             BACKEND_SETTINGS+=("PSEUDO_AUTH_ENABLED=true")
             BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
             BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")

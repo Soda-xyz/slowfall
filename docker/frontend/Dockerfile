@@ -3,7 +3,7 @@
 # Seperation of concerns!!!
 
 # Stage 1: build the frontend with Node
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 # Build args to control Vite mode and API URL
 ARG VITE_FRONTEND_ENV=production
@@ -18,7 +18,7 @@ RUN printf 'VITE_API_BASE_URL=%s\nVITE_FRONTEND_ENV=%s\n' "${VITE_API_BASE_URL}"
 # Deterministic install when lockfile exists
 RUN npm ci --silent
 # Build with requested Vite mode
-RUN npm run build -- --mode ${VITE_FRONTEND_ENV}
+RUN npm run build -- --mode "${VITE_FRONTEND_ENV:-production}"
 
 # Stage 2: serve with nginx
 FROM nginx:stable-alpine AS runtime
