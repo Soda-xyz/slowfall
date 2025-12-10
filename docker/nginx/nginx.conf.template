@@ -47,7 +47,7 @@ http {
     # FRONTEND_HOST substituted at container start (entrypoint)
 
     server {
-        listen 80;
+        listen 80ww;
         server_name _;
 
         location = /healthz {
