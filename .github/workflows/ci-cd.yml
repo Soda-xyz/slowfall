@@ -106,7 +106,18 @@ jobs:
   docker-build-push:
     name: Build and push Docker images to ACR
     runs-on: ubuntu-latest
-    needs: [backend-build-test, frontend-build-and-upload]
+    if: github.ref == 'refs/heads/main'
+    env:
+      PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED}}
+      PSEUDO_USER: ${{ secrets.PSEUDO_USER}}
+      PSEUDO_PASS: ${{ secrets.PSEUDO_PASS}}
+    outputs:
+      owner: ${{ steps.normalize_owner.outputs.owner }}
+      owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
+      spring_profiles_active: ${{ steps.compute_spring_profile.outputs.spring_profiles_active }}
+      frontend_digest: ${{ steps.capture_frontend_digest.outputs.frontend_digest }}
+      proxy_digest: ${{ steps.capture_proxy_digest.outputs.proxy_digest }}
+      backend_digest: ${{ steps.capture_backend_digest.outputs.backend_digest }}
 
     steps:
       - name: Checkout
@@ -146,8 +157,256 @@ jobs:
           push: true
           tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-frontend:${{ github.sha }}
           build-args: |
-            VITE_FRONTEND_ENV=production
-            VITE_API_BASE_URL=
+            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILES_ACTIVE == 'prod' && 'production' || env.SPRING_PROFILES_ACTIVE) }}
+            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILES_ACTIVE == 'dev' && 'http://localhost:8080' || '') }}
+            BACKEND_HOST=${{ env.BACKEND_HOST }}
+
+      - name: Capture frontend image digest for immutable deploy reference
+        id: capture_frontend_digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build_frontend.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: frontend build did not produce a digest output"
+            exit 1
+          fi
+          echo "frontend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push proxy image
+        id: build_proxy
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:proxy-latest
+          build-args: |
+            BACKEND_HOST=${{ env.BACKEND_HOST }}
+
+      - name: Capture proxy image digest for immutable deploy reference
+        id: capture_proxy_digest
+        run: |
+          set -euo pipefail
+          DIGEST="${{ steps.build_proxy.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: proxy build did not produce a digest output"
+            exit 1
+          fi
+          echo "proxy_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Verify proxy image pushed
+        run: |
+          set -euo pipefail
+          IMAGE_LATEST="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:proxy-latest"
+          echo "Verifying pushed image: $IMAGE_LATEST"
+          docker pull "$IMAGE_LATEST"
+          docker image inspect "$IMAGE_LATEST" >/dev/null
+          echo "Proxy image verified: $IMAGE_LATEST"
+
+      - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
+        run: |
+          set -euo pipefail
+          SETTINGS=()
+          if [ -n "${SPRING_PROFILES_ACTIVE:-}" ]; then
+          SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}")
+          fi
+          SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
+
+          SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
+          SETTINGS+=("AZ_KEYVAULT_KEY_NAME=${{ secrets.AZ_KEYVAULT_KEY_NAME }}")
+
+          BACKEND_SETTINGS=("${SETTINGS[@]}")
+          FRONT_SETTINGS=("${SETTINGS[@]}")
+
+          _tmp_front=()
+          for s in "${FRONT_SETTINGS[@]}"; do
+          k="${s%%=*}"
+          if [ "$k" = "SPRING_PROFILES_ACTIVE" ]; then
+           echo "Skipping frontend write of SPRING_PROFILES_ACTIVE"
+           continue
+          fi
+          _tmp_front+=("$s")
+          done
+          FRONT_SETTINGS=("${_tmp_front[@]}")
+
+          # Use job env variables instead of inline expression evaluation
+          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
+          echo "Pseudo auth enabled: adding pseudo-related app settings"
+          BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
+          BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
+          BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
+          BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+
+          FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
+          FRONT_SETTINGS+=("VITE_PSEUDO_USER=${PSEUDO_USER}")
+          FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${PSEUDO_PASS}")
+          FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+          FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+          fi
+
+          # Optionally include a PORT setting if the secret APP_PORT is present
+          if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
+          BACKEND_SETTINGS+=("PORT=${{ secrets.APP_PORT }}")
+          fi
+
+          # Apply the settings to the backend and frontend app services
+          # Sanitize settings: only pass entries that contain an '=' character (valid key=value or key=)
+          FILTERED_BACKEND=()
+          FILTERED_FRONT=()
+          FILTERED_BACKEND_KEYS=()
+          FILTERED_FRONT_KEYS=()
+          for s in "${BACKEND_SETTINGS[@]}"; do
+            if [[ "$s" == *=* ]]; then
+              FILTERED_BACKEND+=("$s")
+              FILTERED_BACKEND_KEYS+=("${s%%=*}")
+            else
+              echo "Skipping invalid backend setting (no '=' found): $s" >&2
+            fi
+          done
+          for s in "${FRONT_SETTINGS[@]}"; do
+            if [[ "$s" == *=* ]]; then
+              FILTERED_FRONT+=("$s")
+              FILTERED_FRONT_KEYS+=("${s%%=*}")
+            else
+              echo "Skipping invalid frontend setting (no '=' found): $s" >&2
+            fi
+          done
+
+          # Deduplicate entries while preserving order so last occurrence wins.
+          # Build ordered key list and map for backend
+          declare -A BACK_MAP
+          declare -a BACK_ORDER
+          declare -a DELETE_BACK_KEYS
+          for s in "${FILTERED_BACKEND[@]}"; do
+            k="${s%%=*}"
+            v="${s#*=}"
+            # remove existing occurrence of k in BACK_ORDER if present (so we can append and preserve last-occurrence order)
+            for i in "${!BACK_ORDER[@]}"; do
+              if [ "${BACK_ORDER[$i]}" = "$k" ]; then
+                unset 'BACK_ORDER[$i]'
+                break
+              fi
+            done
+            # append key to order
+            BACK_ORDER+=("$k")
+            if [ -z "${v}" ]; then
+              DELETE_BACK_KEYS+=("$k")
+              unset BACK_MAP["$k"]
+            else
+              BACK_MAP["$k"]="$v"
+            fi
+          done
+          # Build FINAL_BACK using BACK_ORDER to preserve final order and avoid duplicates
+          declare -a FINAL_BACK
+          declare -a FINAL_BACK_KEYS
+          for k in "${BACK_ORDER[@]}"; do
+            # skip keys that were marked for deletion
+            if [ -z "${BACK_MAP[$k]+_}" ]; then
+              continue
+            fi
+            FINAL_BACK+=("${k}=${BACK_MAP[$k]}")
+            FINAL_BACK_KEYS+=("$k")
+          done
+
+          # Frontend: same logic
+          declare -A FRONT_MAP
+          declare -a FRONT_ORDER
+          declare -a DELETE_FRONT_KEYS
+          for s in "${FILTERED_FRONT[@]}"; do
+            k="${s%%=*}"
+            v="${s#*=}"
+            for i in "${!FRONT_ORDER[@]}"; do
+              if [ "${FRONT_ORDER[$i]}" = "$k" ]; then
+                unset 'FRONT_ORDER[$i]'
+                break
+              fi
+            done
+            FRONT_ORDER+=("$k")
+            if [ -z "${v}" ]; then
+              DELETE_FRONT_KEYS+=("$k")
+              unset FRONT_MAP["$k"]
+            else
+              FRONT_MAP["$k"]="$v"
+            fi
+          done
+          declare -a FINAL_FRONT
+          declare -a FINAL_FRONT_KEYS
+          for k in "${FRONT_ORDER[@]}"; do
+            if [ -z "${FRONT_MAP[$k]+_}" ]; then
+              continue
+            fi
+            FINAL_FRONT+=("${k}=${FRONT_MAP[$k]}")
+            FINAL_FRONT_KEYS+=("$k")
+          done
+
+          # Echo only the names of the final settings (avoid printing secret values)
+          echo "Applying backend app settings: ${FINAL_BACK_KEYS[*]}"
+          echo "Applying frontend app settings: ${FINAL_FRONT_KEYS[*]}"
+
+          # Apply non-empty settings per-key to isolate failures and provide clearer logs
+          if [ ${#FINAL_BACK[@]} -gt 0 ]; then
+            echo "Setting backend app settings one-by-one"
+            for entry in "${FINAL_BACK[@]}"; do
+              key="${entry%%=*}"
+              echo "Applying backend key: $key"
+              out=$(az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
+              rc=$?
+              if [ $rc -ne 0 ]; then
+                echo "ERROR: Failed to set backend setting for key: $key" >&2
+                echo "az output:" >&2
+                echo "$out" >&2
+                echo "Current backend app settings (keys only):" >&2
+                az webapp config appsettings list --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
+                exit $rc
+              fi
+            done
+          else
+            echo "No backend app settings to set"
+          fi
+
+          if [ ${#FINAL_FRONT[@]} -gt 0 ]; then
+            echo "Setting frontend app settings one-by-one"
+            for entry in "${FINAL_FRONT[@]}"; do
+              key="${entry%%=*}"
+              echo "Applying frontend key: $key"
+              out=$(az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
+              rc=$?
+              if [ $rc -ne 0 ]; then
+                echo "ERROR: Failed to set frontend setting for key: $key" >&2
+                echo "az output:" >&2
+                echo "$out" >&2
+                echo "Current frontend app settings (keys only):" >&2
+                az webapp config appsettings list --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
+                exit $rc
+              fi
+            done
+          else
+            echo "No frontend app settings to set"
+          fi
+
+
+      - name: Set app settings on proxy
+        run: |
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
+          if [ -n "${BACKEND_HOST:-}" ]; then
+            BACKEND_HOST_VAL="${BACKEND_HOST}"
+          else
+            BACKEND_HOST_VAL="${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net"
+          fi
+
+          # Build settings array and pass as separate args to avoid embedding comments or empty lines
+          SETTINGS=()
+          SETTINGS+=("BACKEND_HOST=${BACKEND_HOST_VAL}")
+          SETTINGS+=("CLIENT_MAX_BODY_SIZE=20m")
+          SETTINGS+=("PROXY_READ_TIMEOUT=90s")
+          SETTINGS+=("PROXY_SEND_TIMEOUT=90s")
+          SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
+
+
+
+          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Write backend app settings (pseudo mode)
         if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
