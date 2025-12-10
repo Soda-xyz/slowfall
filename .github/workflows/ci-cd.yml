@@ -87,6 +87,9 @@ jobs:
     name: Frontend Build & Upload
     runs-on: ubuntu-latest
     needs: backend-build-test
+    outputs:
+      vite_frontend_env: ${{ steps.persist_frontend_mode.outputs.vite_frontend_env }}
+      vite_api_base_url: ${{ steps.persist_frontend_mode.outputs.vite_api_base_url }}
 
     steps:
       - name: Checkout
@@ -115,6 +118,7 @@ jobs:
         # Persist the chosen frontend build mode so downstream jobs use the same mode
         continue-on-error: false
       - name: Persist frontend build mode for downstream jobs
+        id: persist_frontend_mode
         if: always()
         run: |
           set -euo pipefail
@@ -166,11 +170,15 @@ jobs:
   docker-build-push:
     name: Build and push Docker images to ACR
     runs-on: ubuntu-latest
+    needs: [frontend-build-and-upload]
     if: github.ref == 'refs/heads/main'
+    # Make SPRING_PROFILES_ACTIVE available in this job. The deploy environment is stored in the secret DEPLOY_ENV.
     env:
-      PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED}}
-      PSEUDO_USER: ${{ secrets.PSEUDO_USER}}
-      PSEUDO_PASS: ${{ secrets.PSEUDO_PASS}}
+      # Prefer the DEPLOY_ENV secret when present; if not (for example in forked PRs), derive from the branch.
+      SPRING_PROFILES_ACTIVE: ${{ secrets.DEPLOY_ENV && secrets.DEPLOY_ENV || (startsWith(github.ref, 'refs/heads/main') && 'production' || 'development') }}
+      PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED }}
+      PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
+      PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
     outputs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
@@ -203,8 +211,8 @@ jobs:
         id: validate_frontend_mode
         run: |
           set -euo pipefail
-          # Prefer explicit workflow input if provided; otherwise rely on SPRING_PROFILES_ACTIVE (which is required above)
-          FRONT_INPUT="${{ github.event.inputs.frontend_env || '' }}"
+          # Prefer workflow input, then the frontend job output (from needs), then fall back to the job-level SPRING_PROFILES_ACTIVE (from secret DEPLOY_ENV)
+          FRONT_INPUT="${{ github.event.inputs.frontend_env || needs.frontend-build-and-upload.outputs.vite_frontend_env || '' }}"
           if [ -n "$FRONT_INPUT" ]; then
             CHOSEN="$FRONT_INPUT"
           else
@@ -220,7 +228,6 @@ jobs:
                 CHOSEN="development"
                 ;;
               *)
-                # For any other profile, require explicit workflow input to avoid accidental deploys
                 echo "ERROR: SPRING_PROFILES_ACTIVE='${SPRING_PROFILES_ACTIVE}' is not a known mapping; please provide explicit workflow input 'frontend_env'" >&2
                 exit 1
                 ;;
@@ -231,6 +238,13 @@ jobs:
             echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
           else
             echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
+          fi
+          # Expose chosen env as this step output (used later for image build args)
+          echo "vite_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
+          if [ "$CHOSEN" = "development" ]; then
+            echo "vite_api_base_url=http://localhost:8080" >> "$GITHUB_OUTPUT"
+          else
+            echo "vite_api_base_url=" >> "$GITHUB_OUTPUT"
           fi
           echo "chosen_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
           echo "Selected frontend env: $CHOSEN"
