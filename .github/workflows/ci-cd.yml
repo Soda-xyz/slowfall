@@ -92,6 +92,9 @@ jobs:
     name: Frontend Build & Upload
     runs-on: ubuntu-latest
     needs: backend-build-test
+    env:
+      # Allow the job to read the CI deploy env (if present) so we can derive frontend mode when input is absent
+      SPRING_PROFILES_ACTIVE: ${{ secrets.DEPLOY_ENV }}
     outputs:
       vite_frontend_env: ${{ steps.persist_frontend_mode.outputs.vite_frontend_env }}
       vite_api_base_url: ${{ steps.persist_frontend_mode.outputs.vite_api_base_url }}
@@ -116,35 +119,49 @@ jobs:
       - name: Test frontend
         run: npm --prefix frontend run test --if-present
 
-      - name: Build frontend
-        env:
-          VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env }}
-        run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
-        # Persist the chosen frontend build mode so downstream jobs use the same mode
-        continue-on-error: false
-      - name: Persist frontend build mode for downstream jobs
+      - name: Determine frontend mode
         id: persist_frontend_mode
-        if: always()
         run: |
           set -euo pipefail
-          FRONT_INPUT="${{ github.event.inputs.frontend_env || '' }}"
+          # Prefer explicit workflow input, then DEPLOY_ENV from the job env
+          FRONT_INPUT="${{ github.event.inputs.frontend_env || env.SPRING_PROFILES_ACTIVE || '' }}"
           if [ -z "$FRONT_INPUT" ]; then
-            echo "ERROR: workflow input 'frontend_env' is not set; refusing to use a fallback" >&2
+            echo "ERROR: workflow input 'frontend_env' is not set and DEPLOY_ENV is not present; please provide explicit 'frontend_env' or set the DEPLOY_ENV secret" >&2
             exit 1
           fi
-          echo "VITE_FRONTEND_ENV=$FRONT_INPUT" >> "$GITHUB_ENV"
-          if [ "$FRONT_INPUT" = "development" ]; then
+          case "$FRONT_INPUT" in
+            prod)
+              CHOSEN="production"
+              ;;
+            dev)
+              CHOSEN="development"
+              ;;
+            production|development)
+              CHOSEN="$FRONT_INPUT"
+              ;;
+            *)
+              CHOSEN="$FRONT_INPUT"
+              ;;
+          esac
+          echo "VITE_FRONTEND_ENV=$CHOSEN" >> "$GITHUB_ENV"
+          if [ "$CHOSEN" = "development" ]; then
             echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
           else
             echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
           fi
-          # Export job outputs for downstream jobs to avoid relying on job-level env inheritance
-          echo "vite_frontend_env=$FRONT_INPUT" >> "$GITHUB_OUTPUT"
-          if [ "$FRONT_INPUT" = "development" ]; then
+          # Expose outputs for downstream jobs
+          echo "vite_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
+          if [ "$CHOSEN" = "development" ]; then
             echo "vite_api_base_url=http://localhost:8080" >> "$GITHUB_OUTPUT"
           else
             echo "vite_api_base_url=" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Build frontend
+        env:
+          VITE_FRONTEND_ENV: ${{ env.VITE_FRONTEND_ENV }}
+        run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
+        continue-on-error: false
 
       - name: Install brotli (for asset checks)
         if: runner.os == 'Linux'
@@ -179,8 +196,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     # Make SPRING_PROFILES_ACTIVE available in this job. The deploy environment is stored in the secret DEPLOY_ENV.
     env:
-      # Prefer the DEPLOY_ENV secret when present; if not (for example in forked PRs), derive from the branch.
-      SPRING_PROFILES_ACTIVE: ${{ secrets.DEPLOY_ENV && secrets.DEPLOY_ENV || (startsWith(github.ref, 'refs/heads/main') && 'production' || 'development') }}
+      # Use DEPLOY_ENV secret only; do not derive values from the branch automatically
+      SPRING_PROFILES_ACTIVE: ${{ secrets.DEPLOY_ENV }}
       PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED }}
       PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
       PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
