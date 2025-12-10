@@ -1,8 +1,12 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
 import { setToken, clearToken, subscribe, CHANNEL } from "./tokenStore";
+import { logger } from "./log";
 
 // Mock BroadcastChannel implementation for tests. Multiple instances with the same name
 // will deliver messages to each other's listeners via a shared registry.
+/**
+ *
+ */
 class MockBroadcastChannel {
 	static registry: Map<string, MockBroadcastChannel[]> = new Map();
 	name: string;
@@ -27,8 +31,8 @@ class MockBroadcastChannel {
 			if (typeof inst.onmessage === "function") {
 				try {
 					inst.onmessage({ data: msg });
-				} catch {
-					// ignore listener errors for tests
+				} catch (e) {
+					logger.debug("MockBroadcastChannel: listener threw error:", e);
 				}
 			}
 			// also deliver to listeners registered via addEventListener('message', cb)
@@ -36,8 +40,8 @@ class MockBroadcastChannel {
 			if (cb) {
 				try {
 					cb({ data: msg });
-				} catch {
-					// ignore
+				} catch (e) {
+					logger.debug("MockBroadcastChannel: listener event callback threw error:", e);
 				}
 			}
 		}

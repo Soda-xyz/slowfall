@@ -22,6 +22,9 @@ export default function PersonPage(): React.JSX.Element {
 		const controller = new AbortController();
 		let mounted = true;
 
+		/**
+		 * Load persons from the backend and update local state.
+		 */
 		async function load() {
 			setLoading(true);
 			try {
@@ -49,6 +52,9 @@ export default function PersonPage(): React.JSX.Element {
 		};
 	}, []);
 
+	/**
+	 * Append a newly created person to the local list.
+	 */
 	const onCreated = (person: Person) => setPerson((prev) => [...prev, person]);
 
 	const header = useMemo(

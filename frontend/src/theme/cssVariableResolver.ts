@@ -16,6 +16,10 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 
 	const colorsRecord = theme.colors as unknown as Record<string, readonly string[] | undefined>;
 
+	/**
+	 * Get a shade value from the theme palette by name and shade index.
+	 * Returns undefined when a palette or shade is not available.
+	 */
 	const getPaletteColor = (name: string | undefined, shade = 6): string | undefined => {
 		if (!name) return undefined;
 		const palette = colorsRecord[name];

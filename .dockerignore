@@ -1,18 +1,42 @@
-# Docker build context ignores for the repository root
-# Exclude build artifacts, local IDE files, and node_modules
-build/
-build/libs/
-.gradle/
-.gradle-cache/
-.idea/
-.git/
-/tmp/
-/out/
-dist/
-frontend/dist/
-node_modules/
-frontend/node_modules/
-*.log
-**/.DS_Store
-**/Thumbs.db
+# Repo-root .dockerignore — used when building with context '.'
+# Keep large, local, and sensitive files out of Docker build context
 
+.git
+.gitignore
+.github
+.env
+*.env
+**/.env*
+LocalFiles/
+node_modules
+**/node_modules
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/*.local
+*.local
+
+.vscode
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build / IDE / CI output
+build/
+tmp/
+test-results/
+reports/
+coverage/
+
+# Docker / container artifacts
+docker/frontend/nginx.conf.template
+
+# Optional: exclude package lock if you rebuild in CI (leave if you prefer caching)
+# frontend/package-lock.json
+
+# Keep dockerignore itself out of image
+.dockerignore

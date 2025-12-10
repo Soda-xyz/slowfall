@@ -31,6 +31,9 @@ describe("person api", () => {
 		mockFetch.mockImplementationOnce(() =>
 			Promise.resolve({
 				ok: true,
+				/**
+				 * Mocked JSON body returning paged content
+				 */
 				json: () => Promise.resolve({ content: pilots }),
 			} as unknown as Response),
 		);
@@ -65,7 +68,15 @@ describe("person api", () => {
 		);
 
 		mockFetch.mockImplementationOnce(() =>
-			Promise.resolve({ ok: true, json: () => Promise.resolve(all) } as unknown as Response),
+			Promise.resolve({
+				ok: true /**
+				 * Mocked fallback response body
+				 */,
+				/**
+				 * Mocked fallback JSON returning all persons
+				 */
+				json: () => Promise.resolve(all),
+			} as unknown as Response),
 		);
 
 		const res = await fetchPilots();

@@ -24,6 +24,9 @@ export default function PersonForm({ onCreated }: Props): React.JSX.Element {
 	const [email, setEmail] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 
+	/**
+	 * Handle form submit: validate inputs, call createPerson API, and notify on result.
+	 */
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (weight === "" || Number.isNaN(Number(weight))) {

@@ -9,16 +9,44 @@ operators remain consistent.
 
 ---
 
-Recorded provision values (non-secret)
-- BACKEND_APP_ID=628940e9-8851-4a41-a023-ca8183a04263
-- FRONTEND_APP_ID=ce0f64ea-3635-4be7-ad93-7954f04cfa83
-- Key Vault secret (credentials) name: `slowfall-backend-client-secret`
-- Key Vault URI (example): `https://slowfall-keyvault-next.vault.azure.net/`
-- Public proxy domain (frontend): `https://www.oskarnilsson.net` (set as `ALLOWED_ORIGINS` for CORS)
-- AAD group for web users (GUID): `SLOWFALL_WEB_USERS_GROUP_ID=1dea5e51-d15e-4081-9722-46da3bfdee79`
-- Test user (member account, non-secret record): `kisse@Sodezangmail.onmicrosoft.com` (created for testing only)
+Local Docker (3 containers)
 
-Note: Do NOT store raw secret values in the repository. Store secret names, appIds, Key Vault URIs and group ids here as a reference; actual secret values should remain in Key Vault or GitHub Actions secrets.
+Use the provided Docker Compose and example env file to run the backend, frontend, and optional proxy locally.
+
+1. Copy the example env file and edit values (do not commit secrets):
+
+   cp docker/.env.local docker/.env
+
+2. From the repository root start the three containers (build images first):
+
+   docker compose -f docker/docker-compose.yml --env-file docker/.env up --build
+
+3. Access the services in your browser:
+   - Frontend SPA: http://localhost/
+   - Backend (health): http://localhost:8080/actuator/health
+
+Example env vars used when running locally (keys and descriptions):
+
+- SPRING_PROFILES_ACTIVE — Spring profile used by the backend container (default `dev` in compose)
+- PORT — Backend port (Dockerfile default `8080`)
+- JAVA_OPTS — JVM options passed to the java process (optional override)
+- AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET — Optional service-principal credentials for Key Vault when running locally; leave empty to use DefaultAzureCredential (az cli creds)
+- VITE_API_BASE_URL — Frontend runtime API base URL used by the SPA (for example `http://backend:8080/api` when using Docker Compose)
+- VITE_PSEUDO_AUTH, VITE_PSEUDO_USER, VITE_PSEUDO_PASS — Frontend pseudo-auth runtime values; useful for local dev
+- BACKEND_HOST — Used by proxy/nginx when running the optional proxy; typically `backend:8080` in Compose
+- CLIENT_MAX_BODY_SIZE, PROXY_READ_TIMEOUT, PROXY_SEND_TIMEOUT — Optional nginx tuning for the proxy
+
+The repository includes `docker/.env.local` as an example that you can copy to `docker/.env` and edit with local values.
+
+Security notes:
+- Do not commit secrets into the repo. Use a local-only `.env` file or your system's secret store.
+- When adding or renaming env vars that CI or infra rely on, update `README_ENV.md`, `README_CLOUD.md`, and `infra/DEPLOY.md` accordingly.
+
+---
+
+Recorded provision values
+
+NOTE: Provision values and any sensitive identifiers should not be stored in the repository. If you need to keep non-secret references for operational convenience, put them in a restricted location (for example `LocalFiles/` or an internal ops repo) and mark them clearly. Do not commit actual secrets or private credentials. Use Key Vault and GitHub Actions secrets for sensitive values.
 
 ---
 
@@ -57,7 +85,6 @@ IMPORTANT: OIDC-ONLY policy
 - This repository and CI are configured to use Azure AD OIDC (federated credential) for GitHub Actions. Do not rely on long-lived client secrets for automated CI deploys. The workflow uses `azure/login` with a federated credential; that is the required auth mechanism for deployments.
 
 Required secrets (must exist for CI to deploy)
-- AZURE_CLIENT_ID — Azure AD application (app registration) id that has a federated credential for this repository/branch (used by `azure/login`).
 - AZURE_TENANT_ID — Azure tenant id used for Azure login.
 - AZURE_SUBSCRIPTION_ID — Azure subscription id used by `az` operations.
 - AZURE_RG — Azure resource group where App Services and Key Vault exist (e.g., `slowfall-appservice-prod`).
@@ -69,15 +96,14 @@ Required secrets (must exist for CI to deploy)
 - ALLOWED_ORIGINS — optional comma-separated allowed origins used for CORS (CI will write it into app settings if present).
 
 Note on AZURE_CLIENT_ID and service principals vs Managed Identity (clarification)
-- CI (GitHub Actions): the workflow uses OIDC and requires a repository secret `AZURE_CLIENT_ID` which is the App Registration (client) id that has been configured with a federated credential for this repo/branch. This is required by the `azure/login` step in the workflow and is *not* the same as a runtime client secret. Keep `AZURE_CLIENT_ID` in your repository secrets for CI.
+- CI (GitHub Actions): the workflow uses OIDC and a baked-in App Registration client id in `.github/workflows/ci-cd.yml`. The client id is an identifier (not a secret). CI still requires a federated credential configured in Azure AD for the App Registration and appropriate RBAC (for example `AcrPush` on the registry). You do **not** need to add `AZURE_CLIENT_ID` as a repository secret for CI in this configuration.
 
-- Runtime (App Service / backend): the backend code prefers Azure managed identity / `DefaultAzureCredential` when running in Azure. The code also supports an optional service-principal fallback for local testing or for environments where a managed identity isn't available.
-  - If you want to run the app locally and authenticate Key Vault using a service principal, set the following environment variables locally (or in your `.env`):
+- Runtime (App Service / backend): the backend code prefers Azure managed identity / `DefaultAzureCredential` when running in Azure. The application also supports a service-principal fallback for local testing.
+  - To run locally with a service principal set these environment variables (local `.env` or other secure store):
     - `AZURE_CLIENT_ID` (or Spring property `azure.client.id`) — client id of the service principal
     - `AZURE_TENANT_ID` (or Spring property `azure.tenant.id`) — tenant id
     - `AZURE_CLIENT_SECRET` (or Spring property `azure.client.secret`) — client secret
-  - If these three runtime variables are present, `KeyVaultConfig` will create a `ClientSecretCredential` (service principal) and use it to authenticate to Key Vault. If they are not present, the application will fall back to `DefaultAzureCredential`, which will try MSIs/managed identity, Azure CLI login, Visual Studio/Azure developer credentials, etc.
-  - Recommendation: prefer `DefaultAzureCredential` / managed identity for production (no secrets). Use the service principal variables only for local debugging when necessary. If you do set them for local dev, *do not* commit secrets into the repository — use a local `.env` excluded by `.gitignore` or other secure local secret storage.
+  - If all three runtime variables are present, `KeyVaultConfig` will use `ClientSecretCredential` to authenticate to Key Vault. Otherwise the app falls back to `DefaultAzureCredential` (managed identity, az cli creds, etc.). Prefer managed identity in production; only use service-principal values locally as needed and do not commit them.
 
 Secrets you may remove (NOT used by current OIDC workflow)
 - AZURE_CLIENT_SECRET — not required by CI's OIDC-based workflow. However, the application still supports a runtime service-principal fallback when `azure.client.id`, `azure.client.secret`, and `azure.tenant.id` properties are present; only remove this secret if you are sure no team member relies on service-principal local auth or any external automation needs it.
@@ -100,11 +126,9 @@ App Service — Runtime App Settings (set in Azure Portal / App Service -> Confi
 
 - ALLOWED_ORIGINS
   - Purpose: Comma-separated list used by the backend for CORS (maps to `app.cors.allowed-origins`).
-  - Example: `https://slowfall-frontend.azurewebsites.net`
 
 - AZ_KEYVAULT_VAULT_URL
   - Purpose: Full Key Vault URI used by the apps. The workflow requires this secret to be set in GitHub and will fail early if it is missing. Use this exact name when creating/updating secrets.
-  - Example: `https://slowfall-keyvault-next.vault.azure.net/`
 
 - APP_SECURITY_AZURE_KEYVAULT_FAIL_FAST
   - Purpose: When true the application will fail startup if required Key Vault secrets/keys are not accessible. Useful in production. If the app is failing on startup due to Key Vault, temporarily set this to `false` while you fix RBAC.
@@ -147,7 +171,6 @@ Azure Key Vault: required properties and permissions
 
 - Required runtime env / Spring properties (set as App Service app settings or CI secrets):
   - AZ_KEYVAULT_VAULT_URL (note: Spring property is `app.security.azure.keyvault.vault-url`)
-    - Example: `https://slowfall-keyvault-next.vault.azure.net/`
   - AZ_KEYVAULT_KEY_NAME (Spring property: app.security.azure.keyvault.key-name)
     - Example: `slowfall-sign-key`
     - (Optional) APP_SECURITY_AZURE_KEYVAULT_SECRET_NAME (Spring property: app.security.azure.keyvault.secret-name)
@@ -189,7 +212,6 @@ When `PSEUDO_AUTH_ENABLED=true` the CI will write the following runtime App Serv
   - `VITE_PSEUDO_USER=<PSEUDO_USER>`
   - `VITE_PSEUDO_PASS=<PSEUDO_PASS>`
   - `VITE_MSAL_CLIENT_ID=` (cleared so MSAL does not initialize)
-  - `VITE_MSAL_AUTHORITY=` (cleared)
 
 Frontend behavior:
 - The SPA includes a simple login UI (`BasicLogin`) shown when MSAL is not configured. Users may enter username and password which are stored in `localStorage` for that browser session.
@@ -208,3 +230,55 @@ After adding these secrets, trigger the CI workflow (push to `main` or use workf
 
 Security note
 - Treat `PSEUDO_PASS` as a secret. Only enable `PSEUDO_AUTH_ENABLED` for trusted test environments. Audit and rotate these values as needed.
+
+---
+
+<!-- Added: Quick parity instructions for enabling pseudo in production (Option A) -->
+
+## Enable pseudo parity in production (quick parity)
+
+If you want production to behave the same as the project's existing pseudo mode (pseudo is the source of truth), you can enable pseudo parity quickly using the CI-managed secrets and runtime app settings. This approach is fast but should be temporary — follow the deprecation checklist below when you no longer need pseudo parity.
+
+Required repository secrets (set in GitHub → Settings → Secrets → Actions):
+- `PSEUDO_AUTH_ENABLED=true`
+- `PSEUDO_USER` — pseudo username (treat as secret)
+- `PSEUDO_PASS` — pseudo password (treat as secret)
+
+What CI must write into App Service runtime settings (backend + frontend) during deploy:
+- Backend app settings (App Service -> Configuration -> Application settings):
+  - `SPRING_PROFILES_ACTIVE=pseudo`
+  - `app.security.dev-username=<PSEUDO_USER>`
+  - `app.security.dev-password=<PSEUDO_PASS>`
+  - `app.security.dev-bypass=false`
+  - `APP_SECURITY_ALLOWED_GROUP_ID` (unchanged if you use AAD group enforcement)
+  - `ALLOWED_ORIGINS` (set to your frontend origin(s), comma-separated)
+- Frontend runtime settings (written by CI to the App Service frontend container):
+  - `VITE_PSEUDO_AUTH=true`
+  - `VITE_PSEUDO_USER=<PSEUDO_USER>`
+  - `VITE_PSEUDO_PASS=<PSEUDO_PASS>`
+  - `VITE_MSAL_CLIENT_ID=` (clear)
+  - `VITE_MSAL_AUTHORITY=` (clear)
+
+How the frontend receives the values at runtime
+- The frontend container's `entrypoint.sh` already writes a `config.json` from environment variables into the built SPA. When CI writes `VITE_PSEUDO_*` into the frontend App Service app settings, the SPA will consume them at runtime without a rebuild.
+
+Quick gh CLI (example) to add the secrets:
+```bash
+gh secret set PSEUDO_AUTH_ENABLED --body "true"
+gh secret set PSEUDO_USER --body "<your-pseudo-user>"
+gh secret set PSEUDO_PASS --body "<your-pseudo-pass>"
+```
+
+Deprecation & operational checklist (do these after parity is verified):
+1. Add a date to the repo (Issue or PR) marking when pseudo parity will be removed and who owns the change.
+2. Rotate or remove `PSEUDO_*` secrets from GitHub once you switch to real auth (or set them to empty strings in CI to disable pseudo at deploy time).
+3. Update `README_ENV.md`, `README_CLOUD.md`, and `infra/DEPLOY.md` to remove the pseudo instructions when fully deprecated.
+4. Ensure any monitoring/alerts verify that production is using the expected `app.security.mode` or profile.
+
+Security & operational notes
+- Running pseudo mode in prod temporarily reduces auth assurance. Limit access, audit secrets, rotate `PSEUDO_PASS` regularly, and remove the mode as soon as real auth is available.
+- Prefer setting secrets in the GitHub repo with environment-scoped visibility and keep `PSEUDO_AUTH_ENABLED` required only for the deploy environment where parity is needed.
+
+If you want, I can also:
+- Inspect your CI workflow file (if present) and add or confirm the mapping from `PSEUDO_*` secrets into the exact App Service app settings.
+- Create a small smoke-test script that runs after deploy to verify pseudo login works (example: curl + basic auth to a protected endpoint) and add it to the release checklist.
