@@ -85,8 +85,8 @@ export const mantineTheme: MantineThemeOverride = createTheme({
 						"--container-size": fluid
 							? "100%"
 							: size !== undefined && size in CONTAINER_SIZES
-							? CONTAINER_SIZES[size as string]
-							: rem(String(size)),
+								? CONTAINER_SIZES[size as string]
+								: rem(String(size)),
 					},
 				};
 			},

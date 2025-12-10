@@ -87,23 +87,23 @@ export default defineConfig([
 			"jsdoc/require-jsdoc": [
 				"warn",
 				{
-					"require": {
-						"FunctionDeclaration": true,
-						"MethodDefinition": false,
-						"ClassDeclaration": true,
-						"ArrowFunctionExpression": true,
-						"FunctionExpression": true
+					require: {
+						FunctionDeclaration: true,
+						MethodDefinition: false,
+						ClassDeclaration: true,
+						ArrowFunctionExpression: true,
+						FunctionExpression: true,
 					},
-					"contexts": [
+					contexts: [
 						"ExportNamedDeclaration > FunctionDeclaration",
 						"ExportDefaultDeclaration > FunctionDeclaration",
 						"ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > ArrowFunctionExpression",
 						"ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > FunctionExpression",
 						"ExportDefaultDeclaration > ArrowFunctionExpression",
 						"ExportNamedDeclaration > ClassDeclaration",
-						"ExportDefaultDeclaration > ClassDeclaration"
-					]
-				}
+						"ExportDefaultDeclaration > ClassDeclaration",
+					],
+				},
 			],
 			"jsdoc/require-description": "warn",
 			"jsdoc/check-tag-names": "warn",
