@@ -26,6 +26,7 @@ env:
   REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   VITE_API_BASE_URL: ""
+  PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED }}
 
 jobs:
   build-and-test:
@@ -81,15 +82,32 @@ jobs:
 
       - name: Build frontend
         env:
-          VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env || 'production' }}
-          VITE_API_BASE_URL: ${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
+          VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env }}
         run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
         # Persist the chosen frontend build mode so downstream jobs use the same mode
         continue-on-error: false
       - name: Persist frontend build mode for downstream jobs
         if: always()
         run: |
-          echo "VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}" >> "$GITHUB_ENV"
+          set -euo pipefail
+          FRONT_INPUT="${{ github.event.inputs.frontend_env || '' }}"
+          if [ -z "$FRONT_INPUT" ]; then
+            echo "ERROR: workflow input 'frontend_env' is not set; refusing to use a fallback" >&2
+            exit 1
+          fi
+          echo "VITE_FRONTEND_ENV=$FRONT_INPUT" >> "$GITHUB_ENV"
+          if [ "$FRONT_INPUT" = "development" ]; then
+            echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
+          else
+            echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
+          fi
+          # Export job outputs for downstream jobs to avoid relying on job-level env inheritance
+          echo "vite_frontend_env=$FRONT_INPUT" >> "$GITHUB_OUTPUT"
+          if [ "$FRONT_INPUT" = "development" ]; then
+            echo "vite_api_base_url=http://localhost:8080" >> "$GITHUB_OUTPUT"
+          else
+            echo "vite_api_base_url=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install brotli (for asset checks)
         if: runner.os == 'Linux'
@@ -124,6 +142,8 @@ jobs:
     needs: build-and-test
     env:
       BACKEND_HOST: ${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
+      VITE_FRONTEND_ENV: ${{ needs.build-and-test.outputs.vite_frontend_env }}
+      VITE_API_BASE_URL: ${{ needs.build-and-test.outputs.vite_api_base_url }}
 
     steps:
       - name: Checkout
@@ -155,8 +175,8 @@ jobs:
           tags: |
             slowfall-frontend:ci
           build-args: |
-            VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
-            VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
+            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV }}
+            VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: nginx config syntax test inside image
@@ -251,7 +271,7 @@ jobs:
           set -euo pipefail
           DEPLOY="${{ secrets.DEPLOY_ENV || '' }}"
           if [ -z "$DEPLOY" ]; then
-            echo "ERROR: Repository secret DEPLOY_ENV is not set."
+            echo "ERROR: Repository secret DEPLOY_ENV is not set. Aborting to avoid implicit fallbacks."
             exit 1
           fi
           case "$DEPLOY" in
@@ -267,6 +287,42 @@ jobs:
           esac
           echo "SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_ENV"
           echo "spring_profiles_active=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_OUTPUT"
+
+      - name: Validate and persist frontend mode (no fallbacks)
+        id: validate_frontend_mode
+        run: |
+          set -euo pipefail
+          # Prefer explicit workflow input if provided; otherwise rely on SPRING_PROFILES_ACTIVE (which is required above)
+          FRONT_INPUT="${{ github.event.inputs.frontend_env || '' }}"
+          if [ -n "$FRONT_INPUT" ]; then
+            CHOSEN="$FRONT_INPUT"
+          else
+            if [ -z "${SPRING_PROFILES_ACTIVE:-}" ]; then
+              echo "ERROR: SPRING_PROFILES_ACTIVE is not set; cannot determine frontend env" >&2
+              exit 1
+            fi
+            case "${SPRING_PROFILES_ACTIVE}" in
+              prod|production)
+                CHOSEN="production"
+                ;;
+              dev|development)
+                CHOSEN="development"
+                ;;
+              *)
+                # For any other profile, require explicit workflow input to avoid accidental deploys
+                echo "ERROR: SPRING_PROFILES_ACTIVE='${SPRING_PROFILES_ACTIVE}' is not a known mapping; please provide explicit workflow input 'frontend_env'" >&2
+                exit 1
+                ;;
+            esac
+          fi
+          echo "VITE_FRONTEND_ENV=$CHOSEN" >> "$GITHUB_ENV"
+          if [ "$CHOSEN" = "development" ]; then
+            echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
+          else
+            echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
+          fi
+          echo "chosen_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
+          echo "Selected frontend env: $CHOSEN"
 
       - name: Build & push backend image
         id: build_backend
@@ -303,9 +359,9 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:frontend-latest
           build-args: |
-            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILES_ACTIVE == 'prod' && 'production' || env.SPRING_PROFILES_ACTIVE) }}
-            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILES_ACTIVE == 'dev' && 'http://localhost:8080' || '') }}
-            BACKEND_HOST=${{ env.BACKEND_HOST }}
+            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV }}
+            VITE_API_BASE_URL=${{ env.VITE_API_BASE_URL }}
+             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
       - name: Capture frontend image digest for immutable deploy reference
         id: capture_frontend_digest
@@ -391,22 +447,25 @@ jobs:
           # - PSEUDO_PASS
           # Default to pseudo auth enabled when the secret is not present so CI focuses on pseudo mode.
           # This expression falls back to 'true' if the repository secret is missing.
-          if [ "${{ secrets.PSEUDO_AUTH_ENABLED || 'true' }}" = "true" ]; then
+          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
             echo "Pseudo auth enabled: adding pseudo-related app settings"
+            # Require explicit pseudo credentials when enabling pseudo auth
+            if [ -z "${{ secrets.PSEUDO_USER || '' }}" ] || [ -z "${{ secrets.PSEUDO_PASS || '' }}" ]; then
+              echo "ERROR: PSEUDO_AUTH_ENABLED=true but PSEUDO_USER/PSEUDO_PASS secrets are not set" >&2
+              exit 1
+            fi
             BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
-            # Provide safe defaults so CI can run pseudo mode even when secrets are not configured.
-            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER || 'pseudo' }}")
-            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS || 'devpass' }}")
-             # Ensure explicit dev-bypass is disabled when using pseudo profile
-             BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER }}")
+            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS }}")
+            BACKEND_SETTINGS+=("app.security.dev-bypass=false")
 
-             # For the frontend, enable pseudo auth and provide runtime credentials via app settings
+            # For the frontend, enable pseudo auth and provide runtime credentials via app settings
             FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
-            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER || 'pseudo' }}")
-            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS || 'devpass' }}")
-             # Also clear MSAL envs so MSAL won't initialize in the browser runtime
-             FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
-             FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER }}")
+            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS }}")
+            # Also clear MSAL envs so MSAL won't initialize in the browser runtime
+            FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+            FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
           fi
 
           # Optionally include a PORT setting if the secret APP_PORT is present
@@ -566,9 +625,17 @@ jobs:
           SETTINGS+=("PROXY_READ_TIMEOUT=90s")
           SETTINGS+=("PROXY_SEND_TIMEOUT=90s")
           SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
+          SETTINGS+=("AZ_KEYVAULT_KEY_NAME=${{ secrets.AZ_KEYVAULT_KEY_NAME }}")
 
-
-
+          # Apply settings to the proxy app service
+          set -euo pipefail
+          echo "Setting proxy app settings: ${SETTINGS[*]}"
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
-
-
+          # For each setting, verify it was applied (skip empty values)
+          for s in "${SETTINGS[@]}"; do
+            if [[ "$s" == *=* ]]; then
+              key="${s%%=*}"
+              echo "Verifying proxy setting: $key"
+              az webapp config appsettings get --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --query "$key" -o tsv
+            fi
+          done
