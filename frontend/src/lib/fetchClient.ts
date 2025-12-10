@@ -11,34 +11,44 @@
 import * as tokenStore from "./tokenStore";
 import { getApiBaseUrl } from "./apiBase";
 import { getStoredPseudoCredentials } from "../auth/BasicLogin";
+import { logger } from "./log";
 
-// Token helpers (simple wrappers around tokenStore). These are intentionally small and swallow storage errors.
+/**
+ * Get stored access token from tokenStore (best-effort).
+ */
 export function getAuthToken(): string | null {
 	try {
 		return tokenStore.getToken();
-	} catch {
+	} catch (err) {
+		logger.debug("getAuthToken: failed to read token from tokenStore:", err);
 		return null;
 	}
 }
 
+/**
+ * Store an access token in tokenStore (best-effort).
+ */
 export function setAuthToken(token: string): void {
 	try {
 		tokenStore.setToken(token);
-	} catch {
-		// swallow storage errors
+	} catch (err) {
+		logger.debug("setAuthToken: failed to set token in tokenStore:", err);
 	}
 }
 
+/**
+ * Clear auth tokens from tokenStore (best-effort).
+ */
 export function clearAuthToken(): void {
 	try {
 		tokenStore.clearToken();
 		try {
 			tokenStore.clearRefreshToken();
-		} catch {
-			// swallow
+		} catch (err) {
+			logger.debug("clearAuthToken: failed to clear refresh token:", err);
 		}
-	} catch {
-		// swallow
+	} catch (err) {
+		logger.debug("clearAuthToken: failed to clear token:", err);
 	}
 }
 
@@ -46,8 +56,8 @@ export function clearAuthToken(): void {
  * Compute a normalized API prefix using Vite-provided API_BASE_URL.
  *
  * Behavior:
- * - If VITE_API_BASE_URL is defined at build time and is an empty string, treat it as root and use relative paths -> '/api'.
- * - If VITE_API_BASE_URL is a full origin (e.g. 'https://api.example.com'), append '/api' -> 'https://api.example.com/api'.
+ * - If VITE_API_BASE_URL is defined at build time and is an empty string, treat it as root and use relative paths, e.g. '/api'.
+ * - If VITE_API_BASE_URL is a full origin (e.g. 'https://api.example.com'), append '/api', e.g. 'https://api.example.com/api'.
  * - If VITE_API_BASE_URL already ends with '/api', return it as-is to avoid '/api/api'.
  */
 function apiPrefix(): string {
@@ -64,8 +74,8 @@ function apiPrefix(): string {
  * Rules:
  * - Absolute URLs (http(s)://...) are returned unchanged.
  * - Paths that already start with '/api' are returned unchanged.
- * - Paths starting with '/' (but not '/api') are prefixed with `apiPrefix()` (so '/protected' -> '/api/protected').
- * - Other strings are prefixed as '/api/{input}'.
+ * - Paths starting with '/' (but not '/api') are prefixed with `apiPrefix()` (so '/protected' becomes '/api/protected').
+ * - Other strings are prefixed with '/api/' followed by the input.
  */
 function normalizeApiUrl(input: RequestInfo): string | Request {
 	if (typeof input !== "string") return input;
@@ -77,28 +87,23 @@ function normalizeApiUrl(input: RequestInfo): string | Request {
 	return `${prefix}/${url}`;
 }
 
-// Refresh control: avoid multiple concurrent refresh requests
 let refreshPromise: Promise<boolean> | null = null;
 
+/**
+ * Try to refresh access tokens by calling the refresh endpoint and update store on success.
+ */
 async function doRefresh(): Promise<boolean> {
-	// Return existing in-flight refresh to avoid multiple concurrent refresh requests
 	if (refreshPromise) return refreshPromise;
 
 	refreshPromise = (async () => {
 		try {
-			// Attempt to read a stored refresh token if present. When no refresh token is stored
-			// some backends may still use server-side state (cookies) to refresh sessions; therefore
-			// we don't bail out early. Tests also assume the refresh endpoint may be called.
 			const refreshToken = tokenStore.getRefreshToken();
 
 			const prefix = apiPrefix();
 			const url = `${prefix}/web-auth/refresh`;
-			// Build headers only when we will send a JSON body. Sending 'Content-Type: application/json'
-			// without a body can trigger a CORS preflight OPTIONS request; some proxies may not handle OPTIONS.
 			const headers: Record<string, string> = {};
 			const init: RequestInit = {
 				method: "POST",
-				// The backend issues an HttpOnly refresh cookie; include credentials so the browser will send that cookie on refresh requests.
 				credentials: "include",
 			};
 
@@ -113,34 +118,28 @@ async function doRefresh(): Promise<boolean> {
 
 			const res = await fetch(url, init);
 			if (!res.ok) {
-				// Refresh failed (401 or other). Clear tokens and indicate failure.
 				clearAuthToken();
 				return false;
 			}
 			const data = await res.json().catch(() => null);
 			if (!data || typeof data.access_token !== "string") {
-				// Invalid response
 				clearAuthToken();
 				return false;
 			}
-			// Store new access token
 			setAuthToken(data.access_token);
-			// Optionally update refresh token if backend returned one
 			if (data.refresh_token && typeof data.refresh_token === "string") {
 				try {
 					tokenStore.setRefreshToken(data.refresh_token);
-				} catch {
-					// ignore
+				} catch (err) {
+					logger.debug("doRefresh: failed to set refresh token from response:", err);
 				}
 			}
 			return true;
 		} catch (refreshError) {
-			// Network or other error during refresh - clear auth state.
-			console.debug("Token refresh failed", refreshError);
+			logger.debug("Token refresh failed:", refreshError);
 			clearAuthToken();
 			return false;
 		} finally {
-			// reset the in-flight marker so future refreshes can occur
 			refreshPromise = null;
 		}
 	})();
@@ -148,15 +147,19 @@ async function doRefresh(): Promise<boolean> {
 	return refreshPromise;
 }
 
+/**
+ * Perform a fetch with Authorization handling, refresh-on-401, and default credentials.
+ */
 export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}): Promise<Response> {
-	// Helper to actually perform fetch with Authorization header
+	/**
+	 * Internal helper that performs the actual fetch call with the prepared headers.
+	 * Returns the raw `Response` from `fetch` and does not perform 401 handling.
+	 */
 	async function doFetch(): Promise<Response> {
 		const headers = new Headers(init.headers as HeadersInit | undefined);
 
-		// Attach Authorization header if auth token available
 		try {
 			let token = getAuthToken();
-			// If no token, check for pseudo/basic credentials stored by the BasicLogin UI and attach Basic header
 			if (!token) {
 				try {
 					const creds = getStoredPseudoCredentials();
@@ -164,21 +167,18 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 						const basic = btoa(`${creds.user}:${creds.pass}`);
 						headers.set("Authorization", `Basic ${basic}`);
 					}
-				} catch {
-					// ignore storage read errors
+				} catch (err) {
+					logger.debug("fetchWithAuth: failed to read stored pseudo credentials:", err);
 				}
 			}
 			if (token) headers.set("Authorization", `Bearer ${token}`);
 		} catch (tokenErr) {
-			// Log for debugging but do not expose token values
 			console.debug("Failed to read auth token from tokenStore", tokenErr);
 		}
 
 		const merged: RequestInit = {
 			...init,
 			headers,
-			// Default to include credentials so cookies and Authorization headers are preserved behind the proxy.
-			// Callers can override by passing an explicit `credentials` in `init` if they need a different behaviour.
 			credentials: (init.credentials as RequestCredentials) ?? "include",
 		};
 
@@ -186,31 +186,25 @@ export async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}):
 		return fetch(finalUrl, merged);
 	}
 
-	// First attempt
 	let res = await doFetch();
 	if (res.status !== 401) return res;
 
-	// 401: try refresh once
 	try {
 		const refreshed = await doRefresh();
 		if (!refreshed) {
-			// refresh failed -> return original 401 so UI can handle redirect/login
 			return res;
 		}
-		// Retry original request once with new token
 		res = await doFetch();
 		return res;
 	} catch (fetchError) {
-		// On unexpected error, clear auth and return the first response
-		console.debug("fetchWithAuth unexpected error", fetchError);
+		logger.debug("fetchWithAuth unexpected error:", fetchError);
 		try {
 			clearAuthToken();
 		} catch (clearErr) {
-			console.debug("Failed to clear auth token", clearErr);
+			logger.debug("fetchWithAuth: failed to clear auth token after unexpected error:", clearErr);
 		}
 		return res;
 	}
 }
 
-// Re-export subscribe so consumers can import all token helpers from fetchClient
 export const subscribe = tokenStore.subscribe;

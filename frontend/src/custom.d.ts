@@ -1,4 +1,3 @@
-// Allow importing CSS files and CSS modules in TypeScript
 declare module "*.module.css" {
 	const classes: { [key: string]: string };
 	export default classes;

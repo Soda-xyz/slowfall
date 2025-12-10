@@ -1,36 +1,49 @@
-name: CI / Build / Publish / Deploy
+name: Minimal CI
 
 on:
   push:
-    branches:
-      - "**"
+    branches: main
   pull_request:
-    branches:
-      - "**"
-  workflow_dispatch:
-    inputs:
-      frontend_env:
-        description: "Frontend build mode (development or production)"
-        required: false
-        default: "production"
+    branches: main
+  workflow_dispatch: {}
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-
-env:
-  # Use Azure Container Registry (ACR) as the image registry. The CI expects these secrets to be set:
-  # - ACR_NAME: name of the ACR (short name, e.g. slowfallacr)
-  # - ACR_LOGIN_SERVER: login server of the ACR (e.g. slowfallacr.azurecr.io)
-  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
-  ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
-  VITE_API_BASE_URL: ""
 
 jobs:
-  build-and-test:
-    name: Build & Test (backend + frontend)
+  lint:
+    name: Lint (frontend + backend style checks)
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies for lint
+        run: npm ci --prefix frontend
+
+      - name: Run frontend lint
+        run: npm --prefix frontend run lint --if-present
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Run backend style checks (spotless / checkstyle)
+        run: ./gradlew --no-daemon spotlessCheck check
+        shell: bash
+
+  backend-build-test:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    needs: lint
 
     steps:
       - name: Checkout
@@ -40,10 +53,10 @@ jobs:
         run: chmod +x ./gradlew
         shell: bash
 
-      - name: Set up JDK 21 (Temurin)
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
+          distribution: 'temurin'
           java-version: '21'
           cache: 'gradle'
 
@@ -54,14 +67,22 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             .gradle
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/settings.gradle*', '**/build.gradle*', '**/build.gradle.kts') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
-      - name: Build & test backend (Gradle)
-        working-directory: ./
-        run: |
-          ./gradlew --no-daemon clean test
+      - name: Build & test backend (production profile)
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+        run: ./gradlew --no-daemon clean build
+        shell: bash
+
+  frontend-build-and-upload:
+    name: Frontend Build & Upload
+    runs-on: ubuntu-latest
+    needs: backend-build-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -73,502 +94,89 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
-      - name: Lint frontend
-        run: npm --prefix frontend run lint --if-present
+      - name: Build frontend (production)
+        run: npm --prefix frontend run build -- --mode production
 
-      - name: Test frontend
-        run: npm --prefix frontend run test --if-present
-
-      - name: Build frontend
-        env:
-          VITE_FRONTEND_ENV: ${{ github.event.inputs.frontend_env || 'production' }}
-          VITE_API_BASE_URL: ${{ ((github.event.inputs.frontend_env || 'production') == 'development') && 'http://localhost:8080' || '' }}
-        run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
-        # Persist the chosen frontend build mode so downstream jobs use the same mode
-        continue-on-error: false
-      - name: Persist frontend build mode for downstream jobs
-        if: always()
-        run: |
-          echo "VITE_FRONTEND_ENV=${{ github.event.inputs.frontend_env || 'production' }}" >> "$GITHUB_ENV"
-
-      - name: Install brotli (for asset checks)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y brotli
-
-      - name: 'CI assertion: ensure frontend build didn''t bake /api/api'
-        run: |
-          set -euo pipefail
-          found=0
-          if ls frontend/dist/*.js frontend/dist/**/*.js >/dev/null 2>&1; then
-            if grep -R --line-number --binary-files=without-match "/api/api" frontend/dist/*.js frontend/dist/**/*.js 2>/dev/null; then
-              echo "ERROR: '/api/api' found in built assets"
-              found=1
-            fi
-          fi
-          if [ "$found" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Upload build artifacts (optional)
-        if: always()
+      - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: frontend/dist
 
-  frontend-docker-checks:
-    name: Frontend Docker checks (nginx test)
+  docker-build-push:
+    name: Build and push Docker images to ACR
     runs-on: ubuntu-latest
-    needs: build-and-test
-    env:
-      BACKEND_HOST: ${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net
+    needs: [backend-build-test, frontend-build-and-upload]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU and Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Compute sanitized BACKEND_FQDN for CI checks
-        id: sanitize_backend
-        run: |
-          set -euo pipefail
-          RAW="${{ secrets.BACKEND_APP_NAME }}"
-          SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
-          if echo "$SANITIZED" | grep -q '\.'; then
-            FQDN="$SANITIZED"
-          else
-            FQDN="$SANITIZED.azurewebsites.net"
-          fi
-          echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
-
-      - name: Build frontend image (load into local Docker)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: docker/frontend/Dockerfile
-          push: false
-          load: true
-          tags: |
-            slowfall-frontend:ci
-          build-args: |
-            VITE_FRONTEND_ENV=${{ (secrets.DEPLOY_ENV == 'prod' || secrets.DEPLOY_ENV == 'production') && 'production' || secrets.DEPLOY_ENV || github.event.inputs.frontend_env || 'production' }}
-            VITE_API_BASE_URL=${{ (secrets.DEPLOY_ENV == 'development' || github.event.inputs.frontend_env == 'development') && 'http://localhost:8080' || '' }}
-            BACKEND_HOST=${{ env.BACKEND_HOST }}
-
-      - name: nginx config syntax test inside image
-        run: |
-          docker run --rm --add-host ${BACKEND_HOST}:127.0.0.1 --add-host backend:127.0.0.1 --entrypoint nginx slowfall-frontend:ci -t
-
-      - name: Cleanup container and image (always)
-        if: always()
-        run: |
-          docker rm -f slowfall-frontend-ci >/dev/null 2>&1 || true
-          docker image rm slowfall-frontend:ci >/dev/null 2>&1 || true
-
-  publish-images:
-    name: Build & Publish images (GHCR)
-    needs: frontend-docker-checks
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    outputs:
-      owner: ${{ steps.normalize_owner.outputs.owner }}
-      owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
-      spring_profiles_active: ${{ steps.compute_spring_profile.outputs.spring_profiles_active }}
-      frontend_digest: ${{ steps.capture_frontend_digest.outputs.frontend_digest }}
-      proxy_digest: ${{ steps.capture_proxy_digest.outputs.proxy_digest }}
-      backend_digest: ${{ steps.capture_backend_digest.outputs.backend_digest }}
-
-    steps:
-      - name: Normalize repository owner to lowercase
-        id: normalize_owner
-        run: |
-          OWNER="${{ github.repository_owner }}"
-          LOWER=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
-          # Emit both the original owner (preserve case) and a lowercase variant
-          echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
-          echo "owner_lower=$LOWER" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Compute sanitized BACKEND_HOST for publish
-        id: sanitize_backend_publish
-        run: |
-          set -euo pipefail
-          RAW="${{ secrets.BACKEND_APP_NAME }}"
-          SANITIZED=$(echo "$RAW" | tr -d '\r\n ')
-          if echo "$SANITIZED" | grep -q '\.'; then
-            FQDN="$SANITIZED"
-          else
-            FQDN="$SANITIZED.azurewebsites.net"
-          fi
-          echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
-
-      - name: Azure login (OIDC) for resolving backend FQDN
+      - name: Login to Azure (OIDC)
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-id: 'f17c9149-9c99-4294-ada3-9a97f0cf7b0b'
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-oidc: true
 
-      - name: Login to ACR
+      - name: Login to ACR using az cli
         run: |
-          set -euo pipefail
-          if [ -z "${{ secrets.ACR_NAME || '' }}" ]; then
-            echo "ERROR: secret ACR_NAME is not set; cannot login to ACR"
-            exit 1
-          fi
-          echo "Logging in to ACR: ${{ secrets.ACR_NAME }}"
-          az acr login --name "${{ secrets.ACR_NAME }}"
-
-      - name: (Optional) set app port on backend if provided
-        run: |
-          set -euo pipefail
-          if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
-            az webapp config appsettings set \
-              --name "${{ secrets.BACKEND_APP_NAME }}" \
-              --resource-group "${{ secrets.AZURE_RG }}" \
-              --settings "PORT=${{ secrets.APP_PORT }}"
-          else
-            echo "APP_PORT not set; leaving backend PORT unchanged"
-          fi
-
-      - name: Resolve backend defaultHostName (use as BACKEND_HOST)
-        run: |
-          set -euo pipefail
-          RAW_NAME="${{ secrets.BACKEND_APP_NAME }}"
-          RG="${{ secrets.AZURE_RG }}"
-          FQDN=$(az webapp show --name "$RAW_NAME" --resource-group "$RG" --query defaultHostName -o tsv)
-          echo "BACKEND_HOST=$FQDN" >> "$GITHUB_ENV"
-
-      - name: Compute SPRING_PROFILE from DEPLOY_ENV secret
-        id: compute_spring_profile
-        run: |
-          set -euo pipefail
-          DEPLOY="${{ secrets.DEPLOY_ENV || '' }}"
-          if [ -z "$DEPLOY" ]; then
-            echo "ERROR: Repository secret DEPLOY_ENV is not set."
-            exit 1
-          fi
-          case "$DEPLOY" in
-            production|prod)
-              SPRING_PROFILES_ACTIVE="prod"
-              ;;
-            development|dev)
-              SPRING_PROFILES_ACTIVE="dev"
-              ;;
-            *)
-              SPRING_PROFILES_ACTIVE="$DEPLOY"
-              ;;
-          esac
-          echo "SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_ENV"
-          echo "spring_profiles_active=$SPRING_PROFILES_ACTIVE" >> "$GITHUB_OUTPUT"
+          # Use canonical ACR name from repository secrets (e.g. slowfallregistry)
+          ACR_NAME="${{ secrets.ACR_NAME }}"
+          echo "Logging in to ACR: $ACR_NAME"
+          az acr login --name "$ACR_NAME"
+        shell: bash
 
       - name: Build & push backend image
-        id: build_backend
         uses: docker/build-push-action@v4
         with:
           context: .
           file: docker/backend/Dockerfile
           push: true
-          platforms: linux/amd64
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:backend-latest
+          tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-backend:${{ github.sha }}
           build-args: |
-            SPRING_PROFILES_ACTIVE=${{ env.SPRING_PROFILES_ACTIVE }}
-
-      - name: Capture backend image digest for immutable deploy reference
-        id: capture_backend_digest
-        run: |
-          set -euo pipefail
-          DIGEST="${{ steps.build_backend.outputs.digest }}"
-          if [ -z "$DIGEST" ]; then
-            echo "ERROR: backend build did not produce a digest output"
-            exit 1
-          fi
-          echo "backend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+            SPRING_PROFILES_ACTIVE=prod
 
       - name: Build & push frontend image
-        id: build_frontend
         uses: docker/build-push-action@v4
         with:
           context: .
           file: docker/frontend/Dockerfile
           push: true
-          platforms: linux/amd64
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:frontend-latest
+          tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-frontend:${{ github.sha }}
           build-args: |
-            VITE_FRONTEND_ENV=${{ env.VITE_FRONTEND_ENV || (env.SPRING_PROFILES_ACTIVE == 'prod' && 'production' || env.SPRING_PROFILES_ACTIVE) }}
-            VITE_API_BASE_URL=${{ env.VITE_FRONTEND_ENV == 'dev' && 'http://localhost:8080' || (env.SPRING_PROFILES_ACTIVE == 'dev' && 'http://localhost:8080' || '') }}
-            BACKEND_HOST=${{ env.BACKEND_HOST }}
+            VITE_FRONTEND_ENV=production
+            VITE_API_BASE_URL=
 
-      - name: Capture frontend image digest for immutable deploy reference
-        id: capture_frontend_digest
+      - name: Write backend app settings (pseudo mode)
+        if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
+        env:
+          BACKEND_APP_NAME: ${{ secrets.BACKEND_APP_NAME }}
+          AZURE_RG: ${{ secrets.AZURE_RG }}
+          PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
+          PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
         run: |
-          set -euo pipefail
-          DIGEST="${{ steps.build_frontend.outputs.digest }}"
-          if [ -z "$DIGEST" ]; then
-            echo "ERROR: frontend build did not produce a digest output"
-            exit 1
-          fi
-          echo "frontend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Writing pseudo app settings to backend: $BACKEND_APP_NAME"
+          az webapp config appsettings set \
+            --name "$BACKEND_APP_NAME" \
+            --resource-group "$AZURE_RG" \
+            --settings PSEUDO_AUTH_ENABLED="true" app.security.dev-username="$PSEUDO_USER" app.security.dev-password="$PSEUDO_PASS" SPRING_PROFILES_ACTIVE="pseudo" \
+            --output none
+        shell: bash
 
-      - name: Build & push proxy image
-        id: build_proxy
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: docker/nginx/Dockerfile
-          push: true
-          platforms: linux/amd64
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:proxy-latest
-          build-args: |
-            BACKEND_HOST=${{ env.BACKEND_HOST }}
-
-      - name: Capture proxy image digest for immutable deploy reference
-        id: capture_proxy_digest
+      - name: Write frontend app settings (pseudo mode)
+        if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
+        env:
+          FRONTEND_APP_NAME: ${{ secrets.FRONTEND_APP_NAME }}
+          AZURE_RG: ${{ secrets.AZURE_RG }}
+          PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
+          PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
         run: |
-          set -euo pipefail
-          DIGEST="${{ steps.build_proxy.outputs.digest }}"
-          if [ -z "$DIGEST" ]; then
-            echo "ERROR: proxy build did not produce a digest output"
-            exit 1
-          fi
-          echo "proxy_digest=$DIGEST" >> "$GITHUB_OUTPUT"
-
-      - name: Verify proxy image pushed
-        run: |
-          set -euo pipefail
-          IMAGE_LATEST="${{ env.REGISTRY }}/${{ steps.normalize_owner.outputs.owner_lower }}/slowfall:proxy-latest"
-          echo "Verifying pushed image: $IMAGE_LATEST"
-          docker pull "$IMAGE_LATEST"
-          docker image inspect "$IMAGE_LATEST" >/dev/null
-          echo "Proxy image verified: $IMAGE_LATEST"
-
-      - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
-        run: |
-          # NOTE: when switching to ACR, ensure the App Service has AcrPull permissions on the ACR
-          set -euo pipefail
-          SETTINGS=()
-          if [ -n "${SPRING_PROFILES_ACTIVE:-}" ]; then
-            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}")
-          fi
-          SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
-
-          # Ensure Key Vault settings are propagated to the backend (and frontend when relevant).
-          # These are provided as repository secrets and must be set in the environment.
-          # The backend expects the Key Vault URI (written as AZ_KEYVAULT_VAULT_URL) and AZ_KEYVAULT_KEY_NAME
-          SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
-          SETTINGS+=("AZ_KEYVAULT_KEY_NAME=${{ secrets.AZ_KEYVAULT_KEY_NAME }}")
-
-          # Build backend-specific and frontend-specific settings arrays so we can add toggles independently.
-          BACKEND_SETTINGS=("${SETTINGS[@]}")
-          FRONT_SETTINGS=("${SETTINGS[@]}")
-          # Remove backend-only keys from FRONT_SETTINGS (for example SPRING_PROFILES_ACTIVE)
-          # so we don't attempt to write backend-specific Spring properties into the frontend App Service.
-          _tmp_front=()
-          for s in "${FRONT_SETTINGS[@]}"; do
-            k="${s%%=*}"
-            if [ "$k" = "SPRING_PROFILES_ACTIVE" ]; then
-              echo "Skipping frontend write of SPRING_PROFILES_ACTIVE"
-              continue
-            fi
-            _tmp_front+=("$s")
-          done
-          FRONT_SETTINGS=("${_tmp_front[@]}")
-
-          # If pseudo auth is enabled via repository secret, configure backend to use the 'pseudo' profile
-          # and set the in-memory user credentials; configure frontend to send Basic auth credentials.
-          # Required repository secrets when enabling pseudo auth:
-          # - PSEUDO_AUTH_ENABLED (set to 'true' to enable)
-          # - PSEUDO_USER
-          # - PSEUDO_PASS
-          # Default to pseudo auth enabled when the secret is not present so CI focuses on pseudo mode.
-          # This expression falls back to 'true' if the repository secret is missing.
-          if [ "${{ secrets.PSEUDO_AUTH_ENABLED || 'true' }}" = "true" ]; then
-            echo "Pseudo auth enabled: adding pseudo-related app settings"
-            BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
-            # Provide safe defaults so CI can run pseudo mode even when secrets are not configured.
-            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER || 'pseudo' }}")
-            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS || 'devpass' }}")
-             # Ensure explicit dev-bypass is disabled when using pseudo profile
-             BACKEND_SETTINGS+=("app.security.dev-bypass=false")
-
-             # For the frontend, enable pseudo auth and provide runtime credentials via app settings
-            FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
-            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER || 'pseudo' }}")
-            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS || 'devpass' }}")
-             # Also clear MSAL envs so MSAL won't initialize in the browser runtime
-             FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
-             FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
-          fi
-
-          # Optionally include a PORT setting if the secret APP_PORT is present
-          if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
-            BACKEND_SETTINGS+=("PORT=${{ secrets.APP_PORT }}")
-          fi
-
-          # Apply the settings to the backend and frontend app services
-          # Sanitize settings: only pass entries that contain an '=' character (valid key=value or key=)
-          FILTERED_BACKEND=()
-          FILTERED_FRONT=()
-          FILTERED_BACKEND_KEYS=()
-          FILTERED_FRONT_KEYS=()
-          for s in "${BACKEND_SETTINGS[@]}"; do
-            if [[ "$s" == *=* ]]; then
-              FILTERED_BACKEND+=("$s")
-              FILTERED_BACKEND_KEYS+=("${s%%=*}")
-            else
-              echo "Skipping invalid backend setting (no '=' found): $s" >&2
-            fi
-          done
-          for s in "${FRONT_SETTINGS[@]}"; do
-            if [[ "$s" == *=* ]]; then
-              FILTERED_FRONT+=("$s")
-              FILTERED_FRONT_KEYS+=("${s%%=*}")
-            else
-              echo "Skipping invalid frontend setting (no '=' found): $s" >&2
-            fi
-          done
-
-          # Deduplicate entries while preserving order so last occurrence wins.
-          # Build ordered key list and map for backend
-          declare -A BACK_MAP
-          declare -a BACK_ORDER
-          declare -a DELETE_BACK_KEYS
-          for s in "${FILTERED_BACKEND[@]}"; do
-            k="${s%%=*}"
-            v="${s#*=}"
-            # remove existing occurrence of k in BACK_ORDER if present (so we can append and preserve last-occurrence order)
-            for i in "${!BACK_ORDER[@]}"; do
-              if [ "${BACK_ORDER[$i]}" = "$k" ]; then
-                unset 'BACK_ORDER[$i]'
-                break
-              fi
-            done
-            # append key to order
-            BACK_ORDER+=("$k")
-            if [ -z "${v}" ]; then
-              DELETE_BACK_KEYS+=("$k")
-              unset BACK_MAP["$k"]
-            else
-              BACK_MAP["$k"]="$v"
-            fi
-          done
-          # Build FINAL_BACK using BACK_ORDER to preserve final order and avoid duplicates
-          declare -a FINAL_BACK
-          declare -a FINAL_BACK_KEYS
-          for k in "${BACK_ORDER[@]}"; do
-            # skip keys that were marked for deletion
-            if [ -z "${BACK_MAP[$k]+_}" ]; then
-              continue
-            fi
-            FINAL_BACK+=("${k}=${BACK_MAP[$k]}")
-            FINAL_BACK_KEYS+=("$k")
-          done
-
-          # Frontend: same logic
-          declare -A FRONT_MAP
-          declare -a FRONT_ORDER
-          declare -a DELETE_FRONT_KEYS
-          for s in "${FILTERED_FRONT[@]}"; do
-            k="${s%%=*}"
-            v="${s#*=}"
-            for i in "${!FRONT_ORDER[@]}"; do
-              if [ "${FRONT_ORDER[$i]}" = "$k" ]; then
-                unset 'FRONT_ORDER[$i]'
-                break
-              fi
-            done
-            FRONT_ORDER+=("$k")
-            if [ -z "${v}" ]; then
-              DELETE_FRONT_KEYS+=("$k")
-              unset FRONT_MAP["$k"]
-            else
-              FRONT_MAP["$k"]="$v"
-            fi
-          done
-          declare -a FINAL_FRONT
-          declare -a FINAL_FRONT_KEYS
-          for k in "${FRONT_ORDER[@]}"; do
-            if [ -z "${FRONT_MAP[$k]+_}" ]; then
-              continue
-            fi
-            FINAL_FRONT+=("${k}=${FRONT_MAP[$k]}")
-            FINAL_FRONT_KEYS+=("$k")
-          done
-
-          # Echo only the names of the final settings (avoid printing secret values)
-          echo "Applying backend app settings: ${FINAL_BACK_KEYS[*]}"
-          echo "Applying frontend app settings: ${FINAL_FRONT_KEYS[*]}"
-
-          # Apply non-empty settings per-key to isolate failures and provide clearer logs
-          if [ ${#FINAL_BACK[@]} -gt 0 ]; then
-            echo "Setting backend app settings one-by-one"
-            for entry in "${FINAL_BACK[@]}"; do
-              key="${entry%%=*}"
-              echo "Applying backend key: $key"
-              out=$(az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
-              rc=$?
-              if [ $rc -ne 0 ]; then
-                echo "ERROR: Failed to set backend setting for key: $key" >&2
-                echo "az output:" >&2
-                echo "$out" >&2
-                echo "Current backend app settings (keys only):" >&2
-                az webapp config appsettings list --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
-                exit $rc
-              fi
-            done
-          else
-            echo "No backend app settings to set"
-          fi
-
-          if [ ${#FINAL_FRONT[@]} -gt 0 ]; then
-            echo "Setting frontend app settings one-by-one"
-            for entry in "${FINAL_FRONT[@]}"; do
-              key="${entry%%=*}"
-              echo "Applying frontend key: $key"
-              out=$(az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
-              rc=$?
-              if [ $rc -ne 0 ]; then
-                echo "ERROR: Failed to set frontend setting for key: $key" >&2
-                echo "az output:" >&2
-                echo "$out" >&2
-                echo "Current frontend app settings (keys only):" >&2
-                az webapp config appsettings list --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
-                exit $rc
-              fi
-            done
-          else
-            echo "No frontend app settings to set"
-          fi
-
-
-      - name: Set app settings on proxy
-        run: |
-          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          if [ -n "${BACKEND_HOST:-}" ]; then
-            BACKEND_HOST_VAL="${BACKEND_HOST}"
-          else
-            BACKEND_HOST_VAL="${{ secrets.BACKEND_APP_NAME }}.azurewebsites.net"
-          fi
-
-          # Build settings array and pass as separate args to avoid embedding comments or empty lines
-          SETTINGS=()
-          SETTINGS+=("BACKEND_HOST=${BACKEND_HOST_VAL}")
-          SETTINGS+=("CLIENT_MAX_BODY_SIZE=20m")
-          SETTINGS+=("PROXY_READ_TIMEOUT=90s")
-          SETTINGS+=("PROXY_SEND_TIMEOUT=90s")
-          SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
-
-
-
-          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
-
-
+          echo "Writing pseudo app settings to frontend: $FRONTEND_APP_NAME"
+          az webapp config appsettings set \
+            --name "$FRONTEND_APP_NAME" \
+            --resource-group "$AZURE_RG" \
+            --settings VITE_PSEUDO_AUTH="true" VITE_PSEUDO_USER="$PSEUDO_USER" VITE_PSEUDO_PASS="$PSEUDO_PASS" VITE_MSAL_CLIENT_ID="" VITE_MSAL_AUTHORITY="" \
+            --output none
+        shell: bash

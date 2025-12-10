@@ -7,37 +7,22 @@ environment and deployment documentation.
 
 slowfall is a Java Spring Boot backend with a TypeScript/React frontend. This README contains developer-facing
 information (logging, the AOP logging aspect, and repository pointers). See `README_ENV.md` for environment variables
-and `README_CLOUD.md` for cloud deployment and IaC guidance. The `LocalFiles/README_AZURE_MIGRATION.md` (local-only) has
-concise migration requirements and implementation notes for the Entra migration and nginx proxy.
+and `README_CLOUD.md` for cloud deployment and IaC guidance.
 
-## Quick links
+Proxy (current architecture)
 
-- Environment & secrets: `README_ENV.md`
-- Cloud deployment & Key Vault: `README_CLOUD.md`
-- Azure migration notes (local-only): `LocalFiles/README_AZURE_MIGRATION.md`
-
-## Authentication and Proxy (current architecture)
-
-- Authentication: Entra (Azure AD) is the primary identity provider (OIDC) for frontend and backend in production. The
-  backend validates incoming bearer tokens issued by Entra. HTTP Basic remains allowed only for development-like profiles
-  (dev/pseudo) and should not be enabled in production.
 - Reverse proxy: A dedicated nginx reverse proxy (`slowfall-proxy`) runs as its own App Service container in the
   recommended architecture. The proxy is responsible for TLS termination (if used), header forwarding, cookie preservation,
   and mapping `/api/` requests to the backend host. The proxy reads `BACKEND_HOST` and related settings from App Service
   app settings.
 
-See `README_CLOUD.md` for the canonical cloud deployment steps, CI/Credentials, and Key Vault guidance.
+Notes about CI / builds / Docker (current)
 
-## Where to look in the repository
+- CI uses GitHub Actions with OIDC-based login to Azure (`azure/login` + `enable-oidc: true`) — no long-lived client secrets in CI.
+- Images are built in CI and pushed to Azure Container Registry (ACR) using the canonical secret `ACR_NAME` (images: `<ACR_NAME>.azurecr.io/...`).
+- CI produces production-mode artifacts only: backend builds with `SPRING_PROFILES_ACTIVE=prod` and frontend builds with Vite `--mode production` (VITE_FRONTEND_ENV=production). The Docker builds bake these values via build-args.
+- Keep a repo-root `.dockerignore` (present) so large or sensitive files (node_modules, frontend/dist, .env*) are excluded from the Docker build context. The repo also keeps `frontend/.gitignore` for local dev convenience.
+- Frontend `.env.*` behavior: `.env.development` is useful for local dev; production values are baked at build-time via CI build-args (empty `VITE_API_BASE_URL` in CI means the SPA uses relative `/api` paths).
 
-- `src/main/java/xyz/soda/slowfall/infra/logging/LoggingAspect.java`
-- `src/main/java/xyz/soda/slowfall/infra/logging/Loggable.java`
-- `src/main/java/xyz/soda/slowfall/infra/logging/RequestLoggingFilter.java`
-- `src/main/resources/logback-spring.xml`
+See `README_ENV.md` and `README_CLOUD.md` for environment, secret, and deployment instructions.
 
-(Developer tooling and build instructions unchanged.)
-
-## Security note
-
-Do not commit secrets into the repository. Use Key Vault and GitHub repository secrets, and prefer OIDC-based federated
-credentials for CI where possible.

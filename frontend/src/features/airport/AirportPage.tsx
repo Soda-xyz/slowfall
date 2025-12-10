@@ -16,9 +16,15 @@ export default function AirportPage(): React.JSX.Element {
 	const [airports, setAirports] = useState<Airport[]>([]);
 	const [loading, setLoading] = useState(false);
 
+	/**
+	 * Callback invoked when a new airport is created; append to the current list.
+	 */
 	const onCreated = (airport: Airport) =>
 		setAirports((previousAirports) => [...previousAirports, airport]);
 
+	/**
+	 * Delete an airport by id and update the local list; show notifications on result.
+	 */
 	const handleDeleted = async (id: string) => {
 		try {
 			await deleteAirport({ id });
@@ -53,6 +59,9 @@ export default function AirportPage(): React.JSX.Element {
 		const controller = new AbortController();
 		let mounted = true;
 
+		/**
+		 * Load airports from the backend and update state. Aborts if component unmounts.
+		 */
 		async function load() {
 			setLoading(true);
 			try {

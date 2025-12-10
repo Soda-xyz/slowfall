@@ -6,6 +6,7 @@ import "@testing-library/jest-dom/vitest";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "@mantine/dates/styles.css";
+import { logger } from "../src/lib/log";
 
 // Provide plain-JS aliases so we can avoid TypeScript `as` casts which some linters/parsers choke on
 const anyWindow = window;
@@ -98,6 +99,7 @@ try {
 					// Intentionally do not fall back to direct assignment here because some runtimes
 					// expose readonly globals; if defineProperty fails, tests will still proceed without
 					// mutating the global directly.
+					logger.debug("test setup: failed to define localStorage on global/window:", e);
 				}
 			}
 			// Also ensure sessionStorage exists for completeness
@@ -123,7 +125,7 @@ try {
 					configurable: true,
 				});
 			} catch (e) {
-				// ignore
+				logger.debug("test setup: failed to mirror local/session storage to globalThis:", e);
 			}
 			try {
 				Object.defineProperty(anyGlobal, "sessionStorage", {
@@ -132,11 +134,11 @@ try {
 					configurable: true,
 				});
 			} catch (e) {
-				// ignore
+				logger.debug("test setup: failed to mirror local/session storage to globalThis:", e);
 			}
 		}
 	} catch (e) {
-		// ignore errors in test setup
+		logger.debug("test setup: error in ensureLocalStorage:", e);
 	}
 })();
 

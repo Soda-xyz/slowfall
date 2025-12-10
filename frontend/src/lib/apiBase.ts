@@ -10,16 +10,25 @@
 
 let _overrideApiBase: string | undefined;
 
+/**
+ * Override the computed API base URL (used for tests or runtime overrides).
+ */
 export function setApiBaseUrl(value?: string): void {
 	_overrideApiBase = value;
 	API_BASE_URL = getApiBaseUrl();
 }
 
+/**
+ * Reset any manual API base override and recompute default.
+ */
 export function resetApiBaseUrl(): void {
 	_overrideApiBase = undefined;
 	API_BASE_URL = getApiBaseUrl();
 }
 
+/**
+ * Compute the effective API base URL using override, Vite env, mode, or host heuristics.
+ */
 export function getApiBaseUrl(): string {
 	if (typeof _overrideApiBase !== "undefined") return _overrideApiBase;
 
@@ -41,4 +50,3 @@ export function getApiBaseUrl(): string {
 }
 
 export let API_BASE_URL: string = getApiBaseUrl();
-// End of file

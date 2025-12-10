@@ -1,3 +1,5 @@
+import { logger } from "./log";
+
 /**
  * Token store wrapper: provides get/set/clear and subscribe with BroadcastChannel fallback.
  * Compatible with React 19 and TypeScript ~5.9.
@@ -13,6 +15,9 @@ type TokenSubscriber = (token: string | null) => void;
 /** In-memory subscribers for same-tab notifications (important for test envs without BroadcastChannel) */
 const subscribers = new Set<TokenSubscriber>();
 
+/**
+ * Check if `window` is available (SSR-safe detection).
+ */
 function isWindowAvailable(): boolean {
 	try {
 		return typeof window !== "undefined" && !!window;
@@ -26,7 +31,8 @@ export function getToken(): string | null {
 	if (!isWindowAvailable()) return null;
 	try {
 		return localStorage.getItem(KEY);
-	} catch {
+	} catch (err) {
+		logger.debug("tokenStore: failed to read access token from localStorage:", err);
 		return null;
 	}
 }
@@ -36,39 +42,38 @@ export function setToken(token: string): void {
 	if (!isWindowAvailable()) return;
 	try {
 		localStorage.setItem(KEY, token);
-		// Notify same-tab subscribers immediately
 		try {
 			subscribers.forEach((subscriber) => {
 				try {
 					subscriber(token);
-				} catch {
-					// no-op
+				} catch (innerErr) {
+					logger.debug("tokenStore subscriber threw an error:", innerErr);
 				}
 			});
-		} catch {
-			// no-op
+		} catch (notifyErr) {
+			logger.debug("tokenStore: failed notifying subscribers:", notifyErr);
 		}
-		// Broadcast to other tabs
+
 		try {
 			if (typeof BroadcastChannel !== "undefined") {
 				const bc = new BroadcastChannel(CHANNEL);
 				try {
 					bc.postMessage({ type: "token", token });
-				} catch {
-					// no-op
+				} catch (postErr) {
+					logger.debug("tokenStore: BroadcastChannel.postMessage failed:", postErr);
 				} finally {
 					try {
 						bc.close();
-					} catch {
-						// no-op
+					} catch (closeErr) {
+						logger.debug("tokenStore: BroadcastChannel.close failed:", closeErr);
 					}
 				}
 			}
-		} catch {
-			// no-op
+		} catch (bcErr) {
+			logger.debug("tokenStore: BroadcastChannel unavailable or errored:", bcErr);
 		}
-	} catch {
-		// no-op
+	} catch (err) {
+		logger.debug("tokenStore: failed to set token in localStorage:", err);
 	}
 }
 
@@ -77,49 +82,48 @@ export function clearToken(): void {
 	if (!isWindowAvailable()) return;
 	try {
 		localStorage.removeItem(KEY);
-		// Notify same-tab subscribers immediately
 		try {
 			subscribers.forEach((subscriber) => {
 				try {
 					subscriber(null);
-				} catch {
-					// no-op
+				} catch (innerErr) {
+					logger.debug("tokenStore subscriber threw on clear:", innerErr);
 				}
 			});
-		} catch {
-			// no-op
+		} catch (notifyErr) {
+			logger.debug("tokenStore: failed notifying subscribers on clear:", notifyErr);
 		}
-		// Broadcast to other tabs
+
 		try {
 			if (typeof BroadcastChannel !== "undefined") {
 				const bc = new BroadcastChannel(CHANNEL);
 				try {
 					bc.postMessage({ type: "token_cleared" });
-				} catch {
-					// no-op
+				} catch (postErr) {
+					logger.debug("tokenStore: BroadcastChannel.postMessage failed on clear:", postErr);
 				} finally {
 					try {
 						bc.close();
-					} catch {
-						// no-op
+					} catch (closeErr) {
+						logger.debug("tokenStore: BroadcastChannel.close failed on clear:", closeErr);
 					}
 				}
 			}
-		} catch {
-			// no-op
+		} catch (bcErr) {
+			logger.debug("tokenStore: BroadcastChannel unavailable or errored on clear:", bcErr);
 		}
-	} catch {
-		// no-op
+	} catch (err) {
+		logger.debug("tokenStore: failed to clear token in localStorage:", err);
 	}
 }
 
-// Refresh-token helpers
 /** Get refresh token */
 export function getRefreshToken(): string | null {
 	if (!isWindowAvailable()) return null;
 	try {
 		return localStorage.getItem(REFRESH_KEY);
-	} catch {
+	} catch (err) {
+		logger.debug("tokenStore: failed to read refresh token from localStorage:", err);
 		return null;
 	}
 }
@@ -129,8 +133,8 @@ export function setRefreshToken(token: string): void {
 	if (!isWindowAvailable()) return;
 	try {
 		localStorage.setItem(REFRESH_KEY, token);
-	} catch {
-		// no-op
+	} catch (err) {
+		logger.debug("tokenStore: failed to set refresh token:", err);
 	}
 }
 
@@ -139,28 +143,31 @@ export function clearRefreshToken(): void {
 	if (!isWindowAvailable()) return;
 	try {
 		localStorage.removeItem(REFRESH_KEY);
-	} catch {
-		// no-op
+	} catch (err) {
+		logger.debug("tokenStore: failed to remove refresh token:", err);
 	}
 }
 
-// Subscribe to token changes. Returns unsubscribe function.
+/**
+ * Subscribe to token changes. Returns an unsubscribe function.
+ * Supports same-tab subscribers and BroadcastChannel cross-tab notifications.
+ */
 export function subscribe(cb: TokenSubscriber): () => void {
 	if (!isWindowAvailable()) {
-		// No-op unsubscribe
 		return () => {};
 	}
 
 	let unsubbed = false;
 
-	// Add to in-memory subscribers for same-tab notification
 	subscribers.add(cb);
 
-	// Handler for BroadcastChannel messages
 	let bc: BroadcastChannel | null = null;
 	try {
 		if (typeof BroadcastChannel !== "undefined") {
 			bc = new BroadcastChannel(CHANNEL);
+			/**
+			 * Listen for cross-tab token messages and forward to subscriber callback.
+			 */
 			bc.onmessage = (ev: MessageEvent) => {
 				if (unsubbed) return;
 				const raw = ev.data as unknown;
@@ -170,11 +177,14 @@ export function subscribe(cb: TokenSubscriber): () => void {
 				if (data.type === "token_cleared") cb(null);
 			};
 		}
-	} catch {
+	} catch (err) {
+		logger.debug("tokenStore: BroadcastChannel unavailable or failed:", err);
 		bc = null;
 	}
 
-	// Handler for storage events as a fallback
+	/**
+	 * Storage event handler to observe localStorage changes from other tabs.
+	 */
 	function onStorage(e: StorageEvent) {
 		if (unsubbed) return;
 		if (e.key === KEY) {
@@ -184,23 +194,25 @@ export function subscribe(cb: TokenSubscriber): () => void {
 
 	window.addEventListener("storage", onStorage);
 
-	// Immediately call subscriber with current value
 	try {
 		cb(getToken());
-	} catch {
-		// no-op
+	} catch (err) {
+		logger.debug("tokenStore: subscriber callback threw during initial delivery:", err);
 	}
 
-	// Return unsubscribe
 	return () => {
 		unsubbed = true;
-		window.removeEventListener("storage", onStorage);
+		try {
+			window.removeEventListener("storage", onStorage);
+		} catch (err) {
+			logger.debug("tokenStore: failed to remove storage listener on unsubscribe:", err);
+		}
 		subscribers.delete(cb);
 		if (bc) {
 			try {
 				bc.close();
-			} catch {
-				// no-op
+			} catch (err) {
+				logger.debug("tokenStore: failed to close BroadcastChannel on unsubscribe:", err);
 			}
 		}
 	};
