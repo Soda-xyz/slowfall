@@ -159,7 +159,7 @@ jobs:
 
       - name: Build frontend
         env:
-          VITE_FRONTEND_ENV: ${{ env.VITE_FRONTEND_ENV }}
+          VITE_FRONTEND_ENV: ${{ steps.persist_frontend_mode.outputs.vite_frontend_env }}
         run: npm --prefix frontend run build -- --mode $VITE_FRONTEND_ENV
         continue-on-error: false
 
@@ -282,6 +282,7 @@ jobs:
             SPRING_PROFILES_ACTIVE=prod
 
       - name: Build & push frontend image
+        id: build_frontend
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -297,12 +298,25 @@ jobs:
         id: capture_frontend_digest
         run: |
           set -euo pipefail
+          # Prefer the digest reported by the build action
           DIGEST="${{ steps.build_frontend.outputs.digest }}"
           if [ -z "$DIGEST" ]; then
-            echo "ERROR: frontend build did not produce a digest output"
+            IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/slowfall-frontend:${{ github.sha }}"
+            echo "build action did not report digest; attempting to pull and inspect image: $IMAGE"
+            # Try to pull the image and inspect repo digests
+            docker pull "$IMAGE"
+            DIGEST_FULL="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+            if [ -n "$DIGEST_FULL" ]; then
+              # DIGEST_FULL looks like '<registry>/repo@sha256:...'; extract part after '@'
+              DIGEST="${DIGEST_FULL#*@}"
+            fi
+          fi
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: frontend build did not produce a digest output" >&2
             exit 1
           fi
           echo "frontend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+        shell: bash
 
       - name: Build & push proxy image
         id: build_proxy
