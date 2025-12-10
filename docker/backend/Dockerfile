@@ -2,49 +2,46 @@
 FROM eclipse-temurin:21-jdk AS builder
 WORKDIR /work
 
-# Copy Gradle wrapper and build files first to leverage layer caching
+# Cache Gradle wrapper and build files for faster rebuilds
 COPY gradlew .
 COPY gradle gradle
-# COPY settings.gradle settings.gradle.kts build.gradle* ./
-# Allow either settings.gradle or settings.gradle.kts; use wildcard so COPY doesn't fail when one isn't present
+# Allow settings.gradle or settings.gradle.kts
 COPY settings.gradle* build.gradle* ./
 
-# Ensure wrapper is executable
+# Make wrapper executable
 RUN chmod +x ./gradlew
 
-# Copy the rest of the source
+# Copy source
 COPY . .
 
-# Ensure the wrapper is executable after the full copy (COPY . . can overwrite permissions)
+# Re-ensure wrapper executable
 RUN chmod +x ./gradlew
 
-# Build the application jar (skip tests for faster local builds)
+# Build fat jar (skip tests for speed)
 RUN ./gradlew --no-daemon bootJar -x test
 
 # Stage 2: runtime image
 FROM eclipse-temurin:21-jre AS runtime
 
-# create a non-root user
+# Create non-root user
 RUN addgroup --system app && adduser --system --ingroup app app
 WORKDIR /app
 
-# Copy the Spring Boot fat jar from the builder stage and set ownership to app user
+# Copy jar from builder and set ownership
 COPY --from=builder --chown=app:app /work/build/libs/*.jar app.jar
 
-# JVM options (override at runtime with JAVA_OPTS env var)
+# JVM options (override via JAVA_OPTS)
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"
 ENV PORT=8080
-# Allow bake-in of SPRING_PROFILES_ACTIVE during image build via build-arg. CI should pass
-# SPRING_PROFILES_ACTIVE=prod when building production images. This ENV acts as a default and
-# can still be overridden via Azure App Service app settings or container runtime env.
+# Build-arg to set SPRING profile (default: prod)
 ARG SPRING_PROFILES_ACTIVE=prod
 ENV SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
 EXPOSE 8080
 
-# Install curl for HEALTHCHECK and base64 if missing
+# Install minimal tools for healthcheck/debug
 RUN apt-get update && apt-get install -y --no-install-recommends curl coreutils && rm -rf /var/lib/apt/lists/*
 
-# Create the container entrypoint which defers to the application for Key Vault integration
+# Entrypoint: diagnostics, validation, then run the jar
 RUN cat > /usr/local/bin/entrypoint.sh <<'SH'
 #!/bin/sh
 set -e
@@ -55,23 +52,23 @@ CONTAINER_INSTANCE_ID="${WEBSITE_INSTANCE_ID:-unknown}"
 # Timestamped startup marker
 echo "Container startup: hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_INSTANCE_ID} time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
-# --- Diagnostics: print a small set of non-secret envs to aid debugging ---
+# --- Diagnostics: small, non-secret set ---
 echo "--- Startup diagnostics ---"
 echo "SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-<not-set>}"
 echo "PORT=${PORT:-<not-set>}"
 echo "JAVA_OPTS=${JAVA_OPTS:-<not-set>}"
 
-# Validate the jar exists and is readable
+# Validate jar exists
 if [ ! -f /app/app.jar ]; then
   echo "ERROR: expected /app/app.jar not found in container hostname=${CONTAINER_HOSTNAME} instance_id=${CONTAINER_INSTANCE_ID}"
   ls -la /app || true
   exit 1
 fi
 
-# Show tiny filesystem /app snapshot to help debugging
+# Small /app snapshot
 ls -la /app || true
 
-# Show Java version info (helps diagnose JVM incompatibilities)
+# Show Java version info
 if command -v java >/dev/null 2>&1; then
   echo "--- Java version ---"
   java -version 2>&1 || true
@@ -87,12 +84,11 @@ else
   echo "Java not found in PATH"
 fi
 
-# Finally exec the java process (stdout/stderr will stream to container logs)
+# Finally exec the java process
 exec java $JAVA_OPTS -jar /app/app.jar
 SH
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
-
 
 # Run as non-root user
 USER app
@@ -100,5 +96,5 @@ USER app
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:${PORT}/actuator/health || exit 1
 
-# Use the custom entrypoint that starts the application
+# Start app
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

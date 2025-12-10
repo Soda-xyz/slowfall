@@ -13,13 +13,6 @@ import styles from "./theme/app-global.module.css";
 import mantineCssVariableResolver from "./theme/cssVariableResolver";
 import { BrowserRouter } from "react-router-dom";
 
-// Prefer runtime-provided env (window.__env) set by index.html loader, then fall back to build-time import.meta.env
-// type RuntimeEnv = Record<string, string | undefined>;
-// const runtimeEnv = (typeof window !== "undefined" ? (window as unknown as { __env?: RuntimeEnv }).__env : undefined);
-// const buildEnv = import.meta.env as unknown as Record<string, string | undefined>;
-// const env = Object.assign({}, buildEnv, runtimeEnv || {});
-// runtime envs are read by modules that need them (msalClient, fetchClient, etc.)
-
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
 		<MantineProvider theme={mantineTheme} cssVariablesResolver={mantineCssVariableResolver}>

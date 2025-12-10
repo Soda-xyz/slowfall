@@ -12,6 +12,9 @@ import mantineCssVariableResolver from "../theme/cssVariableResolver";
  * same provider, notifications, and cssVariablesResolver as the app.
  */
 export const renderWithMantine = (ui: React.ReactElement): RenderResult => {
+	/**
+	 * Simple wrapper component that mounts MantineProvider with app theme and notifications.
+	 */
 	const Wrapper = ({ children }: React.PropsWithChildren<object>) => (
 		<MantineProvider theme={mantineTheme} cssVariablesResolver={mantineCssVariableResolver}>
 			<Notifications position="top-right" />

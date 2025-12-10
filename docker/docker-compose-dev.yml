@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    image: slowfall-backend:local
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+    ports:
+      - "8080:8080"
+    network_mode: host
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    image: slowfall-frontend:local
+    ports:
+      - "80:80"
+    network_mode: host
+    environment:
+      BACKEND_HOST: localhost:8080
+      VITE_FRONTEND_ENV: development
+
+  proxy:
+    build:
+      context: ..
+      dockerfile: docker/nginx/Dockerfile
+    image: slowfall-proxy:local
+    ports:
+      - "90:80"
+    network_mode: host

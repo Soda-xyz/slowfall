@@ -10,14 +10,11 @@
 		},
 		"types": ["node"],
 		"skipLibCheck": true,
-		/* Bundler mode */
-		// Use 'nodenext' to correctly resolve package exports and modern type declarations
 		"moduleResolution": "nodenext",
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
 		"moduleDetection": "force",
 		"noEmit": true,
-		/* Linting */
 		"strict": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,

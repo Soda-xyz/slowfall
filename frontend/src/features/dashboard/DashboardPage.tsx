@@ -18,6 +18,9 @@ export default function DashboardPage(): React.JSX.Element {
 		mountedRef.current = true;
 		const controller = new AbortController();
 
+		/**
+		 * Load jumps from the backend and update state when the component is mounted.
+		 */
 		const load = async () => {
 			try {
 				const data = await fetchJumps(controller.signal);
@@ -30,6 +33,9 @@ export default function DashboardPage(): React.JSX.Element {
 
 		load();
 
+		/**
+		 * Event handler to reload jumps when a global `jumpCreated` event occurs.
+		 */
 		const handler = async (_ev: Event) => {
 			try {
 				const data = await fetchJumps();

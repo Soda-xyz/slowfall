@@ -13,6 +13,11 @@ import xyz.soda.slowfall.jump.domain.Jump;
 @RestController
 @RequestMapping("/api/jumps")
 public class JumpController {
+    /**
+     * Note: CORS is handled globally by the application's CorsConfigurationSource
+     * and per-profile settings (see application-dev.properties). Remove per-controller
+     * {@code @CrossOrigin} to centralize CORS policy for dev vs. prod environments.
+     */
     private final JumpService service;
 
     /**
@@ -23,9 +28,6 @@ public class JumpController {
     public JumpController(JumpService service) {
         this.service = service;
     }
-    // Note: CORS is handled globally by the application's CorsConfigurationSource
-    // and per-profile settings (see application-dev.properties). Remove per-controller
-    // @CrossOrigin to centralize CORS policy for dev vs. prod environments.
 
     /**
      * Create a new jump from the request.

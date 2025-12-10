@@ -1,12 +1,9 @@
+# Deprecated: frontend/.dockerignore is deprecated.
+# Use repository root's .dockerignore instead: /.dockerignore
+# This file remains for backwards compatibility.
+
+# Patterns to ignore when building with context 'frontend/' (if you do)
 node_modules
 dist
-.git
-.gitignore
 .env*
 *.local
-.DS_Store
-*.log
-.vscode
-npm-debug.log
-coverage
-
