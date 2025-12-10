@@ -174,6 +174,10 @@ jobs:
     needs: frontend-docker-checks
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    env:
+      PSEUDO_AUTH_ENABLED: ${{ secrets.PSEUDO_AUTH_ENABLED}}
+      PSEUDO_USER: ${{ secrets.PSEUDO_USER}}
+      PSEUDO_PASS: ${{ secrets.PSEUDO_PASS}}
     outputs:
       owner: ${{ steps.normalize_owner.outputs.owner }}
       owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
@@ -353,65 +357,48 @@ jobs:
 
       - name: Set app settings (SPRING_PROFILES_ACTIVE and ALLOWED_ORIGINS) on Backend & Frontend
         run: |
-          # NOTE: when switching to ACR, ensure the App Service has AcrPull permissions on the ACR
           set -euo pipefail
           SETTINGS=()
           if [ -n "${SPRING_PROFILES_ACTIVE:-}" ]; then
-            SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}")
+          SETTINGS+=("SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}")
           fi
           SETTINGS+=("ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}")
 
-          # Ensure Key Vault settings are propagated to the backend (and frontend when relevant).
-          # These are provided as repository secrets and must be set in the environment.
-          # The backend expects the Key Vault URI (written as AZ_KEYVAULT_VAULT_URL) and AZ_KEYVAULT_KEY_NAME
           SETTINGS+=("AZ_KEYVAULT_VAULT_URL=${{ secrets.AZ_KEYVAULT_VAULT_URL }}")
           SETTINGS+=("AZ_KEYVAULT_KEY_NAME=${{ secrets.AZ_KEYVAULT_KEY_NAME }}")
 
-          # Build backend-specific and frontend-specific settings arrays so we can add toggles independently.
           BACKEND_SETTINGS=("${SETTINGS[@]}")
           FRONT_SETTINGS=("${SETTINGS[@]}")
-          # Remove backend-only keys from FRONT_SETTINGS (for example SPRING_PROFILES_ACTIVE)
-          # so we don't attempt to write backend-specific Spring properties into the frontend App Service.
+
           _tmp_front=()
           for s in "${FRONT_SETTINGS[@]}"; do
-            k="${s%%=*}"
-            if [ "$k" = "SPRING_PROFILES_ACTIVE" ]; then
-              echo "Skipping frontend write of SPRING_PROFILES_ACTIVE"
-              continue
-            fi
-            _tmp_front+=("$s")
+          k="${s%%=*}"
+          if [ "$k" = "SPRING_PROFILES_ACTIVE" ]; then
+           echo "Skipping frontend write of SPRING_PROFILES_ACTIVE"
+           continue
+          fi
+          _tmp_front+=("$s")
           done
           FRONT_SETTINGS=("${_tmp_front[@]}")
 
-          # If pseudo auth is enabled via repository secret, configure backend to use the 'pseudo' profile
-          # and set the in-memory user credentials; configure frontend to send Basic auth credentials.
-          # Required repository secrets when enabling pseudo auth:
-          # - PSEUDO_AUTH_ENABLED (set to 'true' to enable)
-          # - PSEUDO_USER
-          # - PSEUDO_PASS
-          # Default to pseudo auth enabled when the secret is not present so CI focuses on pseudo mode.
-          # This expression falls back to 'true' if the repository secret is missing.
-          if [ "${{ secrets.PSEUDO_AUTH_ENABLED || 'true' }}" = "true" ]; then
-            echo "Pseudo auth enabled: adding pseudo-related app settings"
-            BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
-            # Provide safe defaults so CI can run pseudo mode even when secrets are not configured.
-            BACKEND_SETTINGS+=("app.security.dev-username=${{ secrets.PSEUDO_USER || 'pseudo' }}")
-            BACKEND_SETTINGS+=("app.security.dev-password=${{ secrets.PSEUDO_PASS || 'devpass' }}")
-             # Ensure explicit dev-bypass is disabled when using pseudo profile
-             BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+          # Use job env variables instead of inline expression evaluation
+          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
+          echo "Pseudo auth enabled: adding pseudo-related app settings"
+          BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
+          BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
+          BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
+          BACKEND_SETTINGS+=("app.security.dev-bypass=false")
 
-             # For the frontend, enable pseudo auth and provide runtime credentials via app settings
-            FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
-            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${{ secrets.PSEUDO_USER || 'pseudo' }}")
-            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${{ secrets.PSEUDO_PASS || 'devpass' }}")
-             # Also clear MSAL envs so MSAL won't initialize in the browser runtime
-             FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
-             FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+          FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
+          FRONT_SETTINGS+=("VITE_PSEUDO_USER=${PSEUDO_USER}")
+          FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${PSEUDO_PASS}")
+          FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+          FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
           fi
 
           # Optionally include a PORT setting if the secret APP_PORT is present
           if [ -n "${{ secrets.APP_PORT || '' }}" ]; then
-            BACKEND_SETTINGS+=("PORT=${{ secrets.APP_PORT }}")
+          BACKEND_SETTINGS+=("PORT=${{ secrets.APP_PORT }}")
           fi
 
           # Apply the settings to the backend and frontend app services
