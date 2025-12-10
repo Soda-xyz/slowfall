@@ -2,9 +2,9 @@ name: Minimal CI
 
 on:
   push:
-    branches: main
+    branches: [main]
   pull_request:
-    branches: main
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -13,9 +13,6 @@ permissions:
   id-token: write
 
 env:
-  # Use Azure Container Registry (ACR) as the image registry. The CI expects these secrets to be set:
-  # - ACR_NAME: name of the ACR (short name, e.g. slowfallacr)
-  # - ACR_LOGIN_SERVER: login server of the ACR (e.g. slowfallacr.azurecr.io)
   REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
   ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
   VITE_API_BASE_URL: ""
@@ -510,7 +507,7 @@ jobs:
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Write backend app settings (pseudo mode)
-        if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
+        if: ${{ env.PSEUDO_AUTH_ENABLED == 'true' }}
         env:
           BACKEND_APP_NAME: ${{ secrets.BACKEND_APP_NAME }}
           AZURE_RG: ${{ secrets.AZURE_RG }}
@@ -526,7 +523,7 @@ jobs:
         shell: bash
 
       - name: Write frontend app settings (pseudo mode)
-        if: ${{ secrets.PSEUDO_AUTH_ENABLED == 'true' || env.PSEUDO_AUTH_ENABLED == 'true' }}
+        if: ${{ env.PSEUDO_AUTH_ENABLED == 'true' }}
         env:
           FRONTEND_APP_NAME: ${{ secrets.FRONTEND_APP_NAME }}
           AZURE_RG: ${{ secrets.AZURE_RG }}
