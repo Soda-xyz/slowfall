@@ -202,8 +202,6 @@ jobs:
       PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
       PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
     outputs:
-      owner: ${{ steps.normalize_owner.outputs.owner }}
-      owner_lower: ${{ steps.normalize_owner.outputs.owner_lower }}
       spring_profiles_active: ${{ steps.compute_spring_profile.outputs.spring_profiles_active }}
       frontend_digest: ${{ steps.capture_frontend_digest.outputs.frontend_digest }}
       proxy_digest: ${{ steps.capture_proxy_digest.outputs.proxy_digest }}
@@ -228,67 +226,6 @@ jobs:
           echo "Logging in to ACR: $ACR_NAME"
           az acr login --name "$ACR_NAME"
         shell: bash
-
-      - name: Normalize owner for image tags
-        id: normalize_owner
-        run: |
-          set -euo pipefail
-          # Prefer explicit repository owner context; fall back to actor if unavailable
-          OWNER="${OWNER:-}"
-          if [ -z "$OWNER" ]; then
-            OWNER="${GITHUB_REPOSITORY_OWNER:-}"
-          fi
-          if [ -z "$OWNER" ]; then
-            OWNER="${GITHUB_ACTOR:-}"
-          fi
-          OWNER_LOWER="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
-          echo "normalize_owner: owner=$OWNER owner_lower=$OWNER_LOWER"
-          echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
-          echo "owner_lower=$OWNER_LOWER" >> "$GITHUB_OUTPUT"
-        env:
-          OWNER: ${{ github.repository_owner }}
-
-      - name: Validate and persist frontend mode (no fallbacks)
-        id: validate_frontend_mode
-        run: |
-          set -euo pipefail
-          # Prefer workflow input, then the frontend job output (from needs), then fall back to the job-level SPRING_PROFILES_ACTIVE (from secret DEPLOY_ENV)
-          FRONT_INPUT="${{ github.event.inputs.frontend_env || needs.frontend-build-and-upload.outputs.vite_frontend_env || '' }}"
-          if [ -n "$FRONT_INPUT" ]; then
-            CHOSEN="$FRONT_INPUT"
-          else
-            if [ -z "${SPRING_PROFILES_ACTIVE:-}" ]; then
-              echo "ERROR: SPRING_PROFILES_ACTIVE is not set; cannot determine frontend env" >&2
-              exit 1
-            fi
-            case "${SPRING_PROFILES_ACTIVE}" in
-              prod|production)
-                CHOSEN="production"
-                ;;
-              dev|development)
-                CHOSEN="development"
-                ;;
-              *)
-                echo "ERROR: SPRING_PROFILES_ACTIVE='${SPRING_PROFILES_ACTIVE}' is not a known mapping; please provide explicit workflow input 'frontend_env'" >&2
-                exit 1
-                ;;
-            esac
-          fi
-          echo "VITE_FRONTEND_ENV=$CHOSEN" >> "$GITHUB_ENV"
-          if [ "$CHOSEN" = "development" ]; then
-            echo "VITE_API_BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
-          else
-            echo "VITE_API_BASE_URL=" >> "$GITHUB_ENV"
-          fi
-          # Expose chosen env as this step output (used later for image build args)
-          echo "vite_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
-          if [ "$CHOSEN" = "development" ]; then
-            echo "vite_api_base_url=http://localhost:8080" >> "$GITHUB_OUTPUT"
-          else
-            echo "vite_api_base_url=" >> "$GITHUB_OUTPUT"
-          fi
-          echo "chosen_frontend_env=$CHOSEN" >> "$GITHUB_OUTPUT"
-          echo "Selected frontend env: $CHOSEN"
 
       - name: Build & push backend image
         uses: docker/build-push-action@v4
@@ -398,18 +335,33 @@ jobs:
           FRONT_SETTINGS=("${_tmp_front[@]}")
 
           # Use job env variables instead of inline expression evaluation
-          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
-          echo "Pseudo auth enabled: adding pseudo-related app settings"
-          BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
-          BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
-          BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
-          BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+          #          if [ "${PSEUDO_AUTH_ENABLED}" = "true" ]; then
+#          echo "Pseudo auth enabled: adding pseudo-related app settings"
+#          BACKEND_SETTINGS+=("SPRING_PROFILES_ACTIVE=pseudo")
+#          BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
+#          BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
+#          BACKEND_SETTINGS+=("app.security.dev-bypass=false")
+#
+#          FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
+#          FRONT_SETTINGS+=("VITE_PSEUDO_USER=${PSEUDO_USER}")
+#          FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${PSEUDO_PASS}")
+#          FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+#          FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+#          fi
+          # If pseudo auth is enabled in secrets, pass the credentials through as app settings
+          # Do NOT change SPRING_PROFILES_ACTIVE here — there is no pseudo runtime profile.
+          if [ "${PSEUDO_AUTH_ENABLED:-}" = "true" ]; then
+            echo "Pseudo auth enabled: adding pseudo-related app settings"
+            BACKEND_SETTINGS+=("PSEUDO_AUTH_ENABLED=true")
+            BACKEND_SETTINGS+=("app.security.dev-username=${PSEUDO_USER}")
+            BACKEND_SETTINGS+=("app.security.dev-password=${PSEUDO_PASS}")
 
-          FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
-          FRONT_SETTINGS+=("VITE_PSEUDO_USER=${PSEUDO_USER}")
-          FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${PSEUDO_PASS}")
-          FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
-          FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
+            FRONT_SETTINGS+=("VITE_PSEUDO_AUTH=true")
+            FRONT_SETTINGS+=("VITE_PSEUDO_USER=${PSEUDO_USER}")
+            FRONT_SETTINGS+=("VITE_PSEUDO_PASS=${PSEUDO_PASS}")
+            # Keep MSAL client/authority empty when using pseudo auth to avoid accidental real auth
+            FRONT_SETTINGS+=("VITE_MSAL_CLIENT_ID=")
+            FRONT_SETTINGS+=("VITE_MSAL_AUTHORITY=")
           fi
 
           # Optionally include a PORT setting if the secret APP_PORT is present
@@ -520,37 +472,37 @@ jobs:
               out=$(az webapp config appsettings set --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
               rc=$?
               if [ $rc -ne 0 ]; then
-                echo "ERROR: Failed to set backend setting for key: $key" >&2
-                echo "az output:" >&2
-                echo "$out" >&2
-                echo "Current backend app settings (keys only):" >&2
-                az webapp config appsettings list --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
-                exit $rc
-              fi
-            done
-          else
-            echo "No backend app settings to set"
-          fi
+                echo "ERROR - Failed to set backend setting for key $key"
+                echo "az output -"
+                echo "$out"
+                 echo "Current backend app settings (keys only)"
+                  az webapp config appsettings list --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' || true
+                   exit $rc
+               fi
+             done
+           else
+             echo "No backend app settings to set"
+           fi
 
-          if [ ${#FINAL_FRONT[@]} -gt 0 ]; then
-            echo "Setting frontend app settings one-by-one"
-            for entry in "${FINAL_FRONT[@]}"; do
-              key="${entry%%=*}"
-              echo "Applying frontend key: $key"
-              out=$(az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
-              rc=$?
-              if [ $rc -ne 0 ]; then
-                echo "ERROR: Failed to set frontend setting for key: $key" >&2
-                echo "az output:" >&2
-                echo "$out" >&2
-                echo "Current frontend app settings (keys only):" >&2
-                az webapp config appsettings list --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' >&2 || true
-                exit $rc
-              fi
-            done
-          else
-            echo "No frontend app settings to set"
-          fi
+           if [ ${#FINAL_FRONT[@]} -gt 0 ]; then
+             echo "Setting frontend app settings one-by-one"
+             for entry in "${FINAL_FRONT[@]}"; do
+               key="${entry%%=*}"
+               echo "Applying frontend key: $key"
+               out=$(az webapp config appsettings set --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --settings "$entry" 2>&1) || true
+               rc=$?
+               if [ $rc -ne 0 ]; then
+                 echo "ERROR - Failed to set frontend setting for key $key"
+                 echo "az output -"
+                 echo "$out"
+                 echo "Current frontend app settings (keys only)"
+                 az webapp config appsettings list --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" -o json | jq -r '.[].name' || true
+                 exit $rc
+               fi
+             done
+           else
+             echo "No frontend app settings to set"
+           fi
 
 
       - name: Set app settings on proxy
@@ -575,35 +527,3 @@ jobs:
           set -euo pipefail
           echo "Setting proxy app settings: ${SETTINGS[*]}"
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
-
-      - name: Write backend app settings (pseudo mode)
-        if: ${{ env.PSEUDO_AUTH_ENABLED == 'true' }}
-        env:
-          BACKEND_APP_NAME: ${{ secrets.BACKEND_APP_NAME }}
-          AZURE_RG: ${{ secrets.AZURE_RG }}
-          PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
-          PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
-        run: |
-          echo "Writing pseudo app settings to backend: $BACKEND_APP_NAME"
-          az webapp config appsettings set \
-            --name "$BACKEND_APP_NAME" \
-            --resource-group "$AZURE_RG" \
-            --settings PSEUDO_AUTH_ENABLED="true" app.security.dev-username="$PSEUDO_USER" app.security.dev-password="$PSEUDO_PASS" SPRING_PROFILES_ACTIVE="pseudo" \
-            --output none
-        shell: bash
-
-      - name: Write frontend app settings (pseudo mode)
-        if: ${{ env.PSEUDO_AUTH_ENABLED == 'true' }}
-        env:
-          FRONTEND_APP_NAME: ${{ secrets.FRONTEND_APP_NAME }}
-          AZURE_RG: ${{ secrets.AZURE_RG }}
-          PSEUDO_USER: ${{ secrets.PSEUDO_USER }}
-          PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
-        run: |
-          echo "Writing pseudo app settings to frontend: $FRONTEND_APP_NAME"
-          az webapp config appsettings set \
-            --name "$FRONTEND_APP_NAME" \
-            --resource-group "$AZURE_RG" \
-            --settings VITE_PSEUDO_AUTH="true" VITE_PSEUDO_USER="$PSEUDO_USER" VITE_PSEUDO_PASS="$PSEUDO_PASS" VITE_MSAL_CLIENT_ID="" VITE_MSAL_AUTHORITY="" \
-            --output none
-        shell: bash
