@@ -55,9 +55,7 @@ export function AirportProvider({ children }: { children: React.ReactNode }): Re
 				setSelectedAirportId,
 				loading,
 				refresh: load,
-				/**
-				 *
-				 */
+				/** Add an airport to the current list (optimistic/local update) */
 				addAirport: (airport: Airport) => setAirports((prev) => [airport, ...prev]),
 			}}
 		>

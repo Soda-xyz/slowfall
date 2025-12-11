@@ -1,38 +1,8 @@
 import React, { useState } from "react";
-import {
-	Button,
-	Text,
-	Menu,
-	TextInput,
-	ScrollArea,
-	Table as MantineTable,
-	Tooltip,
-} from "@mantine/core";
+import { Button, Text, Menu, TextInput, ScrollArea, Tooltip, Table } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import type { Jump, PersonDto } from "./types";
 import { addSkydiverToJump, addPilotToJump } from "./api";
-
-const Table: any = MantineTable as any;
-/**
- *
- */
-Table.Tr = (props: any) => <tr {...props} />;
-/**
- *
- */
-Table.Td = (props: any) => <td {...props} />;
-/**
- *
- */
-Table.Thead = (props: any) => <thead {...props} />;
-/**
- *
- */
-Table.Tbody = (props: any) => <tbody {...props} />;
-/**
- *
- */
-Table.Th = (props: any) => <th {...props} />;
 
 type Props = {
 	jumps: Jump[];
@@ -57,9 +27,10 @@ export default function JumpTable({
 	const [dropdownOpenedKey, setDropdownOpenedKey] = useState<string | null>(null);
 	const [filter, setFilter] = useState<string>("");
 
-	// helper to format "Firstname.LastInitial" -> "Alice.A"
 	/**
+	 * Compact name helper for display purposes.
 	 *
+	 * Converts a full name to a short form used in table cells (e.g. "Alice Smith" gives "Alice.S").
 	 */
 	const compactName = (fullName: string) => {
 		if (!fullName) return "";
@@ -73,7 +44,7 @@ export default function JumpTable({
 	if (!jumps || jumps.length === 0) return <Text>No upcoming jumps</Text>;
 
 	/**
-	 *
+	 * Open the add-person menu for a given jump in the specified mode.
 	 */
 	const openFor = (jumpId: string, mode: "skydiver" | "pilot") => {
 		setSelectedPersonId(null);
@@ -81,9 +52,7 @@ export default function JumpTable({
 		setDropdownOpenedKey(`${jumpId}-${mode}`);
 	};
 
-	/**
-	 *
-	 */
+	/** Close the add-person menu and clear any temporary selection/filter */
 	const closeMenu = () => {
 		setSelectedPersonId(null);
 		setFilter("");
@@ -91,7 +60,7 @@ export default function JumpTable({
 	};
 
 	/**
-	 *
+	 * Parse a dropdown key produced by `openFor` into jumpId and mode.
 	 */
 	const parseKey = (key: string | null) => {
 		if (!key) return { jumpId: null as string | null, mode: null as string | null };
@@ -106,7 +75,7 @@ export default function JumpTable({
 	const { jumpId: currentJumpId } = parseKey(dropdownOpenedKey);
 
 	/**
-	 *
+	 * Submit adding a skydiver to a jump via the API, show notification, and refresh.
 	 */
 	const submitAddSkydiver = async (personId?: string) => {
 		const personToAdd = personId ?? selectedPersonId;
@@ -129,9 +98,7 @@ export default function JumpTable({
 		}
 	};
 
-	/**
-	 *
-	 */
+	/** Submit adding a pilot to a jump */
 	const submitAddPilot = async (personId?: string) => {
 		const personToAdd = personId ?? selectedPersonId;
 		if (!currentJumpId || !personToAdd) return;
@@ -153,7 +120,6 @@ export default function JumpTable({
 		}
 	};
 
-	// Build table rows using a real <table>
 	const rows = jumps
 		.slice()
 		.sort((left, right) => new Date(left.jumpTime).getTime() - new Date(right.jumpTime).getTime())
@@ -161,17 +127,16 @@ export default function JumpTable({
 			const skyKey = `${jump.id}-skydiver`;
 			const pilotKey = `${jump.id}-pilot`;
 
-			const filteredSkydivers = skydivers.filter((p) =>
-				p.name.toLowerCase().includes(filter.toLowerCase()),
+			const filteredSkydivers = skydivers.filter((person) =>
+				person.name.toLowerCase().includes(filter.toLowerCase()),
 			);
-			const filteredPilots = pilots.filter((p) =>
-				p.name.toLowerCase().includes(filter.toLowerCase()),
+			const filteredPilots = pilots.filter((person) =>
+				person.name.toLowerCase().includes(filter.toLowerCase()),
 			);
 
-			// compact display (first 3) and tooltip with full list
 			const maxInline = 3;
-			const skyFull = jump.skydivers?.map((p) => p.name) ?? [];
-			const pilotFull = jump.pilots?.map((p) => p.name) ?? [];
+			const skyFull = jump.skydivers?.map((person) => person.name) ?? [];
+			const pilotFull = jump.pilots?.map((person) => person.name) ?? [];
 
 			const skyInline =
 				skyFull.length === 0
@@ -203,9 +168,7 @@ export default function JumpTable({
 								</Text>
 							</Tooltip>
 						) : (
-							<Text size="sm" color="dimmed">
-								None
-							</Text>
+							<Text size="sm">None</Text>
 						)}
 					</Table.Td>
 					<Table.Td style={{ padding: 8 }}>
@@ -219,9 +182,7 @@ export default function JumpTable({
 								</Text>
 							</Tooltip>
 						) : (
-							<Text size="sm" color="dimmed">
-								None
-							</Text>
+							<Text size="sm">None</Text>
 						)}
 					</Table.Td>
 					<Table.Td style={{ width: 260, padding: 8, textAlign: "right" }}>
@@ -245,15 +206,13 @@ export default function JumpTable({
 								/>
 								<ScrollArea style={{ maxHeight: 240 }}>
 									{filteredSkydivers.length > 0 ? (
-										filteredSkydivers.map((p) => (
-											<Menu.Item key={p.id} onClick={() => submitAddSkydiver(p.id)}>
-												<Text size="sm">{p.name}</Text>
+										filteredSkydivers.map((person) => (
+											<Menu.Item key={person.id} onClick={() => submitAddSkydiver(person.id)}>
+												<Text size="sm">{person.name}</Text>
 											</Menu.Item>
 										))
 									) : (
-										<Text size="sm" color="dimmed">
-											No matches
-										</Text>
+										<Text size="sm">No matches</Text>
 									)}
 								</ScrollArea>
 							</Menu.Dropdown>
@@ -278,15 +237,13 @@ export default function JumpTable({
 								/>
 								<ScrollArea style={{ maxHeight: 240 }}>
 									{filteredPilots.length > 0 ? (
-										filteredPilots.map((p) => (
-											<Menu.Item key={p.id} onClick={() => submitAddPilot(p.id)}>
-												<Text size="sm">{p.name}</Text>
+										filteredPilots.map((person) => (
+											<Menu.Item key={person.id} onClick={() => submitAddPilot(person.id)}>
+												<Text size="sm">{person.name}</Text>
 											</Menu.Item>
 										))
 									) : (
-										<Text size="sm" color="dimmed">
-											No matches
-										</Text>
+										<Text size="sm">No matches</Text>
 									)}
 								</ScrollArea>
 							</Menu.Dropdown>

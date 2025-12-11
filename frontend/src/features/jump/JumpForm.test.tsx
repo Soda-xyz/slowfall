@@ -1,12 +1,12 @@
+/**
+ * JumpForm test - verifies form behavior, validations and API integration.
+ */
 import React from "react";
-// Mock mantine date/time inputs before importing the component so JumpForm gets mocked implementations
 vi.mock(
 	"@mantine/dates",
 	() =>
 		({
-			/**
-			 *
-			 */
+			/** Mock DateInput returning a simple input element */
 			DateInput: (props: any) =>
 				React.createElement("input", {
 					"aria-label": props.label ?? "Date",
@@ -15,21 +15,15 @@ vi.mock(
 							? props.value
 							: props.value.toString()
 						: "",
-					/**
-					 *
-					 */
+					/** Mock onChange handler for DateInput */
 					onChange: (e: any) => props.onChange?.(e.target.value),
 				}),
-			/**
-			 *
-			 */
+			/** Mock TimePicker returning a simple input element */
 			TimePicker: (props: any) =>
 				React.createElement("input", {
 					"aria-label": props.label ?? "Time",
 					value: props.value ?? "",
-					/**
-					 *
-					 */
+					/** Mock onChange handler for TimePicker */
 					onChange: (e: any) => props.onChange?.(e.target.value),
 				}),
 		}) as unknown as any,
@@ -76,7 +70,6 @@ vi.mock("../craft/api", () => ({
 	),
 }));
 
-// Mock the createJump and fetchJumps from api (kept here so test file can import api spy later)
 vi.mock("./api", async () => {
 	const actual: any = await vi.importActual("./api");
 	return {
@@ -124,25 +117,20 @@ describe("JumpForm", () => {
 			</MantineProvider>,
 		);
 
-		// wait for craft select to be populated; select is readonly input with placeholder
 		await waitFor(() => expect(screen.getByPlaceholderText(/Select craft/i)).toBeTruthy());
 
-		// set altitude using user events
 		const altitude = screen.getByLabelText(/Altitude/i);
 		await userEvent.clear(altitude);
 		await userEvent.type(altitude, "10000");
 
-		// set time using user events
 		const timeInput = screen.getByLabelText(/Time/i);
 		await userEvent.clear(timeInput);
 		await userEvent.type(timeInput, "12:00");
 
-		// submit
 		const btn = screen.getByRole("button", { name: /Create jump/i });
 		await userEvent.click(btn);
 
 		await waitFor(() => expect(onCreated).toHaveBeenCalled());
-		// also ensure createJump was called
 		expect(api.createJump).toHaveBeenCalled();
 	});
 
@@ -157,7 +145,6 @@ describe("JumpForm", () => {
 		const btn = await screen.findByRole("button", { name: /Create jump/i });
 		userEvent.click(btn);
 
-		// Expect a notification to appear - NotificationsProvider mounts notifications in document.body
 		await waitFor(() => expect(document.body.textContent).toContain("Missing fields"));
 		expect(api.createJump).not.toHaveBeenCalled();
 	});
@@ -170,10 +157,8 @@ describe("JumpForm", () => {
 			</MantineProvider>,
 		);
 
-		// wait for craft select to be populated
 		await waitFor(() => expect(screen.getByPlaceholderText(/Select craft/i)).toBeTruthy());
 
-		// set altitude and time
 		const altitude2 = screen.getByLabelText(/Altitude/i);
 		await userEvent.clear(altitude2);
 		await userEvent.type(altitude2, "9000");

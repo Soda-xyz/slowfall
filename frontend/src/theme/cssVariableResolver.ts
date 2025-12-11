@@ -79,22 +79,18 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 		});
 	}
 
-	const otherTokens = (theme as any)?.other?.tokens as
+	const otherTokensRaw = (theme as unknown as Record<string, unknown>)?.other as
+		| undefined
+		| Record<string, unknown>;
+	const otherTokens = otherTokensRaw?.tokens as
 		| undefined
 		| { light?: Record<string, string>; dark?: Record<string, string> };
 
-	/**
-	 *
-	 */
-	const prefer = (lightKey: string, fallback: string) => {
-		return otherTokens?.light?.[lightKey] ?? fallback;
-	};
-	/**
-	 *
-	 */
-	const preferDark = (darkKey: string, fallback: string) => {
-		return otherTokens?.dark?.[darkKey] ?? fallback;
-	};
+	/** Prefer a light token from otherTokens if available */
+	const prefer = (lightKey: string, fallback: string) => otherTokens?.light?.[lightKey] ?? fallback;
+	/** Prefer a dark token from otherTokens if available */
+	const preferDark = (darkKey: string, fallback: string) =>
+		otherTokens?.dark?.[darkKey] ?? fallback;
 
 	const light: Record<string, string> = {
 		[`${prefix}background`]: prefer("bg", theme.white ?? gray0),

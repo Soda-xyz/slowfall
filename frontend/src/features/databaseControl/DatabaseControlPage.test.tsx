@@ -1,35 +1,24 @@
-// Ensure vi is available for top-level mocks
+/**
+ * DatabaseControlPage test - ensures page renders its title and internal placeholders.
+ */
 import { vi } from "vitest";
 
-// Mock child components and APIs before importing the DatabaseControlPage
 vi.mock("../person", () => ({
-	/**
-	 *
-	 */
+	/** Mock PersonTable used in DatabaseControlPage tests */
 	PersonTable: () => <div>PersonTable</div>,
-	/**
-	 *
-	 */
+	/** Mock PersonForm used in DatabaseControlPage tests */
 	PersonForm: () => <div>PersonForm</div>,
 }));
 vi.mock("../airport", () => ({
-	/**
-	 *
-	 */
+	/** Mock AirportTable used in DatabaseControlPage tests */
 	AirportTable: () => <div>AirportTable</div>,
-	/**
-	 *
-	 */
+	/** Mock AirportForm used in DatabaseControlPage tests */
 	AirportForm: () => <div>AirportForm</div>,
 }));
 vi.mock("../craft", () => ({
-	/**
-	 *
-	 */
+	/** Mock CraftTable used in DatabaseControlPage tests */
 	CraftTable: () => <div>CraftTable</div>,
-	/**
-	 *
-	 */
+	/** Mock CraftForm used in DatabaseControlPage tests */
 	CraftForm: () => <div>CraftForm</div>,
 }));
 vi.mock("../person/api", () => ({ fetchPerson: vi.fn(() => Promise.resolve([])) }));
@@ -49,10 +38,8 @@ describe("DatabaseControlPage", () => {
 			</MantineProvider>,
 		);
 
-		// Wait for loading to finish and title to appear
 		await waitFor(() => expect(screen.getByText(/Database Control/i)).toBeTruthy());
 
-		// child placeholders should be present (PersonForm/PersonTable, AirportForm/Table, CraftForm/Table are mocked)
 		await waitFor(() => expect(screen.getByText(/PersonForm/i)).toBeTruthy());
 		expect(screen.getByText(/PersonTable/i)).toBeTruthy();
 		expect(screen.getByText(/AirportForm/i)).toBeTruthy();

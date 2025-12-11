@@ -5,8 +5,8 @@ import JumpTable from "../jump/JumpTable";
 import JumpPlanner from "../jump/JumpPlanner";
 import { fetchJumps } from "../jump/api";
 import { fetchPilots, fetchSkydivers } from "../person/api";
-import type { Jump } from "../jump/types";
-import type { PersonDto } from "../jump/types";
+import type { Jump } from "../jump";
+import type { PersonDto } from "../jump";
 
 /**
  * DashboardPage
@@ -60,9 +60,13 @@ export default function DashboardPage(): React.JSX.Element {
 	useEffect(() => {
 		mountedRef.current = true;
 		const controller = new AbortController();
-		loadAll(controller.signal).catch((err) =>
-			console.debug("DashboardPage: initial load failed:", err),
-		);
+		(async () => {
+			try {
+				await loadAll(controller.signal);
+			} catch (err) {
+				console.debug("DashboardPage: initial load failed:", err);
+			}
+		})();
 
 		/**
 		 * Event handler to reload jumps/people when a global `jumpCreated` event occurs.
@@ -98,8 +102,8 @@ export default function DashboardPage(): React.JSX.Element {
 			<Card>
 				<JumpPlanner
 					jumps={jumps}
-					pilots={pilots.map((p) => p.name)}
-					skydivers={skydivers.map((p) => p.name)}
+					pilots={pilots.map((person) => person.name)}
+					skydivers={skydivers.map((person) => person.name)}
 					onRefresh={loadAll}
 				/>
 			</Card>

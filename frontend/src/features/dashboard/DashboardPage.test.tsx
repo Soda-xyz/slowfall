@@ -1,23 +1,18 @@
-// Ensure vi is available for top-level mocks
+/**
+ * DashboardPage test - verifies rendering of title and child placeholders.
+ */
 import { vi } from "vitest";
 
-// Mock child jump components and APIs before importing the DashboardPage
 vi.mock("../jump/JumpForm", () => ({
-	/**
-	 *
-	 */
+	/** Mock JumpForm child for DashboardPage tests */
 	default: () => <div>JumpForm</div>,
 }));
 vi.mock("../jump/JumpTable", () => ({
-	/**
-	 *
-	 */
+	/** Mock JumpTable child for DashboardPage tests */
 	default: () => <div>JumpTable</div>,
 }));
 vi.mock("../jump/JumpPlanner", () => ({
-	/**
-	 *
-	 */
+	/** Mock JumpPlanner child for DashboardPage tests */
 	default: () => <div>JumpPlanner</div>,
 }));
 vi.mock("../jump/api", () => ({ fetchJumps: vi.fn(() => Promise.resolve([])) }));
@@ -40,7 +35,6 @@ describe("DashboardPage", () => {
 		);
 
 		expect(screen.getByText(/Dashboard/i)).toBeTruthy();
-		// child placeholders should be present (JumpForm/JumpTable/JumpPlanner are mocked)
 		await waitFor(() => expect(screen.getByText(/JumpForm/i)).toBeTruthy());
 		expect(screen.getByText(/JumpTable/i)).toBeTruthy();
 		expect(screen.getByText(/JumpPlanner/i)).toBeTruthy();

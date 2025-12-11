@@ -1,3 +1,7 @@
+/**
+ * JumpPlanner smoke test - renders the component and checks key UI labels.
+ */
+
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import JumpPlanner from "./JumpPlanner";

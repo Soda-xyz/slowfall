@@ -347,7 +347,7 @@ export const mantineTheme: MantineThemeOverride = createTheme({
 	focusRing: "never",
 	scale: 1,
 	primaryColor: "primary",
-	primaryShade: { light: 5, dark: 6 } as any,
+	primaryShade: { light: 5, dark: 6 },
 	autoContrast: true,
 	luminanceThreshold: 0.3,
 	fontFamily: "Geist",
@@ -431,9 +431,10 @@ export const mantineTheme: MantineThemeOverride = createTheme({
 	components: {
 		Container: {
 			/**
-			 *
+			 * Provide container CSS variables. `themeArg` is unused but included for
+			 * compatibility with Mantine's component vars signature.
 			 */
-			vars: (_: any, { size, fluid }: { size?: string | number; fluid?: boolean }) => ({
+			vars: (_themeArg: unknown, { size, fluid }: { size?: string | number; fluid?: boolean }) => ({
 				root: {
 					"--container-size": fluid
 						? "100%"

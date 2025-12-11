@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { ActionIcon, Box, Text, useCombobox, Combobox, Group, Stack, Card } from "@mantine/core";
 import { IconParachute, IconParkingCircle } from "@tabler/icons-react";
 import type { Jump } from "./types";
@@ -14,7 +14,10 @@ type Props = {
 };
 
 /**
+ * JumpPlanner
  *
+ * Small utility UI that shows the next upcoming jump and allows assigning pilots
+ * and skydivers to the next load. Kept intentionally lightweight.
  */
 export default function JumpPlanner({
 	jumps,
@@ -28,33 +31,39 @@ export default function JumpPlanner({
 	void people;
 	void combined;
 
-	/**
-	 *
-	 */
-	const getNextJump = (): Jump | null => {
+	/** Return the next upcoming jump or null */
+	const getNextJump = useCallback((): Jump | null => {
 		if (!jumps || jumps.length === 0) return null;
 		const now = Date.now();
 		const sorted = [...jumps].sort(
-			(a, b) => new Date(a.jumpTime).getTime() - new Date(b.jumpTime).getTime(),
+			(leftJump, rightJump) =>
+				new Date(leftJump.jumpTime).getTime() - new Date(rightJump.jumpTime).getTime(),
 		);
 		return sorted.find((j) => new Date(j.jumpTime).getTime() > now) ?? null;
-	};
+	}, [jumps]);
 
 	const nextJump = getNextJump();
 
 	/**
-	 *
+	 * Coerce a person-like value into a display name
 	 */
-	const toName = (p: any): string => {
-		if (!p) return "";
-		if (typeof p === "string") return p;
-		if (typeof p === "object" && (p.name || p.id)) return String(p.name ?? p.id ?? "");
-		return String(p);
+	const toName = (value: unknown): string => {
+		if (!value) return "";
+		if (typeof value === "string") return value;
+		if (typeof value === "object") {
+			const asObj = value as { name?: unknown; id?: unknown };
+			if (asObj.name || asObj.id) return String(asObj.name ?? asObj.id ?? "");
+		}
+		return String(value);
 	};
 
-	const pilotList: string[] = nextJump ? (nextJump.pilots ?? []).map(toName) : [];
+	const pilotList: string[] = nextJump
+		? (nextJump.pilots ?? []).map((person) => toName(person))
+		: [];
 
-	const skydiverList: string[] = nextJump ? (nextJump.skydivers ?? []).map(toName) : [];
+	const skydiverList: string[] = nextJump
+		? (nextJump.skydivers ?? []).map((person) => toName(person))
+		: [];
 
 	const [selectedPilots, setSelectedPilots] = useState<(string | null)[]>([null, null]);
 	const [selectedSkydivers, setSelectedSkydivers] = useState<{
@@ -65,9 +74,7 @@ export default function JumpPlanner({
 		right: Array(3).fill(null),
 	});
 
-	/**
-	 *
-	 */
+	/** Ensure a pilot selection is unique across pilot slots */
 	function setPilotAtUnique(index: number, value: string) {
 		setSelectedPilots((prev) => {
 			const copy = [...prev];
@@ -80,9 +87,7 @@ export default function JumpPlanner({
 		});
 	}
 
-	/**
-	 *
-	 */
+	/** Ensure a skydiver selection is unique across both left and right stacks */
 	function setSkydiverAtUnique(side: "left" | "right", index: number, value: string) {
 		setSelectedSkydivers((prev) => {
 			const left = [...prev.left];
@@ -114,10 +119,10 @@ export default function JumpPlanner({
 		for (let i = 0; i < Math.min(3, ssrc.length); i++) left[i] = ssrc[i] ?? null;
 		for (let i = 3; i < Math.min(6, ssrc.length); i++) right[i - 3] = ssrc[i] ?? null;
 		setSelectedSkydivers({ left, right });
-	}, [jumps]);
+	}, [getNextJump]);
 
 	/**
-	 *
+	 * Small Combobox field helper used by pilots/skydivers lists.
 	 */
 	function ComboboxField({
 		value,
@@ -183,17 +188,19 @@ export default function JumpPlanner({
 			<Group>
 				<Text mb="md">Weight distribution</Text>
 				<Box>
-					<Text mb="md">{dayjs(nextJump?.jumpTime).format("HH:MM") ?? "No upcomming jump"}</Text>
+					<Text mb="md">
+						{nextJump ? dayjs(nextJump.jumpTime).format("HH:mm") : "No upcoming jump"}
+					</Text>
 				</Box>
 			</Group>
 			<Box>
 				<Text mb="xs">Pilots</Text>
 				<Group>
-					{Array.from({ length: 2 }).map((_, idx) => (
+					{Array.from({ length: 2 }).map((_i, idx) => (
 						<Box key={`pilot-${idx}`} mt="xs">
 							<ComboboxField
 								value={selectedPilots[idx]}
-								onChange={(v) => setPilotAtUnique(idx, v)}
+								onChange={(val) => setPilotAtUnique(idx, val)}
 								options={pilotList}
 								icon={<IconParkingCircle size={18} />}
 							/>
@@ -212,11 +219,11 @@ export default function JumpPlanner({
 									<Text mt="lg" mb="xs">
 										Left
 									</Text>
-									{Array.from({ length: 3 }).map((_, idx) => (
+									{Array.from({ length: 3 }).map((_i, idx) => (
 										<Group key={`sky-left-${idx}`}>
 											<ComboboxField
 												value={selectedSkydivers.left[idx]}
-												onChange={(v) => setSkydiverAtUnique("left", idx, v)}
+												onChange={(val) => setSkydiverAtUnique("left", idx, val)}
 												options={skydiverList}
 												icon={<IconParachute size={16} />}
 											/>
@@ -230,11 +237,11 @@ export default function JumpPlanner({
 									<Text mt="lg" mb="xs">
 										Right
 									</Text>
-									{Array.from({ length: 3 }).map((_, idx) => (
+									{Array.from({ length: 3 }).map((_i, idx) => (
 										<Group key={`sky-right-${idx}`}>
 											<ComboboxField
 												value={selectedSkydivers.right[idx]}
-												onChange={(v) => setSkydiverAtUnique("right", idx, v)}
+												onChange={(val) => setSkydiverAtUnique("right", idx, val)}
 												options={skydiverList}
 												icon={<IconParachute size={16} />}
 											/>

@@ -9,6 +9,7 @@ import { PseudoLogoutButton } from "./auth/PseudoAuth";
 import { Notifications } from "@mantine/notifications";
 import { mantineTheme } from "./theme/theme";
 import mantineCssVariableResolver from "./theme/cssVariableResolver";
+import type { MantineThemeOverride } from "@mantine/core";
 
 /**
  * App
@@ -31,7 +32,7 @@ export default function App(): React.JSX.Element {
 		return "dashboard";
 	}, [location.pathname]);
 
-	const appliedTheme = { ...(mantineTheme as any), colorScheme: "dark" } as any;
+	const appliedTheme: MantineThemeOverride = { ...(mantineTheme as MantineThemeOverride) };
 
 	return (
 		<MantineProvider
