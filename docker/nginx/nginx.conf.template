@@ -111,6 +111,8 @@ http {
             proxy_set_header X-Forwarded-Port $server_port;
             proxy_set_header Cookie $http_cookie;
             proxy_set_header Authorization $http_authorization;
+            # Forward the Origin header so backend CORS handling can reflect/validate it
+            proxy_set_header Origin $http_origin;
             proxy_cookie_domain $BACKEND_HOST $host;
             proxy_redirect off;
             proxy_read_timeout $PROXY_READ_TIMEOUT;
