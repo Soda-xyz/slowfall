@@ -1,27 +1,47 @@
-import React from 'react';
+import React from "react";
 // Mock mantine date/time inputs before importing the component so JumpForm gets mocked implementations
-vi.mock('@mantine/dates', () => ({
-	DateInput: (props: any) =>
-		React.createElement('input', {
-			'aria-label': props.label ?? 'Date',
-			value: props.value ? (typeof props.value === 'string' ? props.value : props.value.toString()) : '',
-			onChange: (e: any) => props.onChange?.(e.target.value),
-		}),
-	TimePicker: (props: any) =>
-		React.createElement('input', {
-			'aria-label': props.label ?? 'Time',
-			value: props.value ?? '',
-			onChange: (e: any) => props.onChange?.(e.target.value),
-		}),
-} as unknown as any));
+vi.mock(
+	"@mantine/dates",
+	() =>
+		({
+			/**
+			 *
+			 */
+			DateInput: (props: any) =>
+				React.createElement("input", {
+					"aria-label": props.label ?? "Date",
+					value: props.value
+						? typeof props.value === "string"
+							? props.value
+							: props.value.toString()
+						: "",
+					/**
+					 *
+					 */
+					onChange: (e: any) => props.onChange?.(e.target.value),
+				}),
+			/**
+			 *
+			 */
+			TimePicker: (props: any) =>
+				React.createElement("input", {
+					"aria-label": props.label ?? "Time",
+					value: props.value ?? "",
+					/**
+					 *
+					 */
+					onChange: (e: any) => props.onChange?.(e.target.value),
+				}),
+		}) as unknown as any,
+);
 
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from '@testing-library/user-event';
+import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import JumpForm from "./JumpForm";
 import { MantineProvider } from "@mantine/core";
-import * as api from './api';
-import { Notifications } from '@mantine/notifications';
+import * as api from "./api";
+import { Notifications } from "@mantine/notifications";
 
 vi.mock("../person/api", () => ({
 	fetchPilots: vi.fn(() =>
@@ -61,7 +81,16 @@ vi.mock("./api", async () => {
 	const actual: any = await vi.importActual("./api");
 	return {
 		...actual,
-		createJump: vi.fn(() => Promise.resolve({ id: "j1", jumpTime: new Date().toISOString(), airportId: "a1", altitudeFeet: 10000, skydivers: [], pilots: [] })),
+		createJump: vi.fn(() =>
+			Promise.resolve({
+				id: "j1",
+				jumpTime: new Date().toISOString(),
+				airportId: "a1",
+				altitudeFeet: 10000,
+				skydivers: [],
+				pilots: [],
+			}),
+		),
 		fetchJumps: vi.fn(() => Promise.resolve([])),
 	};
 });
@@ -86,7 +115,7 @@ describe("JumpForm", () => {
 		);
 	});
 
-	it('submits createJump and calls onCreated when provided', async () => {
+	it("submits createJump and calls onCreated when provided", async () => {
 		const onCreated = vi.fn();
 		render(
 			<MantineProvider>
@@ -101,15 +130,15 @@ describe("JumpForm", () => {
 		// set altitude using user events
 		const altitude = screen.getByLabelText(/Altitude/i);
 		await userEvent.clear(altitude);
-		await userEvent.type(altitude, '10000');
+		await userEvent.type(altitude, "10000");
 
 		// set time using user events
 		const timeInput = screen.getByLabelText(/Time/i);
 		await userEvent.clear(timeInput);
-		await userEvent.type(timeInput, '12:00');
+		await userEvent.type(timeInput, "12:00");
 
 		// submit
-		const btn = screen.getByRole('button', { name: /Create jump/i });
+		const btn = screen.getByRole("button", { name: /Create jump/i });
 		await userEvent.click(btn);
 
 		await waitFor(() => expect(onCreated).toHaveBeenCalled());
@@ -117,7 +146,7 @@ describe("JumpForm", () => {
 		expect(api.createJump).toHaveBeenCalled();
 	});
 
-	it('shows validation error when required fields missing', async () => {
+	it("shows validation error when required fields missing", async () => {
 		render(
 			<MantineProvider>
 				<Notifications position="top-right" />
@@ -125,15 +154,15 @@ describe("JumpForm", () => {
 			</MantineProvider>,
 		);
 
-		const btn = await screen.findByRole('button', { name: /Create jump/i });
+		const btn = await screen.findByRole("button", { name: /Create jump/i });
 		userEvent.click(btn);
 
 		// Expect a notification to appear - NotificationsProvider mounts notifications in document.body
-		await waitFor(() => expect(document.body.textContent).toContain('Missing fields'));
+		await waitFor(() => expect(document.body.textContent).toContain("Missing fields"));
 		expect(api.createJump).not.toHaveBeenCalled();
 	});
 
-	it('calls fetchJumps when onCreated is not provided', async () => {
+	it("calls fetchJumps when onCreated is not provided", async () => {
 		render(
 			<MantineProvider>
 				<Notifications position="top-right" />
@@ -147,12 +176,12 @@ describe("JumpForm", () => {
 		// set altitude and time
 		const altitude2 = screen.getByLabelText(/Altitude/i);
 		await userEvent.clear(altitude2);
-		await userEvent.type(altitude2, '9000');
+		await userEvent.type(altitude2, "9000");
 		const timeInput2 = screen.getByLabelText(/Time/i);
 		await userEvent.clear(timeInput2);
-		await userEvent.type(timeInput2, '13:00');
+		await userEvent.type(timeInput2, "13:00");
 
-		await userEvent.click(screen.getByRole('button', { name: /Create jump/i }));
+		await userEvent.click(screen.getByRole("button", { name: /Create jump/i }));
 
 		await waitFor(() => expect(api.createJump).toHaveBeenCalled());
 		await waitFor(() => expect(api.fetchJumps).toHaveBeenCalled());

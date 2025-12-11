@@ -65,20 +65,72 @@ export const mantineCssVariableResolver: CSSVariablesResolver = (theme: MantineT
 		[`${prefix}muted`]: gray5,
 	};
 
+	const brandName = String(theme.primaryColor ?? "brand");
+	const brandPalette =
+		colorsRecord[brandName] ??
+		(colorsRecord.brand as unknown as readonly string[] | undefined) ??
+		undefined;
+	if (brandPalette && Array.isArray(brandPalette)) {
+		brandPalette.forEach((shade, idx) => {
+			if (typeof shade === "string") {
+				variables[`${prefix}brand-${idx}`] = shade;
+				variables[`--brand-${idx}`] = shade;
+			}
+		});
+	}
+
+	const otherTokens = (theme as any)?.other?.tokens as
+		| undefined
+		| { light?: Record<string, string>; dark?: Record<string, string> };
+
+	/**
+	 *
+	 */
+	const prefer = (lightKey: string, fallback: string) => {
+		return otherTokens?.light?.[lightKey] ?? fallback;
+	};
+	/**
+	 *
+	 */
+	const preferDark = (darkKey: string, fallback: string) => {
+		return otherTokens?.dark?.[darkKey] ?? fallback;
+	};
+
 	const light: Record<string, string> = {
-		[`${prefix}background`]: theme.white ?? gray0,
-		[`${prefix}surface`]: gray0,
-		[`${prefix}text`]: theme.black ?? "#000000",
-		[`${prefix}accent`]: primary,
-		[`${prefix}accent-foreground`]: theme.black ?? "#000000",
+		[`${prefix}background`]: prefer("bg", theme.white ?? gray0),
+		[`${prefix}surface`]: prefer("surface", gray0),
+		[`${prefix}text`]: prefer("text", theme.black ?? "#000000"),
+		[`${prefix}accent`]: prefer("accent", primary),
+		[`${prefix}accent-foreground`]: prefer("accentForeground", theme.black ?? "#000000"),
+
+		"--bg": prefer("bg", theme.white ?? gray0),
+		"--card-bg": prefer("cardBg", gray0),
+		"--text": prefer("text", theme.black ?? "#000000"),
+		"--accent": prefer("accent", primary),
+		"--accent-foreground": prefer("accentForeground", theme.black ?? "#000000"),
+		"--font-family":
+			theme.fontFamily ?? "Inter, system-ui, Avenir, 'Helvetica Neue', Helvetica, Arial",
+		"--button-bg": prefer("buttonBg", primary),
+		"--button-text": prefer("buttonText", theme.white ?? "#ffffff"),
 	};
 
 	const dark: Record<string, string> = {
-		[`${prefix}background`]: colorsRecord.dark?.[7] ?? theme.black ?? "#000000",
-		[`${prefix}surface`]: colorsRecord.dark?.[6] ?? theme.black ?? "#000000",
-		[`${prefix}text`]: colorsRecord.dark?.[0] ?? theme.white ?? "#ffffff",
-		[`${prefix}accent`]: primary,
-		[`${prefix}accent-foreground`]: theme.white ?? "#ffffff",
+		[`${prefix}background`]: preferDark("bg", colorsRecord.dark?.[7] ?? theme.black ?? "#000000"),
+		[`${prefix}surface`]: preferDark("surface", colorsRecord.dark?.[6] ?? theme.black ?? "#000000"),
+		[`${prefix}text`]: preferDark("text", colorsRecord.dark?.[0] ?? theme.white ?? "#ffffff"),
+		[`${prefix}accent`]: preferDark("accent", primary),
+		[`${prefix}accent-foreground`]: preferDark("accentForeground", theme.white ?? "#ffffff"),
+
+		// compatibility aliases for global CSS (dark)
+		"--bg": preferDark("bg", colorsRecord.dark?.[7] ?? theme.black ?? "#000000"),
+		"--card-bg": preferDark("cardBg", colorsRecord.dark?.[6] ?? theme.black ?? "#000000"),
+		"--text": preferDark("text", colorsRecord.dark?.[0] ?? theme.white ?? "#ffffff"),
+		"--accent": preferDark("accent", primary),
+		"--accent-foreground": preferDark("accentForeground", theme.white ?? "#ffffff"),
+		"--font-family":
+			theme.fontFamily ?? "Inter, system-ui, Avenir, 'Helvetica Neue', Helvetica, Arial",
+		"--button-bg": preferDark("buttonBg", primary),
+		"--button-text": preferDark("buttonText", theme.black ?? "#000000"),
 	};
 
 	return {

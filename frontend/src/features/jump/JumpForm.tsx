@@ -190,7 +190,6 @@ export default function JumpForm({ onCreated, airportId }: Props): React.JSX.Ele
 			if (onCreated) {
 				onCreated?.(created);
 			} else {
-				// If parent didn't provide onCreated (e.g. Dashboard), refresh canonical list from server
 				try {
 					await fetchJumps();
 					console.debug("JumpForm: fetched latest jumps after create");

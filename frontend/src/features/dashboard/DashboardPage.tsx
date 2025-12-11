@@ -60,7 +60,9 @@ export default function DashboardPage(): React.JSX.Element {
 	useEffect(() => {
 		mountedRef.current = true;
 		const controller = new AbortController();
-		loadAll(controller.signal).catch((err) => console.debug("DashboardPage: initial load failed:", err));
+		loadAll(controller.signal).catch((err) =>
+			console.debug("DashboardPage: initial load failed:", err),
+		);
 
 		/**
 		 * Event handler to reload jumps/people when a global `jumpCreated` event occurs.

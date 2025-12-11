@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Group, NumberInput, Stack, TextInput } from "@mantine/core";
+import { Button, Group, NumberInput, Stack, TextInput, Checkbox } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import type { CreatePersonRequest, Person } from "./types";
 import { createPerson } from "./api";
@@ -23,6 +23,8 @@ export default function PersonForm({ onCreated }: Props): React.JSX.Element {
 	const [weight, setWeight] = useState<number | string>("");
 	const [email, setEmail] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const [pilot, setPilot] = useState<boolean>(false);
+	const [skydiver, setSkydiver] = useState<boolean>(true);
 
 	/**
 	 * Handle form submit: validate inputs, call createPerson API, and notify on result.
@@ -46,8 +48,8 @@ export default function PersonForm({ onCreated }: Props): React.JSX.Element {
 			firstName: firstName,
 			lastName: lastName,
 			weight: Number(weight),
-			pilot: false,
-			skydiver: true,
+			pilot: pilot,
+			skydiver: skydiver,
 			email: email.trim(),
 		};
 		if (!payload.firstName || !payload.lastName || !payload.email) {
@@ -70,6 +72,8 @@ export default function PersonForm({ onCreated }: Props): React.JSX.Element {
 			setName("");
 			setWeight("");
 			setEmail("");
+			setPilot(false);
+			setSkydiver(true);
 			onCreated?.(created);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to create person";
@@ -97,6 +101,18 @@ export default function PersonForm({ onCreated }: Props): React.JSX.Element {
 					onChange={setWeight}
 					min={0}
 				/>
+				<Group>
+					<Checkbox
+						label="Pilot"
+						checked={pilot}
+						onChange={(e) => setPilot(e.currentTarget.checked)}
+					/>
+					<Checkbox
+						label="Skydiver"
+						checked={skydiver}
+						onChange={(e) => setSkydiver(e.currentTarget.checked)}
+					/>
+				</Group>
 				<TextInput
 					label="Email"
 					placeholder="jane@example.com"
