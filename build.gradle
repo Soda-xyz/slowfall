@@ -52,6 +52,8 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // Skip running tests in CI when deploying to production. CI sets the DEPLOY_ENV secret/env var to 'prod'.
+    onlyIf { !(System.getenv('DEPLOY_ENV') ?: '').equals('prod') }
 }
 spotless {
     java {

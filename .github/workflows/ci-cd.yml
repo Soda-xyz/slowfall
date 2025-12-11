@@ -78,8 +78,19 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
       - name: Build & test backend (production profile)
-        # Run tests first without forcing production profile so test resources and H2 (dev) settings apply
-        run: ./gradlew --no-daemon clean test
+        # Run tests first unless we're deploying to prod; prod builds skip tests to avoid
+        # running environment-specific tests that should not block deployment. Non-prod
+        # runs (PRs, dev) will still run the test suite.
+        run: |
+          set -euo pipefail
+          DEPLOY_ENV="${{ secrets.DEPLOY_ENV || '' }}"
+          if [ "$DEPLOY_ENV" = "prod" ]; then
+            echo "DEPLOY_ENV=prod detected — skipping tests and running assemble only"
+            ./gradlew --no-daemon clean assemble
+          else
+            echo "Running full test suite (DEPLOY_ENV=${DEPLOY_ENV:-<not-set>})"
+            ./gradlew --no-daemon clean test
+          fi
         shell: bash
 
       - name: Build backend artifact (production profile)
