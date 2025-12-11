@@ -3,6 +3,7 @@ import { Button, Group, Stack, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import type { CreateAirportRequest, Airport } from "./types";
 import { createAirport } from "./api";
+import { useAirport } from "./AirportContext";
 
 type Props = {
 	/** Optional callback invoked with created airport */
@@ -20,6 +21,7 @@ export default function AirportForm({ onCreated }: Props): React.JSX.Element {
 	const [name, setName] = useState("");
 	const [icaoCode, setIcaoCode] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const { refresh, addAirport } = useAirport();
 
 	/**
 	 * Handle form submission: validate fields and call the createAirport API.
@@ -47,6 +49,12 @@ export default function AirportForm({ onCreated }: Props): React.JSX.Element {
 			setName("");
 			setIcaoCode("");
 			onCreated?.(createdAirport);
+			try {
+				addAirport?.(createdAirport);
+				await refresh();
+			} catch (err) {
+				console.warn("AirportForm: refresh failed", err);
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to create airport";
 			notifications.show({ color: "red", title: "Error", message });

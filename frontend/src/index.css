@@ -1,13 +1,7 @@
 /* filepath: c:\Cloud Storage\BaseFolder\JavaProjects\slowfall\frontend\src\index.css */
 
-:root {
-	/* keep font tokens here; color tokens moved into Mantine-driven global.css */
-	--font-family: Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial;
-	--line-height: 1.5;
-	--font-weight: 400;
-}
+/* Base layout and minimal typographic resets */
 
-/* Base layout and typographyy (minimal) */
 html,
 body {
 	height: 100%;
@@ -18,17 +12,16 @@ body {
 	min-width: 320px;
 	min-height: 100vh;
 
-	/* typography should use theme-driven variables where possible */
+	/* typography should use Mantine theme variables; font-family is set in theme.ts */
 	font-family:
-		var(--font-family),
 		system-ui,
 		-apple-system,
 		"Segoe UI",
 		Roboto,
 		"Helvetica Neue",
 		Arial;
-	line-height: var(--line-height);
-	font-weight: var(--font-weight);
+	line-height: 1.5;
+	font-weight: 400;
 
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
@@ -36,7 +29,7 @@ body {
 }
 
 /* Note: App-level colors and background/text should come from `global.css` (which
-   reads Mantine theme tokens) or CSS modules (component-scoped). Avoid setting
+   reads Mantine theme tokens) or component-scoped CSS modules. Avoid setting
    body background/color here so Mantine remains the single source of truth. */
 
 /* End of file */

@@ -1,7 +1,4 @@
-/**
- * Jump feature exports
- *
- * Public exports for the jump feature (pages, types, API).
- */
-export { default as JumpPage } from "./JumpPage";
+export { default as JumpForm } from "./JumpForm";
+export { default as JumpTable } from "./JumpTable";
+export { default as JumpPlanner } from "./JumpPlanner";
 export * from "./types";

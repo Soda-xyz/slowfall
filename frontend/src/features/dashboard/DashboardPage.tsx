@@ -2,8 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { Stack, Title, Card } from "@mantine/core";
 import JumpForm from "../jump/JumpForm";
 import JumpTable from "../jump/JumpTable";
+import JumpPlanner from "../jump/JumpPlanner";
 import { fetchJumps } from "../jump/api";
-import type { Jump } from "../jump/types";
+import { fetchPilots, fetchSkydivers } from "../person/api";
+import type { Jump } from "../jump";
+import type { PersonDto } from "../jump";
 
 /**
  * DashboardPage
@@ -12,38 +15,68 @@ import type { Jump } from "../jump/types";
  */
 export default function DashboardPage(): React.JSX.Element {
 	const [jumps, setJumps] = useState<Jump[]>([]);
+	const [pilots, setPilots] = useState<PersonDto[]>([]);
+	const [skydivers, setSkydivers] = useState<PersonDto[]>([]);
 	const mountedRef = useRef(true);
+
+	/**
+	 * Load jumps, pilots, and skydivers and set state.
+	 */
+	const loadAll = async (signal?: AbortSignal) => {
+		try {
+			const [jumpsData, pilotsData, skydiversData] = await Promise.all([
+				fetchJumps(signal),
+				fetchPilots(),
+				fetchSkydivers(),
+			]);
+
+			if (!mountedRef.current) return;
+			setJumps(jumpsData);
+			setPilots(
+				pilotsData.map((person) => ({
+					id: String(person.id),
+					name: person.name,
+					pilot: person.pilot,
+					skydiver: person.skydiver,
+					weight: person.weight,
+					email: person.email,
+				})),
+			);
+			setSkydivers(
+				skydiversData.map((person) => ({
+					id: String(person.id),
+					name: person.name,
+					pilot: person.pilot,
+					skydiver: person.skydiver,
+					weight: person.weight,
+					email: person.email,
+				})),
+			);
+		} catch (err) {
+			console.debug("DashboardPage: failed to load data:", err);
+		}
+	};
 
 	useEffect(() => {
 		mountedRef.current = true;
 		const controller = new AbortController();
-
-		/**
-		 * Load jumps from the backend and update state when the component is mounted.
-		 */
-		const load = async () => {
+		(async () => {
 			try {
-				const data = await fetchJumps(controller.signal);
-				if (!mountedRef.current) return;
-				setJumps(data);
+				await loadAll(controller.signal);
 			} catch (err) {
-				console.debug("DashboardPage: failed to load jumps:", err);
+				console.debug("DashboardPage: initial load failed:", err);
 			}
-		};
-
-		load();
+		})();
 
 		/**
-		 * Event handler to reload jumps when a global `jumpCreated` event occurs.
+		 * Event handler to reload jumps/people when a global `jumpCreated` event occurs.
 		 */
 		const handler = async (_ev: Event) => {
 			try {
-				const data = await fetchJumps();
-				if (!mountedRef.current) return;
-				setJumps(data);
-				console.debug("DashboardPage: reloaded jumps after global jumpCreated event");
+				await loadAll();
+				console.debug("DashboardPage: reloaded data after global jumpCreated event");
 			} catch (err) {
-				console.debug("DashboardPage: failed to reload jumps after event:", err);
+				console.debug("DashboardPage: failed to reload after event:", err);
 			}
 		};
 		window.addEventListener("jumpCreated", handler as EventListener);
@@ -64,7 +97,15 @@ export default function DashboardPage(): React.JSX.Element {
 			</Card>
 
 			<Card shadow="xs" padding="md">
-				<JumpTable jumps={jumps} />
+				<JumpTable jumps={jumps} pilots={pilots} skydivers={skydivers} onRefresh={loadAll} />
+			</Card>
+			<Card>
+				<JumpPlanner
+					jumps={jumps}
+					pilots={pilots.map((person) => person.name)}
+					skydivers={skydivers.map((person) => person.name)}
+					onRefresh={loadAll}
+				/>
 			</Card>
 		</Stack>
 	);

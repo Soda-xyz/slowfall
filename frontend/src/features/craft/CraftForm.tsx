@@ -99,8 +99,6 @@ export default function CraftForm({ onCreated }: Props): React.JSX.Element {
 					defaultValue={0}
 					max={9999}
 					required={true}
-
-
 				/>
 				<Group mt="md" style={{ justifyContent: "flex-end" }}>
 					<Button type="submit" loading={submitting}>

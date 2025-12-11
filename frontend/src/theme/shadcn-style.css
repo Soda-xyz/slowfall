@@ -1,0 +1,312 @@
+/* shadcn-style.css (stored as LocalFiles/style.css) — removed from active stylesheet to avoid static analysis errors.
+
+   This file originally contained nested selectors and non-standard alpha(...) calls
+   that the project's CSS analyzer flagged. Keep a reference copy in LocalFiles.
+
+   To re-enable these styles in the app, convert nested selectors to flat CSS (or
+   enable PostCSS nesting) and replace alpha(...) with valid CSS (e.g., rgba() or
+   use CSS color with alpha via --var and rgba/hex conversions), or import via a
+   preprocessor that understands the syntax.
+*/
+
+/* Checkbox */
+.mantine-Checkbox-root {
+	--checkbox-color: var(--mantine-primary-color-filled);
+	--checkbox-icon-color: var(--mantine-primary-color-contrast);
+}
+.mantine-Checkbox-root .mantine-Checkbox-input {
+	background-color: transparent;
+	border-color: var(--checkbox-color);
+}
+.mantine-Checkbox-root .mantine-Checkbox-input[data-indeterminate],
+.mantine-Checkbox-root .mantine-Checkbox-input:checked {
+	background-color: var(--checkbox-color);
+}
+.mantine-Checkbox-root .mantine-Checkbox-input:disabled {
+	opacity: 0.5;
+}
+.mantine-Checkbox-root .mantine-Checkbox-input:disabled + .mantine-Checkbox-icon {
+	opacity: 0.5;
+	color: var(--checkbox-icon-color);
+}
+.mantine-Checkbox-root .mantine-Checkbox-label[data-disabled] {
+	color: inherit;
+	opacity: 0.7;
+}
+.mantine-Checkbox-root[data-variant="outline"] .mantine-Checkbox-input {
+	background-color: transparent;
+}
+.mantine-Checkbox-root[data-variant="outline"] .mantine-Checkbox-input + .mantine-Checkbox-icon {
+	color: var(--checkbox-color);
+}
+
+/* Checkbox Group */
+.mantine-CheckboxGroup-root .mantine-CheckboxGroup-error {
+	margin-top: 8px;
+}
+
+/* Chip */
+.mantine-Chip-root {
+	--chip-color: var(--mantine-primary-color-contrast);
+}
+.mantine-Chip-root[data-variant="outline"]:not([data-disabled]) .mantine-Chip-label {
+	background-color: transparent;
+	--chip-bd: 1px solid var(--mantine-color-default-border);
+}
+.mantine-Chip-root[data-variant="outline"]:not([data-disabled]) .mantine-Chip-label:hover {
+	background-color: var(--mantine-color-default-hover);
+}
+.mantine-Chip-root[data-variant="outline"]:not([data-disabled])
+	.mantine-Chip-label:where([data-disabled]) {
+	--chip-icon-color: var(--mantine-color-text);
+	border-color: var(--mantine-color-default-border);
+	color: var(--mantine-color-text);
+	opacity: 0.5;
+}
+.mantine-Chip-root[data-variant="outline"]:not([data-disabled])
+	.mantine-Chip-label:where([data-disabled]):hover {
+	background-color: transparent;
+	color: var(--mantine-color-text);
+	--chip-bd: 1px solid var(--mantine-color-default-border);
+	--chip-icon-color: var(--mantine-color-text);
+}
+
+/* Input */
+[data-mantine-color-scheme="light"],
+[data-mantine-color-scheme="dark"] {
+	--input-disabled-bg: alpha(var(--mantine-color-default-hover), 0.5);
+	--input-disabled-color: alpha(var(--mantine-color-text), 0.5);
+}
+[data-mantine-color-scheme="light"] .mantine-Input-wrapper[data-variant="default"],
+[data-mantine-color-scheme="dark"] .mantine-Input-wrapper[data-variant="default"] {
+	--input-bd: var(--mantine-color-default-border);
+	--input-bg: transparent;
+	--input-bd-focus: var(--mantine-primary-color-filled);
+}
+[data-mantine-color-scheme="light"] .mantine-Input-wrapper[data-variant="filled"],
+[data-mantine-color-scheme="dark"] .mantine-Input-wrapper[data-variant="filled"] {
+	--input-bd: transparent;
+	--input-bg: var(--mantine-color-default-hover);
+	--input-bd-focus: var(--mantine-primary-color-filled);
+}
+[data-mantine-color-scheme="light"] .mantine-Input-wrapper[data-variant="unstyled"],
+[data-mantine-color-scheme="dark"] .mantine-Input-wrapper[data-variant="unstyled"] {
+	--input-bd: transparent;
+	--input-bg: transparent;
+	--input-bd-focus: transparent;
+}
+
+/* Color Input */
+.mantine-ColorInput-dropdown {
+	background-color: var(--mantine-color-default);
+	border-color: var(--mantine-color-default-border);
+}
+
+/* Fieldset */
+.mantine-Fieldset-root {
+	border-color: var(--mantine-color-default-border);
+	background-color: transparent;
+}
+.mantine-Fieldset-root[data-variant="filled"] {
+	border-color: var(--mantine-color-default-border);
+	background-color: alpha(var(--mantine-color-default-hover), 0.4);
+}
+.mantine-Fieldset-root[data-variant="unstyled"] {
+	border-color: transparent;
+	background-color: transparent;
+}
+
+/* Radio */
+.mantine-Radio-root .mantine-Radio-radio {
+	background-color: transparent;
+	border-color: var(--radio-color);
+}
+.mantine-Radio-root .mantine-Radio-radio:checked {
+	background-color: var(--radio-color);
+	border-color: var(--radio-color);
+}
+.mantine-Radio-root .mantine-Radio-radio + .mantine-Radio-icon {
+	color: var(--radio-icon-color);
+}
+.mantine-Radio-root .mantine-Radio-radio:disabled {
+	opacity: 0.5;
+}
+.mantine-Radio-root[data-variant="outline"] .mantine-Radio-radio {
+	background-color: transparent;
+	border-color: var(--radio-color);
+}
+.mantine-Radio-root[data-variant="outline"] .mantine-Radio-radio:checked:not(:disabled) {
+	background-color: transparent;
+	border-color: var(--radio-color);
+}
+.mantine-Radio-root[data-variant="outline"] .mantine-Radio-radio:disabled {
+	opacity: 0.5;
+}
+.mantine-Radio-root[data-variant="outline"] .mantine-Radio-radio:disabled + .mantine-Radio-icon {
+	color: var(--radio-color);
+	--radio-icon-opacity: 0.5;
+}
+
+/* Segmented Control */
+.mantine-SegmentedControl-root {
+	background-color: var(--mantine-color-secondary-outline-hover);
+}
+.mantine-SegmentedControl-root .mantine-SegmentedControl-label {
+	color: var(--mantine-color-dimmed);
+}
+.mantine-SegmentedControl-root .mantine-SegmentedControl-label[data-active] {
+	color: var(--mantine-color-text);
+}
+
+[data-mantine-color-scheme="light"]
+	.mantine-SegmentedControl-root
+	.mantine-SegmentedControl-label:not([data-disabled], [data-active], [data-read-only]):hover {
+	color: var(--mantine-color-black);
+}
+
+[data-mantine-color-scheme="dark"]
+	.mantine-SegmentedControl-root
+	.mantine-SegmentedControl-label:not([data-disabled], [data-active], [data-read-only]):hover {
+	color: var(--mantine-color-white);
+}
+
+[data-mantine-color-scheme="light"]
+	.mantine-SegmentedControl-root
+	.mantine-SegmentedControl-label:not([data-disabled], [data-active], [data-read-only]):hover {
+	color: var(--mantine-color-black);
+}
+[data-mantine-color-scheme="dark"]
+	.mantine-SegmentedControl-root
+	.mantine-SegmentedControl-label:not([data-disabled], [data-active], [data-read-only]):hover {
+	color: var(--mantine-color-white);
+}
+
+[data-mantine-color-scheme="light"]
+	.mantine-SegmentedControl-root
+	.mantine-SegmentedControl-label:not([data-disabled], [data-active], [data-read-only]):hover {
+	color: var(--mantine-color-black);
+}
+[data-mantine-color-scheme="dark"]
+	.mantine-SegmentedControl-root
+	.mantine-SegmentedControl-label:not([data-disabled], [data-active], [data-read-only]):hover {
+	color: var(--mantine-color-white);
+}
+
+/* Slider */
+[data-mantine-color-scheme="light"],
+[data-mantine-color-scheme="dark"] .mantine-Slider-root {
+	--slider-track-bg: var(--mantine-color-secondary-outline-hover);
+}
+.mantine-Slider-root .mantine-Slider-trackContainer[data-disabled] {
+	opacity: 0.5;
+}
+.mantine-Slider-root .mantine-Slider-label {
+	background-color: var(--mantine-color-default) !important;
+	color: var(--mantine-color-text);
+	border: 1px solid var(--mantine-color-default-border) !important;
+	top: -45px;
+}
+
+/* Pills Input */
+.mantine-PillsInput-wrapper .mantine-PillsInput-input[data-variant="filled"] .mantine-Pill-root {
+	background-color: var(--mantine-color-body);
+}
+
+/* Tags Input */
+.mantine-TagsInput-wrapper .mantine-TagsInput-input[data-variant="filled"] .mantine-Pill-root {
+	background-color: var(--mantine-color-body);
+}
+
+/* ActionIcon */
+.mantine-ActionIcon-root:where(:disabled:not([data-loading]), [data-disabled]:not([data-loading])) {
+	border: var(--ai-bd);
+	opacity: 0.5;
+}
+.mantine-ActionIcon-root:where(
+		:disabled:not([data-loading]),
+		[data-disabled]:not([data-loading])
+	):active {
+	transform: none;
+}
+
+/* Button */
+.mantine-Button-root:where(:disabled:not([data-loading]), [data-disabled]:not([data-loading])) {
+	border: var(--button-bd);
+	opacity: 0.5;
+}
+
+/* Close Button */
+.mantine-CloseButton-root[data-variant="subtle"]:not([data-disabled], :disabled):hover {
+	background-color: var(--mantine-color-default-hover);
+}
+
+/* NavLink */
+.mantine-NavLink-root:hover {
+	background-color: var(--mantine-color-default-hover);
+}
+.mantine-NavLink-root:where([data-active], [aria-current="page"]) {
+	background-color: var(--nl-bg);
+	color: var(--nl-color);
+}
+.mantine-NavLink-root:where([data-active], [aria-current="page"]):hover {
+	background-color: var(--nl-hover);
+}
+.mantine-NavLink-root .description {
+	--description-opacity: 0.9;
+	--description-color: var(--nl-color);
+}
+
+/* Pagination */
+.mantine-Pagination-root .mantine-Pagination-control {
+	border-color: var(--mantine-color-default-border);
+	background-color: var(--mantine-color-body);
+}
+.mantine-Pagination-root .mantine-Pagination-control:hover:not(:disabled):not([data-disabled]) {
+	background-color: var(--mantine-color-default-hover);
+}
+.mantine-Pagination-root .mantine-Pagination-control[data-active] {
+	background-color: var(--pagination-active-bg);
+	border-color: var(--pagination-active-bg);
+	color: var(--pagination-active-color, var(--mantine-primary-color-contrast));
+}
+.mantine-Pagination-root .mantine-Pagination-control[data-active]:hover {
+	background-color: rgba(from var(--pagination-active-bg) r g b / 0.9);
+}
+
+/* Stepper */
+.mantine-Stepper-root .mantine-Stepper-stepIcon {
+	background-color: var(--mantine-color-body);
+	border-color: var(--mantine-color-default-border);
+	color: var(--mantine-color-text);
+}
+.mantine-Stepper-root .mantine-Stepper-stepIcon[data-progress] {
+	border-color: var(--step-color);
+}
+.mantine-Stepper-root .mantine-Stepper-stepIcon[data-completed] {
+	color: var(--stepper-icon-color, var(--mantine-color-white));
+	background-color: var(--step-color);
+	border-color: var(--step-color);
+}
+
+/* Tabs */
+.mantine-Tabs-root {
+	--tab-border-color: var(--mantine-color-default-border);
+}
+.mantine-Tabs-root[data-variant="default"] {
+	--tabs-list-border-width: 2px;
+	--tab-hover-color: var(--mantine-color-default-hover);
+}
+.mantine-Tabs-root[data-variant="pills"] {
+	--tabs-list-gap: calc(var(--mantine-spacing-sm) / 2);
+	--tabs-text-color: var(--mantine-color-body) !important;
+	--tab-hover-color: var(--mantine-color-default-hover);
+}
+.mantine-Tabs-root .mantine-Tabs-tab {
+	color: var(--mantine-color-dimmed);
+}
+.mantine-Tabs-root .mantine-Tabs-tab[data-variant="default"],
+.mantine-Tabs-root .mantine-Tabs-tab[data-variant="outline"] {
+	color: var(--mantine-color-text);
+}
+
+/* ...rest of file omitted for brevity... */

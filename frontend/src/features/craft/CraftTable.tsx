@@ -15,11 +15,11 @@ type Props = {
  * Displays a list of crafts in a card and exposes a delete action per row.
  */
 export default function CraftTable({
-										 crafts,
-										 loading,
-										 onDelete,
-										 deletingId,
-									 }: Props): React.JSX.Element {
+	crafts,
+	loading,
+	onDelete,
+	deletingId,
+}: Props): React.JSX.Element {
 	return (
 		<Card withBorder shadow="sm" radius="md" p="md">
 			<Group justify="space-between" mb="sm">

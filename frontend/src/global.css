@@ -5,32 +5,33 @@
 */
 
 :root {
-	/* default tokens so linters / dev tools can resolve them; theme provider may overwrite at runtime */
-	--bg: #ffffff;
-	--text: #111827;
-	--font-family: Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
-	--accent: #3380ff;
-	--accent-hover: #005be6;
+	/* Map local aliases to Mantine-provided CSS variables. These are intentionally not
+	   hard-coded here so the theme is the single source of truth (no light-mode literals). */
+	--bg: var(--sf-background);
+	--text: var(--sf-text);
+	--font-family: var(--sf-font-family);
+	--accent: var(--sf-accent);
+	--accent-hover: var(--sf-accent-foreground);
+	--muted: var(--sf-muted);
 }
 
 /* App-level defaults. These refer to CSS variables that should be set by the Mantine theme
-   (ThemeVars or provider resolver). They provide safe fallbacks if variables are missing. */
+   (via cssVariablesResolver). Avoid hard-coded color fallbacks here so the theme controls colors. */
 body {
 	margin: 0;
 	min-height: 100vh;
-	background-color: var(--bg, #fff);
-	color: var(--text, #000);
-	font-family:
-		var(--font-family, Inter, system-ui, Avenir, "Helvetica Neue", Helvetica, Arial), sans-serif;
+	background-color: var(--bg);
+	color: var(--text);
+	font-family: var(--font-family);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
 
 /* Utility element-level rules that are safe to place globally (lightweight) */
 a {
-	color: var(--accent, #3380ff);
+	color: var(--accent);
 	text-decoration: none;
 }
 a:hover {
-	color: var(--accent-hover, #005be6);
+	color: var(--accent-hover);
 }

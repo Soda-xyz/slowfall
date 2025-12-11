@@ -40,6 +40,8 @@ export default function PersonTable({ person, loading }: Props): React.JSX.Eleme
 							<Table.Th>Name</Table.Th>
 							<Table.Th>Weight</Table.Th>
 							<Table.Th>Email</Table.Th>
+							<Table.Th>Pilot</Table.Th>
+							<Table.Th>Skydiver</Table.Th>
 						</Table.Tr>
 					</Table.Thead>
 					<Table.Tbody>
@@ -48,6 +50,8 @@ export default function PersonTable({ person, loading }: Props): React.JSX.Eleme
 								<Table.Td>{personItem.name}</Table.Td>
 								<Table.Td>{personItem.weight}</Table.Td>
 								<Table.Td>{personItem.email}</Table.Td>
+								<Table.Td>{personItem.pilot ? "Yes" : "No"}</Table.Td>
+								<Table.Td>{personItem.skydiver ? "Yes" : "No"}</Table.Td>
 							</Table.Tr>
 						))}
 					</Table.Tbody>

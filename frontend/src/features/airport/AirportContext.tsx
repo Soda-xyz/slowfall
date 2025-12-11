@@ -10,6 +10,8 @@ type AirportContextType = {
 	setSelectedAirportId: (id: string | null) => void;
 	loading: boolean;
 	refresh: () => Promise<void>;
+	/** Add an airport to the current list (optimistic/local update) */
+	addAirport: (airport: Airport) => void;
 };
 
 const AirportContext = createContext<AirportContextType | undefined>(undefined);
@@ -47,7 +49,15 @@ export function AirportProvider({ children }: { children: React.ReactNode }): Re
 
 	return (
 		<AirportContext.Provider
-			value={{ airports, selectedAirportId, setSelectedAirportId, loading, refresh: load }}
+			value={{
+				airports,
+				selectedAirportId,
+				setSelectedAirportId,
+				loading,
+				refresh: load,
+				/** Add an airport to the current list (optimistic/local update) */
+				addAirport: (airport: Airport) => setAirports((prev) => [airport, ...prev]),
+			}}
 		>
 			{children}
 		</AirportContext.Provider>
@@ -61,7 +71,7 @@ export function AirportProvider({ children }: { children: React.ReactNode }): Re
  * a safe default so components can render in isolation (tests) without
  * crashing.
  */
-export function useAirport(): AirportContextType {
+export const useAirport = (): AirportContextType => {
 	const ctx = useContext(AirportContext);
 	if (!ctx) {
 		return {
@@ -76,10 +86,14 @@ export function useAirport(): AirportContextType {
 			 * No-op refresh used when AirportProvider is not present.
 			 */
 			refresh: async () => {},
+			/**
+			 * No-op addAirport used when AirportProvider is not present.
+			 */
+			addAirport: () => {},
 		} as AirportContextType;
 	}
 	return ctx;
-}
+};
 
 /**
  * AirportSelector
