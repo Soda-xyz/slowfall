@@ -478,7 +478,7 @@ jobs:
           # Apply settings to the proxy app service
           set -euo pipefail
           echo "Setting proxy app settings: ${SETTINGS[*]}"
-          az webapp config.appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Update Web Apps to new image digests
         run: |
