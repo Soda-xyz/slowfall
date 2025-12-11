@@ -62,6 +62,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http, Filter pseudoAuthFilter) throws Exception {
         http.cors(Customizer.withDefaults())
                 .csrf(CsrfConfigurer::disable)
+                // Allow pages from the same origin to be framed (H2 console uses frames)
                 .headers(headers -> headers.addHeaderWriter(
                         new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)))
                 .addFilterBefore(pseudoAuthFilter, BasicAuthenticationFilter.class)
