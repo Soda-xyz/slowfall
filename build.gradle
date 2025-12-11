@@ -39,8 +39,6 @@ dependencies {
     implementation 'org.springframework.security:spring-security-oauth2-jose'
     testImplementation 'org.springframework.security:spring-security-test'
     implementation 'org.postgresql:postgresql'
-    // Flyway: database migrations
-    implementation 'org.flywaydb:flyway-core'
 
 
     runtimeOnly 'com.h2database:h2'
