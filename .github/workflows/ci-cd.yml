@@ -228,6 +228,7 @@ jobs:
         shell: bash
 
       - name: Build & push backend image
+        id: build_backend
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -274,6 +275,28 @@ jobs:
           echo "frontend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
         shell: bash
 
+      - name: Capture backend image digest for immutable deploy reference
+        id: capture_backend_digest
+        run: |
+          set -euo pipefail
+          # Prefer the digest reported by the build action
+          DIGEST="${{ steps.build_backend.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/slowfall-backend:${{ github.sha }}"
+            echo "build action did not report digest; attempting to pull and inspect image: $IMAGE"
+            docker pull "$IMAGE"
+            DIGEST_FULL="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+            if [ -n "$DIGEST_FULL" ]; then
+              DIGEST="${DIGEST_FULL#*@}"
+            fi
+          fi
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: backend build did not produce a digest output" >&2
+            exit 1
+          fi
+          echo "backend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Build & push proxy image
         id: build_proxy
         uses: docker/build-push-action@v4
@@ -297,6 +320,7 @@ jobs:
             exit 1
           fi
           echo "proxy_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+        shell: bash
 
       - name: Verify proxy image pushed
         run: |
@@ -514,3 +538,35 @@ jobs:
           set -euo pipefail
           echo "Setting proxy app settings: ${SETTINGS[*]}"
           az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+
+      - name: Update Web Apps to new image digests
+        run: |
+          set -euo pipefail
+          ACR_HOST="${{ secrets.ACR_NAME }}.azurecr.io"
+
+          FRONT_IMG="$ACR_HOST/slowfall-frontend@${{ steps.capture_frontend_digest.outputs.frontend_digest }}"
+          BACK_IMG="$ACR_HOST/slowfall-backend@${{ steps.capture_backend_digest.outputs.backend_digest }}"
+          PROXY_IMG="$ACR_HOST/slowfall-proxy@${{ steps.capture_proxy_digest.outputs.proxy_digest }}"
+
+          echo "Updating frontend app to $FRONT_IMG"
+          az webapp config container set \
+            --name "${{ secrets.FRONTEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --docker-custom-image-name "$FRONT_IMG" \
+            --docker-registry-server-url "https://$ACR_HOST"
+
+          echo "Updating backend app to $BACK_IMG"
+          az webapp config container set \
+            --name "${{ secrets.BACKEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --docker-custom-image-name "$BACK_IMG" \
+            --docker-registry-server-url "https://$ACR_HOST"
+
+          echo "Updating proxy app to $PROXY_IMG"
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
+          az webapp config container set \
+            --name "$PROXY_NAME" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --docker-custom-image-name "$PROXY_IMG" \
+            --docker-registry-server-url "https://$ACR_HOST"
+        shell: bash
