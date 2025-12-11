@@ -203,9 +203,8 @@ jobs:
       PSEUDO_PASS: ${{ secrets.PSEUDO_PASS }}
     outputs:
       spring_profiles_active: ${{ steps.compute_spring_profile.outputs.spring_profiles_active }}
-      frontend_digest: ${{ steps.capture_frontend_digest.outputs.frontend_digest }}
-      proxy_digest: ${{ steps.capture_proxy_digest.outputs.proxy_digest }}
-      backend_digest: ${{ steps.capture_backend_digest.outputs.backend_digest }}
+      # Digests removed: we now use commit SHA tags for app updates
+      # (frontend/proxy/backend digests were captured previously but are no longer used)
 
     steps:
       - name: Checkout
@@ -251,52 +250,6 @@ jobs:
             VITE_API_BASE_URL=${{ steps.validate_frontend_mode.outputs.vite_api_base_url }}
             BACKEND_HOST=${{ env.BACKEND_HOST }}
 
-      - name: Capture frontend image digest for immutable deploy reference
-        id: capture_frontend_digest
-        run: |
-          set -euo pipefail
-          # Prefer the digest reported by the build action
-          DIGEST="${{ steps.build_frontend.outputs.digest }}"
-          if [ -z "$DIGEST" ]; then
-            IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/slowfall-frontend:${{ github.sha }}"
-            echo "build action did not report digest; attempting to pull and inspect image: $IMAGE"
-            # Try to pull the image and inspect repo digests
-            docker pull "$IMAGE"
-            DIGEST_FULL="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
-            if [ -n "$DIGEST_FULL" ]; then
-              # DIGEST_FULL looks like '<registry>/repo@sha256:...'; extract part after '@'
-              DIGEST="${DIGEST_FULL#*@}"
-            fi
-          fi
-          if [ -z "$DIGEST" ]; then
-            echo "ERROR: frontend build did not produce a digest output" >&2
-            exit 1
-          fi
-          echo "frontend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
-        shell: bash
-
-      - name: Capture backend image digest for immutable deploy reference
-        id: capture_backend_digest
-        run: |
-          set -euo pipefail
-          # Prefer the digest reported by the build action
-          DIGEST="${{ steps.build_backend.outputs.digest }}"
-          if [ -z "$DIGEST" ]; then
-            IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/slowfall-backend:${{ github.sha }}"
-            echo "build action did not report digest; attempting to pull and inspect image: $IMAGE"
-            docker pull "$IMAGE"
-            DIGEST_FULL="$(docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
-            if [ -n "$DIGEST_FULL" ]; then
-              DIGEST="${DIGEST_FULL#*@}"
-            fi
-          fi
-          if [ -z "$DIGEST" ]; then
-            echo "ERROR: backend build did not produce a digest output" >&2
-            exit 1
-          fi
-          echo "backend_digest=$DIGEST" >> "$GITHUB_OUTPUT"
-        shell: bash
-
       - name: Build & push proxy image
         id: build_proxy
         uses: docker/build-push-action@v4
@@ -309,18 +262,6 @@ jobs:
           tags: ${{ secrets.ACR_NAME }}.azurecr.io/slowfall-proxy:${{ github.sha }}
           build-args: |
             BACKEND_HOST=${{ env.BACKEND_HOST }}
-
-      - name: Capture proxy image digest for immutable deploy reference
-        id: capture_proxy_digest
-        run: |
-          set -euo pipefail
-          DIGEST="${{ steps.build_proxy.outputs.digest }}"
-          if [ -z "$DIGEST" ]; then
-            echo "ERROR: proxy build did not produce a digest output"
-            exit 1
-          fi
-          echo "proxy_digest=$DIGEST" >> "$GITHUB_OUTPUT"
-        shell: bash
 
       - name: Verify proxy image pushed
         run: |
@@ -537,36 +478,56 @@ jobs:
           # Apply settings to the proxy app service
           set -euo pipefail
           echo "Setting proxy app settings: ${SETTINGS[*]}"
-          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+          az webapp config.appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Update Web Apps to new image digests
         run: |
           set -euo pipefail
           ACR_HOST="${{ secrets.ACR_NAME }}.azurecr.io"
 
-          FRONT_IMG="$ACR_HOST/slowfall-frontend@${{ steps.capture_frontend_digest.outputs.frontend_digest }}"
-          BACK_IMG="$ACR_HOST/slowfall-backend@${{ steps.capture_backend_digest.outputs.backend_digest }}"
-          PROXY_IMG="$ACR_HOST/slowfall-proxy@${{ steps.capture_proxy_digest.outputs.proxy_digest }}"
+          # Use image tags (commit SHA) rather than image digests so apps are set to
+          # '<registry>/name:COMMIT_SHA' (e.g. slowfall-backend:e69c2f3...)
+          # The images were pushed earlier with the tag '${{ github.sha }}', so use that.
+          FRONT_IMG="$ACR_HOST/slowfall-frontend:${{ github.sha }}"
+          BACK_IMG="$ACR_HOST/slowfall-backend:${{ github.sha }}"
+          PROXY_IMG="$ACR_HOST/slowfall-proxy:${{ github.sha }}"
 
-          echo "Updating frontend app to $FRONT_IMG"
-          az webapp config container set \
-            --name "${{ secrets.FRONTEND_APP_NAME }}" \
-            --resource-group "${{ secrets.AZURE_RG }}" \
-            --docker-custom-image-name "$FRONT_IMG" \
-            --docker-registry-server-url "https://$ACR_HOST"
+          # Update the backend app service
+          az webapp update --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --set \
+            linuxFxVersion="DOCKER|$BACK_IMG" \
+            appSettings."SPRING_PROFILES_ACTIVE"="${{ secrets.DEPLOY_ENV }}" \
+            appSettings."ALLOWED_ORIGINS"="${{ secrets.ALLOWED_ORIGINS }}" \
+            appSettings."AZ_KEYVAULT_VAULT_URL"="${{ secrets.AZ_KEYVAULT_VAULT_URL }}" \
+            appSettings."AZ_KEYVAULT_KEY_NAME"="${{ secrets.AZ_KEYVAULT_KEY_NAME }}" \
+            appSettings."PSEUDO_AUTH_ENABLED"="${{ secrets.PSEUDO_AUTH_ENABLED }}" \
+            appSettings."app.security.dev-username"="${{ secrets.PSEUDO_USER }}" \
+            appSettings."app.security.dev-password"="${{ secrets.PSEUDO_PASS }}" \
+            appSettings."VITE_PSEUDO_AUTH"="true" \
+            appSettings."VITE_PSEUDO_USER"="${{ secrets.PSEUDO_USER }}" \
+            appSettings."VITE_PSEUDO_PASS"="${{ secrets.PSEUDO_PASS }}" \
+            appSettings."VITE_MSAL_CLIENT_ID"="" \
+            appSettings."VITE_MSAL_AUTHORITY"="" \
+            appSettings."PORT"="${{ secrets.APP_PORT }}" || true
 
-          echo "Updating backend app to $BACK_IMG"
-          az webapp config container set \
-            --name "${{ secrets.BACKEND_APP_NAME }}" \
-            --resource-group "${{ secrets.AZURE_RG }}" \
-            --docker-custom-image-name "$BACK_IMG" \
-            --docker-registry-server-url "https://$ACR_HOST"
+          # Update the frontend app service
+          az webapp update --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --set \
+            linuxFxVersion="DOCKER|$FRONT_IMG" \
+            appSettings."SPRING_PROFILES_ACTIVE"="${{ secrets.DEPLOY_ENV }}" \
+            appSettings."ALLOWED_ORIGINS"="${{ secrets.ALLOWED_ORIGINS }}" \
+            appSettings."AZ_KEYVAULT_VAULT_URL"="${{ secrets.AZ_KEYVAULT_VAULT_URL }}" \
+            appSettings."AZ_KEYVAULT_KEY_NAME"="${{ secrets.AZ_KEYVAULT_KEY_NAME }}" \
+            appSettings."PSEUDO_AUTH_ENABLED"="${{ secrets.PSEUDO_AUTH_ENABLED }}" \
+            appSettings."app.security.dev-username"="${{ secrets.PSEUDO_USER }}" \
+            appSettings."app.security.dev-password"="${{ secrets.PSEUDO_PASS }}" \
+            appSettings."VITE_PSEUDO_AUTH"="true" \
+            appSettings."VITE_PSEUDO_USER"="${{ secrets.PSEUDO_USER }}" \
+            appSettings."VITE_PSEUDO_PASS"="${{ secrets.PSEUDO_PASS }}" \
+            appSettings."VITE_MSAL_CLIENT_ID"="" \
+            appSettings."VITE_MSAL_AUTHORITY"="" \
+            appSettings."PORT"="${{ secrets.APP_PORT }}" || true
 
-          echo "Updating proxy app to $PROXY_IMG"
-          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
-          az webapp config container set \
-            --name "$PROXY_NAME" \
-            --resource-group "${{ secrets.AZURE_RG }}" \
-            --docker-custom-image-name "$PROXY_IMG" \
-            --docker-registry-server-url "https://$ACR_HOST"
-        shell: bash
+          # Update the proxy app service (if separate)
+          if [ "$PROXY_NAME" != "slowfall-proxy" ]; then
+            az webapp update --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --set \
+              linuxFxVersion="DOCKER|$PROXY_IMG" || true
+          fi
