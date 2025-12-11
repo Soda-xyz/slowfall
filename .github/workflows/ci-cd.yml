@@ -478,7 +478,8 @@ jobs:
           # Apply settings to the proxy app service
           set -euo pipefail
           echo "Setting proxy app settings: ${SETTINGS[*]}"
-          az webapp config.appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
+          # Pass array elements as separate --settings args by expanding the array on the same command line
+          az webapp config appsettings set --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --settings "${SETTINGS[@]}"
 
       - name: Update Web Apps to new image digests
         run: |
@@ -492,42 +493,27 @@ jobs:
           BACK_IMG="$ACR_HOST/slowfall-backend:${{ github.sha }}"
           PROXY_IMG="$ACR_HOST/slowfall-proxy:${{ github.sha }}"
 
-          # Update the backend app service
-          az webapp update --name "${{ secrets.BACKEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --set \
-            linuxFxVersion="DOCKER|$BACK_IMG" \
-            appSettings."SPRING_PROFILES_ACTIVE"="${{ secrets.DEPLOY_ENV }}" \
-            appSettings."ALLOWED_ORIGINS"="${{ secrets.ALLOWED_ORIGINS }}" \
-            appSettings."AZ_KEYVAULT_VAULT_URL"="${{ secrets.AZ_KEYVAULT_VAULT_URL }}" \
-            appSettings."AZ_KEYVAULT_KEY_NAME"="${{ secrets.AZ_KEYVAULT_KEY_NAME }}" \
-            appSettings."PSEUDO_AUTH_ENABLED"="${{ secrets.PSEUDO_AUTH_ENABLED }}" \
-            appSettings."app.security.dev-username"="${{ secrets.PSEUDO_USER }}" \
-            appSettings."app.security.dev-password"="${{ secrets.PSEUDO_PASS }}" \
-            appSettings."VITE_PSEUDO_AUTH"="true" \
-            appSettings."VITE_PSEUDO_USER"="${{ secrets.PSEUDO_USER }}" \
-            appSettings."VITE_PSEUDO_PASS"="${{ secrets.PSEUDO_PASS }}" \
-            appSettings."VITE_MSAL_CLIENT_ID"="" \
-            appSettings."VITE_MSAL_AUTHORITY"="" \
-            appSettings."PORT"="${{ secrets.APP_PORT }}" || true
+          # Ensure PROXY_NAME is set from secrets (avoid unbound variable)
+          PROXY_NAME="${{ secrets.PROXY_APP_NAME || 'slowfall-proxy' }}"
 
-          # Update the frontend app service
-          az webapp update --name "${{ secrets.FRONTEND_APP_NAME }}" --resource-group "${{ secrets.AZURE_RG }}" --set \
-            linuxFxVersion="DOCKER|$FRONT_IMG" \
-            appSettings."SPRING_PROFILES_ACTIVE"="${{ secrets.DEPLOY_ENV }}" \
-            appSettings."ALLOWED_ORIGINS"="${{ secrets.ALLOWED_ORIGINS }}" \
-            appSettings."AZ_KEYVAULT_VAULT_URL"="${{ secrets.AZ_KEYVAULT_VAULT_URL }}" \
-            appSettings."AZ_KEYVAULT_KEY_NAME"="${{ secrets.AZ_KEYVAULT_KEY_NAME }}" \
-            appSettings."PSEUDO_AUTH_ENABLED"="${{ secrets.PSEUDO_AUTH_ENABLED }}" \
-            appSettings."app.security.dev-username"="${{ secrets.PSEUDO_USER }}" \
-            appSettings."app.security.dev-password"="${{ secrets.PSEUDO_PASS }}" \
-            appSettings."VITE_PSEUDO_AUTH"="true" \
-            appSettings."VITE_PSEUDO_USER"="${{ secrets.PSEUDO_USER }}" \
-            appSettings."VITE_PSEUDO_PASS"="${{ secrets.PSEUDO_PASS }}" \
-            appSettings."VITE_MSAL_CLIENT_ID"="" \
-            appSettings."VITE_MSAL_AUTHORITY"="" \
-            appSettings."PORT"="${{ secrets.APP_PORT }}" || true
+          echo "Updating frontend app to $FRONT_IMG"
+          az webapp config container set \
+            --name "${{ secrets.FRONTEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --docker-custom-image-name "$FRONT_IMG" \
+            --docker-registry-server-url "https://$ACR_HOST"
 
-          # Update the proxy app service (if separate)
-          if [ "$PROXY_NAME" != "slowfall-proxy" ]; then
-            az webapp update --name "$PROXY_NAME" --resource-group "${{ secrets.AZURE_RG }}" --set \
-              linuxFxVersion="DOCKER|$PROXY_IMG" || true
-          fi
+          echo "Updating backend app to $BACK_IMG"
+          az webapp config container set \
+            --name "${{ secrets.BACKEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --docker-custom-image-name "$BACK_IMG" \
+            --docker-registry-server-url "https://$ACR_HOST"
+
+          echo "Updating proxy app to $PROXY_IMG"
+          az webapp config container set \
+            --name "$PROXY_NAME" \
+            --resource-group "${{ secrets.AZURE_RG }}" \
+            --docker-custom-image-name "$PROXY_IMG" \
+            --docker-registry-server-url "https://$ACR_HOST"
+        shell: bash
