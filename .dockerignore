@@ -1,5 +1,3 @@
-# Repo-root .dockerignore — used when building with context '.'
-# Keep large, local, and sensitive files out of Docker build context
 
 .git
 .gitignore
@@ -34,9 +32,6 @@ coverage/
 
 # Docker / container artifacts
 docker/frontend/nginx.conf.template
-
-# Optional: exclude package lock if you rebuild in CI (leave if you prefer caching)
-# frontend/package-lock.json
 
 # Keep dockerignore itself out of image
 .dockerignore
