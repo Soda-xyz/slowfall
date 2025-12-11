@@ -24,7 +24,10 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.lang.NonNull;
 
+@SuppressWarnings("unused")
 @Configuration
 public class SecurityConfig {
 
@@ -59,6 +62,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http, Filter pseudoAuthFilter) throws Exception {
         http.cors(Customizer.withDefaults())
                 .csrf(CsrfConfigurer::disable)
+                // Allow pages from the same origin to be framed (H2 console uses frames)
+                .headers(headers -> headers.addHeaderWriter(
+                        new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)
+                ))
                 .addFilterBefore(pseudoAuthFilter, BasicAuthenticationFilter.class)
                 .authorizeHttpRequests(
                         auth -> auth.requestMatchers(HttpMethod.OPTIONS, "/**")
@@ -66,7 +73,7 @@ public class SecurityConfig {
                                 .requestMatchers("/api/protected/**")
                                 .authenticated()
                                 .anyRequest()
-                                .permitAll() // allow unauthenticated access in local/dev
+                                .permitAll()
                         );
 
         return http.build();
@@ -88,7 +95,7 @@ public class SecurityConfig {
 
         @Override
         protected void doFilterInternal(
-                HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                @NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
                 throws ServletException, IOException {
             if (enabled) {
                 try {
