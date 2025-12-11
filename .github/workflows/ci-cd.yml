@@ -321,6 +321,14 @@ jobs:
           BACKEND_SETTINGS+=("PORT=${{ secrets.APP_PORT }}")
           fi
 
+          # Add database connection settings from secrets if present. Prefer a single
+          # SPRING_DATASOURCE_URL secret (full jdbc url). These are added only to the
+          # backend app settings (not the frontend). Secret values are not echoed elsewhere.
+          if [ -n "${{ secrets.SPRING_DATASOURCE_URL || '' }}" ]; then
+            echo "Adding SPRING_DATASOURCE_URL to backend app settings (value kept secret)"
+            BACKEND_SETTINGS+=("SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}")
+          fi
+
           # Apply the settings to the backend and frontend app services
           # Sanitize settings: only pass entries that contain an '=' character (valid key=value or key=)
           FILTERED_BACKEND=()
