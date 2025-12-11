@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,9 +22,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.lang.NonNull;
 
 @SuppressWarnings("unused")
 @Configuration
@@ -64,14 +64,17 @@ public class SecurityConfig {
                 .csrf(CsrfConfigurer::disable)
                 // Allow pages from the same origin to be framed (H2 console uses frames)
                 .headers(headers -> headers.addHeaderWriter(
-                        new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)))
+                        new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)
+                ))
                 .addFilterBefore(pseudoAuthFilter, BasicAuthenticationFilter.class)
-                .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.OPTIONS, "/**")
-                        .permitAll()
-                        .requestMatchers("/api/protected/**")
-                        .authenticated()
-                        .anyRequest()
-                        .permitAll());
+                .authorizeHttpRequests(
+                        auth -> auth.requestMatchers(HttpMethod.OPTIONS, "/**")
+                                .permitAll()
+                                .requestMatchers("/api/protected/**")
+                                .authenticated()
+                                .anyRequest()
+                                .permitAll()
+                        );
 
         return http.build();
     }
@@ -92,9 +95,7 @@ public class SecurityConfig {
 
         @Override
         protected void doFilterInternal(
-                @NonNull HttpServletRequest request,
-                @NonNull HttpServletResponse response,
-                @NonNull FilterChain filterChain)
+                @NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
                 throws ServletException, IOException {
             if (enabled) {
                 try {
