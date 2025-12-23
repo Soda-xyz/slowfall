@@ -36,12 +36,15 @@ If you prefer using **zsh** as your default shell, you can set it up properly:
    chsh -s $(which zsh)
    ```
    
-   Or alternatively, use the absolute path directly:
+   Or alternatively, use the absolute path directly (the path may vary by system):
    ```bash
+   # On most Linux systems:
    chsh -s /usr/bin/zsh
+   # On macOS with Homebrew:
+   chsh -s /opt/homebrew/bin/zsh
    ```
 
-   **Note:** Do NOT use `chsh -s $zsh` as this uses an undefined variable. The correct approach is to use command substitution `$(which zsh)` or provide the absolute path to the zsh binary.
+   **Note:** Do NOT use `chsh -s $zsh` as this uses an undefined variable. The correct approach is to use command substitution `$(which zsh)` which automatically finds the correct path, or provide the absolute path to the zsh binary for your system.
 
 4. Log out and log back in for the changes to take effect.
 
@@ -51,7 +54,7 @@ If you prefer using **zsh** as your default shell, you can set it up properly:
 
 ```bash
 cd docker
-docker-compose -f docker-compose-dev.yml up --build
+docker compose -f docker-compose-dev.yml up --build
 ```
 
 #### Local Development
